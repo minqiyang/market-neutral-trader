@@ -1,5 +1,122 @@
 # Stage Plan
 
+## Completed stage record
+
+These records summarize the locally completed stages before Stage 5. They are
+intended as a durable audit map; implementation details remain in the source,
+tests, changelog, engineering log, and handoff archive.
+
+### Stage 0: Repository foundation
+
+- Status: complete.
+- Commit: `1d74236` (co-committed with Stage 1 and Stage 1.5 foundation work).
+- Purpose: establish the Python package, public positioning, tooling, docs, and
+  safety boundary.
+- Files/modules added: `README.md`, `AGENTS.md`, `pyproject.toml`,
+  `.env.example`, package/test structure, project charter, roadmap, risk
+  policy, resume narrative, and supporting docs.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, and `python scripts/01_replay_orderbook_fixture.py`.
+- Next-stage boundary: Stage 1 may add local fixture-based orderbook
+  normalization only.
+- Safety status: no profitability claims, no production/live trading claims, no
+  credentials, and no execution path.
+
+### Stage 1: Kalshi-style orderbook normalization
+
+- Status: complete.
+- Commit: `1d74236` (same foundation commit).
+- Purpose: normalize Kalshi-style YES/NO orderbooks into canonical YES-side
+  bid/ask books.
+- Files/modules added: `src/edmn_trader/core/models.py`,
+  `src/edmn_trader/adapters/kalshi/orderbook.py`,
+  `scripts/01_replay_orderbook_fixture.py`, local Kalshi fixture, and
+  normalizer/core-model tests.
+- Validation commands: `pytest`, `ruff check .`, and
+  `python scripts/01_replay_orderbook_fixture.py`.
+- Next-stage boundary: Stage 1.5 adds continuity docs and workflow governance,
+  not new trading behavior.
+- Safety status: no live API calls, no authenticated requests, no WebSocket, no
+  order placement, no production/live trading claims, and no profitability
+  claims.
+
+### Stage 1.5: Long-running controller and memory layer
+
+- Status: complete.
+- Commit: `1d74236` for the controller/memory foundation; later workflow
+  governance commits include `7a341aa` for conservative auto-merge policy and
+  `6fefc35` for CI bootstrap.
+- Purpose: make the repository safe to continue across Codex sessions,
+  branches, machines, and future `/goal` runs.
+- Files/modules added: `PROJECT_SPEC.md`, `docs/current_handoff.md`,
+  `docs/repo_map.md`, `docs/codex_long_running_controller.md`,
+  `docs/STAGE_PLAN.md`, `docs/DECISION_LOG.md`, `docs/engineering_log.md`,
+  `CHANGELOG.md`, handoff archive guidance, and the project-specific Skill.
+- Validation commands: `pytest`, `ruff check .`, and
+  `python scripts/01_replay_orderbook_fixture.py`.
+- Next-stage boundary: Stage 2 may add a read-only Kalshi Demo market-data
+  client only.
+- Safety status: no REST trading client, no order placement, no WebSocket, no
+  strategies, no production/live trading claims, and no profitability claims.
+
+### Stage 2: Read-only Kalshi Demo market-data client
+
+- Status: complete.
+- Commit: `08b1c17`.
+- Purpose: add a guarded read-only Kalshi Demo REST client for public market
+  metadata and orderbooks.
+- Files/modules added: `src/edmn_trader/adapters/kalshi/client.py`, local
+  Kalshi response fixtures, mocked HTTP tests, and docs/log updates.
+- Validation commands: `pytest`, `ruff check .`, and
+  `python scripts/01_replay_orderbook_fixture.py`.
+- Next-stage boundary: Stage 3 may add offline snapshots and deterministic
+  replay; it must not add execution or WebSocket behavior.
+- Safety status: no credentials, no authenticated trading, no production
+  endpoint, no order placement, no WebSocket, no production/live trading
+  claims, and no profitability claims.
+
+### Stage 3: Local replay simulator and snapshot recorder
+
+- Status: complete.
+- Commit: `2d26522`; Stage 3 plan clarification commit: `19a8754`.
+- Purpose: add deterministic offline market-data snapshots and replay metrics
+  so future research can run without live API state.
+- Files/modules added: `src/edmn_trader/data/snapshots.py`,
+  `src/edmn_trader/data/jsonl.py`, `src/edmn_trader/data/replay.py`,
+  `scripts/02_record_fixture_snapshots.py`,
+  `scripts/03_replay_snapshots.py`, snapshot/replay tests, and handoff archive.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/01_replay_orderbook_fixture.py`,
+  `python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage3_snapshots.jsonl`,
+  and `python scripts/03_replay_snapshots.py --input /tmp/edmn_stage3_snapshots.jsonl`.
+- Next-stage boundary: Stage 4 may consume replayed books for fair-value and
+  dry-run quote output only.
+- Safety status: no network requirement, no order placement, no WebSocket, no
+  fill simulation, no production/live trading claims, no secrets, and no
+  profitability claims.
+
+### Stage 4: Fair-value and quote engine dry-run
+
+- Status: complete.
+- Commit: `7bf2aa4`; Stage 4 plan clarification commit: `394c63f`.
+- Purpose: estimate baseline fair value from normalized/replayed books and emit
+  inventory-aware dry-run quote candidates.
+- Files/modules added: `src/edmn_trader/research/fair_value.py`,
+  `src/edmn_trader/research/quotes.py`,
+  `scripts/04_quote_replay_dry_run.py`, quote-engine tests, replay dry-run
+  script tests, and handoff archive.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/01_replay_orderbook_fixture.py`,
+  `python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage4_snapshots.jsonl`,
+  `python scripts/03_replay_snapshots.py --input /tmp/edmn_stage4_snapshots.jsonl`,
+  and `python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_stage4_snapshots.jsonl`.
+- Next-stage boundary: Stage 5 may add a risk-gated demo execution smoke test
+  only after explicit risk checks, blocked-path tests, and logging requirements
+  are in place.
+- Safety status: quote outputs are `dry_run_only`; no adapter execution calls,
+  no authentication, no order placement, no cancellation/modification, no fill
+  simulation, no production/live trading claims, and no profitability claims.
+
 ## Stage 0: Repository foundation
 
 Purpose: establish the package, public positioning, tooling, and safety
@@ -212,14 +329,89 @@ stop at dry-run quote/intention output.
 Purpose: prove that demo execution actions cannot occur without explicit risk
 approval and logging.
 
-Deliverables: risk checks, execution log format, demo-only smoke test path, and
-blocked-path tests.
+Deliverables: risk checks, execution log format, demo-only smoke test path,
+blocked-path tests, explicit opt-in configuration, and limitation notes.
 
-Acceptance checks: every execution action passes risk checks, `LIVE_DISABLED`
-cannot place orders, logs are auditable, and tests cover rejection paths.
+Risk-check requirements:
+
+- Every execution candidate must pass a pre-execution risk decision before any
+  adapter action can run.
+- Risk checks must consume explicit execution mode, instrument or ticker,
+  side/action, price, quantity, current position or inventory, and risk limits.
+- `LIVE_DISABLED` must reject every execution action.
+- Production or non-demo endpoints must be rejected.
+- Missing explicit demo opt-in must reject every demo action.
+- Size, price-boundary, notional, position, and inventory limits must be
+  enforced with `Decimal` values.
+- Rejections must be deterministic and explainable through `RiskDecision`
+  reasons.
+- Risk-approved actions still require structured execution logging.
+
+Blocked-path test requirements:
+
+- Tests must prove `LIVE_DISABLED` cannot place, cancel, or modify orders.
+- Tests must prove failed risk limits block execution.
+- Tests must prove production endpoints are rejected.
+- Tests must prove missing demo opt-in or missing required demo configuration
+  blocks execution.
+- Tests must prove every attempted execution action is logged, including
+  rejected actions.
+- Tests must use fake or mocked adapters; no live network calls, credentials, or
+  real orders are allowed in unit tests.
+
+Execution log format requirements:
+
+- Logs must be structured and append-friendly, preferably JSONL.
+- Each log entry must include timestamp, execution mode, exchange, ticker or
+  instrument, requested action, order-intent fields, risk decision, result
+  status, error or rejection reason, and a demo/smoke-test marker.
+- Logs must not include credentials, headers, signatures, tokens, private keys,
+  or raw secret-bearing payloads.
+- Every execution attempt, approval, rejection, adapter call, and adapter error
+  must be auditable.
+
+Demo-only smoke constraints:
+
+- Any demo execution smoke script must be explicit opt-in and disabled by
+  default.
+- Demo smoke code must use the Kalshi Demo base URL only.
+- Demo smoke code must not support production trading.
+- Demo smoke code must not run in tests unless fully mocked.
+- Demo smoke output must describe limitations and avoid performance or
+  profitability claims.
+
+Required scripts:
+
+- If a script is added, use a Stage 5 script such as
+  `scripts/05_demo_execution_smoke.py` with an explicit opt-in flag and safe
+  dry-run or fake-adapter mode for local validation.
+
+Acceptance checks: every execution action passes risk checks before adapter
+access, `LIVE_DISABLED` cannot place orders, logs are auditable, blocked-path
+tests cover rejection paths, tests remain offline and deterministic, and
+documentation states demo-only limitations.
+
+Validation commands:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+ruff check .
+python scripts/01_replay_orderbook_fixture.py
+python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage5_snapshots.jsonl
+python scripts/03_replay_snapshots.py --input /tmp/edmn_stage5_snapshots.jsonl
+python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_stage5_snapshots.jsonl
+```
 
 Explicit non-goals: no production trading, no broad strategy deployment, no
-credential storage, and no compliance bypass.
+credential storage, no compliance bypass, no WebSocket ingestion, no strategy
+optimization, no fill simulation, no PnL attribution, no production endpoint,
+no live-trading claims, and no profitability claims.
+
+Next-stage boundary: Stage 6 may connect normalized books, fair value, quote
+generation, risk gates, and dry-run/demo loop behavior after Stage 5 proves
+execution actions are risk-gated, logged, and blocked when unsafe. Stage 5 must
+not implement a market-making loop or broad strategy deployment.
 
 ## Stage 6: Inventory-aware demo market maker in dry-run/demo only
 

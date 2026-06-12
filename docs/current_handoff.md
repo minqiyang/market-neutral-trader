@@ -15,6 +15,11 @@ Stage 4: Fair-value and quote engine dry-run.
 
 ## Stage plan status
 
+`docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
+1, 1.5, 2, 3, and 4. The ledger records purpose, known commit hashes,
+files/modules added, validation commands, status, next-stage boundary, and
+safety status for each completed stage.
+
 `docs/STAGE_PLAN.md` now contains the full Stage 3 specification: snapshot
 schema requirements, Decimal-safe JSONL recorder requirements, deterministic
 replay behavior, fixture recording and replay scripts, offline tests,
@@ -25,6 +30,11 @@ baseline requirements, quote generation, inventory-aware skew, spread and
 tick/price boundary handling, dry-run-only intent output, replay dry-run script,
 offline deterministic tests, validation commands, non-goals, and the Stage 5
 boundary.
+
+`docs/STAGE_PLAN.md` now contains the full Stage 5 specification: risk checks,
+blocked-path tests, execution log format, demo-only smoke constraints,
+offline/fake-adapter test requirements, validation commands, non-goals, and the
+Stage 6 boundary.
 
 ## Important files
 
@@ -81,8 +91,17 @@ python -m pip install -e ".[dev]"
 
 ## Known issues
 
-- A Git remote named `origin` is currently configured; do not push unless the
-  user explicitly asks.
+- GitHub remote `origin` is configured for
+  `https://github.com/minqiyang/market-neutral-trading-research.git`; do not
+  push unless the user explicitly asks or the active workflow requires it.
+- Local `main` and `origin/main` matched at
+  `6fefc3554bfff484d59c55262f89c47bb900daf5` during the Stage 5 readiness
+  record audit.
+- `.github/workflows/ci.yml` exists, and the latest observed GitHub Actions CI
+  run on `main` completed successfully.
+- GitHub reports branch `main` is not protected. Under the conservative
+  auto-merge policy, Codex must not enable auto-merge until branch protection
+  and required checks/reviews are configured and verifiable.
 - The Kalshi Demo client is tested with mocked HTTP and local fixtures; no live
   network smoke script exists.
 - Quote dry-runs emit non-executable intents only. No fill simulation,
@@ -117,12 +136,11 @@ blocked-path tests before any demo action.
 
 ## Exact next prompt suggestion
 
-Before implementing Stage 5, do a read-only readiness check. Verify that
-`docs/STAGE_PLAN.md` contains a full Stage 5 specification for risk-gated demo
-execution smoke tests, including risk checks, blocked-path tests, execution log
-format, demo-only constraints, validation commands, and the Stage 6 boundary.
-Do not implement code during the readiness check.
+Implement Stage 5 from `docs/STAGE_PLAN.md`: add risk-gated demo execution
+smoke-test infrastructure with explicit risk checks, blocked-path tests,
+structured execution logging, demo-only constraints, and no production trading.
+Use local deterministic tests and stop at the Stage 5 boundary.
 
 ## Last updated timestamp
 
-2026-06-11 17:21:26 -07:00
+2026-06-11 22:20:15 -07:00
