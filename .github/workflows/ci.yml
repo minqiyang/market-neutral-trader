@@ -45,3 +45,6 @@ jobs:
 
       - name: Run quote replay dry run
         run: python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_ci_snapshots.jsonl
+
+      - name: Run demo execution smoke check
+        run: python scripts/05_demo_execution_smoke.py --log-output /tmp/edmn_ci_execution_smoke.jsonl

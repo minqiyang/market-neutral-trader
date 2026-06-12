@@ -7,16 +7,17 @@ risk-controlled event-driven prediction-market research platform. Current
 implemented code includes exchange-agnostic core models, Kalshi-style
 fixed-point orderbook normalization, a guarded read-only Kalshi Demo REST
 client, local fixtures, mocked HTTP tests, Decimal-safe JSONL snapshot storage,
-deterministic offline replay metrics, and a fair-value/quote-engine dry run.
+deterministic offline replay metrics, a fair-value/quote-engine dry run, and
+risk-gated fake-adapter demo execution smoke infrastructure.
 
 ## Last completed stage
 
-Stage 4: Fair-value and quote engine dry-run.
+Stage 5: Risk-gated demo execution smoke test.
 
 ## Stage plan status
 
 `docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
-1, 1.5, 2, 3, and 4. The ledger records purpose, known commit hashes,
+1, 1.5, 2, 3, 4, and 5. The ledger records purpose, known commit hashes,
 files/modules added, validation commands, status, next-stage boundary, and
 safety status for each completed stage.
 
@@ -57,18 +58,25 @@ Stage 6 boundary.
   model.
 - `src/edmn_trader/research/quotes.py`: non-executable dry-run quote engine and
   quote intents.
+- `src/edmn_trader/execution/demo.py`: Stage 5 risk decisions, fake adapter,
+  execution boundary, and JSONL audit logging.
 - `scripts/02_record_fixture_snapshots.py`: converts local fixtures to JSONL
   snapshots.
 - `scripts/03_replay_snapshots.py`: replays JSONL snapshots and prints a
   concise metrics table.
 - `scripts/04_quote_replay_dry_run.py`: replays JSONL snapshots through the
   dry-run quote engine and prints fair value and quote metrics.
+- `scripts/05_demo_execution_smoke.py`: runs a local fake-adapter Stage 5
+  smoke check with explicit demo opt-in support.
 - `tests/test_kalshi_client.py`: mocked HTTP coverage for the Stage 2 client.
 - `tests/test_kalshi_orderbook.py`: normalizer coverage.
 - `tests/test_snapshots_jsonl.py`: snapshot/JSONL coverage.
 - `tests/test_replay_snapshots.py`: replay and fixture-conversion coverage.
 - `tests/test_quote_engine.py`: fair-value and dry-run quote-engine coverage.
 - `tests/test_quote_replay_dry_run.py`: replay-based quote script coverage.
+- `tests/test_demo_execution.py`: Stage 5 risk gate, blocked path, fake
+  adapter, and audit log coverage.
+- `tests/test_demo_execution_smoke.py`: Stage 5 smoke script coverage.
 
 ## Commands that currently pass
 
@@ -81,6 +89,10 @@ python scripts/03_replay_snapshots.py --input /tmp/edmn_stage3_snapshots.jsonl
 python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage4_snapshots.jsonl
 python scripts/03_replay_snapshots.py --input /tmp/edmn_stage4_snapshots.jsonl
 python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_stage4_snapshots.jsonl
+python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage5_snapshots.jsonl
+python scripts/03_replay_snapshots.py --input /tmp/edmn_stage5_snapshots.jsonl
+python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_stage5_snapshots.jsonl
+python scripts/05_demo_execution_smoke.py --log-output /tmp/edmn_stage5_execution_smoke.jsonl
 ```
 
 Optional environment validation:
@@ -95,17 +107,18 @@ python -m pip install -e ".[dev]"
   `https://github.com/minqiyang/market-neutral-trading-research.git`; do not
   push unless the user explicitly asks or the active workflow requires it.
 - Local `main` and `origin/main` matched at
-  `6fefc3554bfff484d59c55262f89c47bb900daf5` during the Stage 5 readiness
-  record audit.
+  `3bdd691cad5858aa57dc3268e801ac4e6642cdce` before the Stage 5 branch was
+  created.
 - `.github/workflows/ci.yml` exists, and the latest observed GitHub Actions CI
   run on `main` completed successfully.
-- GitHub reports branch `main` is not protected. Under the conservative
-  auto-merge policy, Codex must not enable auto-merge until branch protection
-  and required checks/reviews are configured and verifiable.
+- GitHub branch protection is enabled on `main` and requires the `Validate`
+  status check.
 - The Kalshi Demo client is tested with mocked HTTP and local fixtures; no live
   network smoke script exists.
-- Quote dry-runs emit non-executable intents only. No fill simulation,
-  execution engine, WebSocket ingestion, or production trading path exists.
+- Quote dry-runs emit non-executable intents. Stage 5 converts those boundaries
+  into fake-adapter demo execution requests only after explicit risk approval;
+  no fill simulation, WebSocket ingestion, production trading path, or live
+  market-making loop exists.
 
 ## PR workflow policy
 
@@ -120,10 +133,8 @@ ambiguity.
 ## Safety boundaries
 
 - Do not add credentials or secrets.
-- Do not implement order placement.
+- Do not implement production order placement.
 - Do not implement WebSocket ingestion.
-- Do not implement Stage 5 demo smoke execution until risk checks and
-  blocked-path tests are explicit.
 - Do not add fill simulation before a dedicated simulation stage.
 - Do not enable live or production trading.
 - Do not make profitability claims.
@@ -131,16 +142,16 @@ ambiguity.
 
 ## Next recommended stage
 
-Stage 5: Risk-gated demo execution smoke test, with explicit risk checks and
-blocked-path tests before any demo action.
+Stage 6: Inventory-aware demo market maker in dry-run/demo only, after the
+Stage 5 PR is merged.
 
 ## Exact next prompt suggestion
 
-Implement Stage 5 from `docs/STAGE_PLAN.md`: add risk-gated demo execution
-smoke-test infrastructure with explicit risk checks, blocked-path tests,
-structured execution logging, demo-only constraints, and no production trading.
-Use local deterministic tests and stop at the Stage 5 boundary.
+After the Stage 5 PR is merged, implement Stage 6 from `docs/STAGE_PLAN.md`:
+connect normalized books, fair value, quote generation, risk gates, and
+dry-run/demo loop behavior without production trading or broad strategy
+deployment.
 
 ## Last updated timestamp
 
-2026-06-11 22:20:15 -07:00
+2026-06-12 14:10:41 -07:00

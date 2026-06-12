@@ -6,10 +6,40 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
-- Stage 5 is expected to add risk checks before any demo execution smoke test.
 - Order placement beyond explicitly risk-gated demo smoke tests, WebSocket
   ingestion, production trading, and profitability claims remain out of scope
   until separately reviewed.
+
+## Stage 5 - Risk-gated demo execution smoke test - 2026-06-12
+
+### Added
+
+- Stage 5 execution boundary with deterministic pre-execution risk decisions.
+- Explicit demo opt-in guard and Kalshi Demo base URL guard before any adapter
+  action can run.
+- Fake/offline execution adapter for local tests and smoke checks.
+- Structured JSONL execution audit logging for approved, rejected, and adapter
+  error paths.
+- Local smoke script at `scripts/05_demo_execution_smoke.py`.
+- Offline tests for `LIVE_DISABLED`, cancel/modify blocked paths, failed risk
+  limits, production endpoint rejection, missing demo opt-in, adapter call
+  logging, and adapter error logging.
+
+### Safety
+
+- Stage 5 uses fake/offline adapter behavior only in tests and local smoke
+  validation. It adds no credentials, live network execution, production
+  endpoint support, WebSocket ingestion, fill simulation, market-making loop,
+  strategy optimization, or profitability claim.
+
+### Validation
+
+- Required checks include `pytest`, `ruff check .`,
+  `python scripts/01_replay_orderbook_fixture.py`,
+  `python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage5_snapshots.jsonl`,
+  `python scripts/03_replay_snapshots.py --input /tmp/edmn_stage5_snapshots.jsonl`,
+  `python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_stage5_snapshots.jsonl`,
+  and `python scripts/05_demo_execution_smoke.py --log-output /tmp/edmn_stage5_execution_smoke.jsonl`.
 
 ## Stage 4 - Fair-value and quote engine dry-run - 2026-06-11
 
