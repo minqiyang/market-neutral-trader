@@ -20,6 +20,12 @@ schema requirements, Decimal-safe JSONL recorder requirements, deterministic
 replay behavior, fixture recording and replay scripts, offline tests,
 out-of-scope boundaries, validation commands, and the Stage 4 boundary.
 
+`docs/STAGE_PLAN.md` also contains the full Stage 4 specification: fair-value
+baseline requirements, quote generation, inventory-aware skew, spread and
+tick/price boundary handling, dry-run-only intent output, replay dry-run script,
+offline deterministic tests, validation commands, non-goals, and the Stage 5
+boundary.
+
 ## Important files
 
 - `AGENTS.md`: repo rules and first-read instructions.
@@ -99,4 +105,4 @@ claims, or live trading.
 
 ## Last updated timestamp
 
-2026-06-11 15:33:11 -07:00
+2026-06-11 17:06:31 -07:00

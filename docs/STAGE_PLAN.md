@@ -131,16 +131,81 @@ fill simulation, production endpoints, or live trading.
 
 ## Stage 4: Fair-value and quote engine dry-run
 
-Purpose: estimate fair value and generate inventory-aware dry-run quotes.
+Purpose: estimate fair value from normalized/replayed orderbook state and
+generate inventory-aware dry-run quotes without creating executable orders or
+placing trades.
 
-Deliverables: fair-value interface, quote engine, quote tests, and dry-run
-reports with assumptions.
+Deliverables: fair-value baseline model, quote engine, inventory-aware quote
+skew, spread and tick/price boundary handling, dry-run order-intent objects,
+replay-based dry-run script, offline deterministic tests, and limitation notes.
 
-Acceptance checks: strategy outputs remain dry-run objects, all prices and
-quantities use `Decimal`, and limitations are documented.
+Fair-value baseline requirements:
+
+- Consume a `NormalizedOrderBook` or replay frame.
+- Produce a `Decimal` fair value.
+- Use deterministic baseline behavior such as midpoint fair value when both
+  sides exist.
+- Define deterministic fallback behavior for one-sided books.
+- Avoid predictive, optimized, or profitability-framed modeling.
+
+Quote generation requirements:
+
+- Generate bid and ask quote candidates from fair value and current orderbook
+  state.
+- Use `Decimal` for prices, quantities, spread, tick size, inventory, and
+  limits.
+- Enforce spread constraints.
+- Enforce tick/price boundaries inside the binary contract range.
+- Keep quote outputs as dry-run objects only.
+
+Inventory-aware skew requirements:
+
+- Accept current inventory or position inputs.
+- Skew quotes deterministically to reduce inventory pressure.
+- Keep skew bounded and explainable.
+- Do not create execution actions.
+
+Dry-run order-intent requirements:
+
+- Produce dry-run candidate intents or quote objects for inspection and tests.
+- Do not call any adapter execution method.
+- Do not send authenticated requests.
+- Do not place, cancel, or modify orders.
+- Clearly label outputs as dry-run.
+
+Replay script requirements:
+
+- Add a replay-based dry-run script that reads Stage 3 JSONL snapshots.
+- Print a concise table with fair value, quote prices, spread/skew inputs, and
+  safety/limitation notes.
+- Require local input only; no network calls.
+
+Acceptance checks: offline deterministic tests cover midpoint fair value,
+one-sided fallback behavior, quote generation, inventory skew, tick and price
+boundary handling, dry-run-only intent output, replay-script behavior, and
+out-of-scope execution guards. All prices and quantities use `Decimal`, and
+limitations are documented.
+
+Validation commands:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+ruff check .
+python scripts/01_replay_orderbook_fixture.py
+python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage4_snapshots.jsonl
+python scripts/03_replay_snapshots.py --input /tmp/edmn_stage4_snapshots.jsonl
+python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_stage4_snapshots.jsonl
+```
 
 Explicit non-goals: no order placement, no live execution, no profitability
-claims, and no optimizer that implies guaranteed performance.
+claims, no optimizer that implies guaranteed performance, no fill simulation,
+no PnL attribution, no authenticated trading, no production endpoint, no
+WebSocket, and no credentials or secrets.
+
+Next-stage boundary: Stage 5 may add a risk-gated demo execution smoke test
+only after the risk checks and blocked-path tests are explicit. Stage 4 must
+stop at dry-run quote/intention output.
 
 ## Stage 5: Risk-gated demo execution smoke test
 
