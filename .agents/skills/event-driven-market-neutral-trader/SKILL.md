@@ -64,6 +64,10 @@ For staged project work, read `docs/current_handoff.md` and `docs/repo_map.md` b
 - The Stage 4 dry-run quote layer lives under `src/edmn_trader/research/`;
   `scripts/04_quote_replay_dry_run.py` must remain local/replay-only and must
   emit non-executable `dry_run_only` quote intents.
+- The Stage 5 execution smoke layer lives under `src/edmn_trader/execution/`;
+  `scripts/05_demo_execution_smoke.py` must remain fake-adapter/local by
+  default, require explicit `--demo-opt-in` for approved fake execution, and log
+  every attempt as JSONL.
 
 ## Verification
 

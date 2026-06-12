@@ -69,6 +69,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/research/quotes.py`: dry-run quote engine, inventory skew,
   tick/price boundaries, and non-executable quote intents. Read for Stage 4
   quote behavior.
+- `src/edmn_trader/execution/demo.py`: Stage 5 risk-gated fake/demo execution
+  boundary, risk decisions, fake adapter, and JSONL audit logging. Read for
+  execution smoke behavior.
 - `src/edmn_trader/scripts/replay_orderbook_fixture.py`: importable fixture
   replay entry point.
 - `src/edmn_trader/scripts/record_fixture_snapshots.py`: importable Stage 3
@@ -77,6 +80,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   replay table renderer.
 - `src/edmn_trader/scripts/quote_replay_dry_run.py`: importable Stage 4 replay
   dry-run quote script and table renderer.
+- `src/edmn_trader/scripts/demo_execution_smoke.py`: importable Stage 5
+  fake-adapter demo execution smoke script.
 - `src/edmn_trader/**/__init__.py`: package exports.
 
 ## Scripts
@@ -89,6 +94,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   metrics. Requires `--input`.
 - `scripts/04_quote_replay_dry_run.py`: reads JSONL snapshots and prints
   fair-value and dry-run quote metrics. Requires `--input`.
+- `scripts/05_demo_execution_smoke.py`: runs a local fake-adapter Stage 5
+  execution smoke check and appends JSONL audit logs. Use `--demo-opt-in` only
+  for fake-adapter approved-path validation.
 
 ## Tests and fixtures
 
@@ -104,6 +112,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   generation, inventory skew, tick/price boundary, and dry-run intent coverage.
 - `tests/test_quote_replay_dry_run.py`: replay-based dry-run quote script
   coverage.
+- `tests/test_demo_execution.py`: Stage 5 risk gate, blocked path, fake
+  adapter, and execution audit log coverage.
+- `tests/test_demo_execution_smoke.py`: Stage 5 smoke script coverage.
 - `tests/fixtures/kalshi_orderbook_fp_basic.json`: basic local Kalshi-style
   fixture used by the replay script.
 - `tests/fixtures/kalshi_markets_response.json`: local markets response fixture

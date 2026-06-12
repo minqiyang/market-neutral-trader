@@ -102,6 +102,26 @@ The main tradeoff was choosing a simple midpoint baseline instead of a more
 ambitious model. That keeps the implementation explainable and testable while
 creating the interface future research stages can replace with richer models.
 
+## Stage 5 risk-gated demo execution smoke
+
+Stage 5 added the first execution-boundary infrastructure, but kept it local,
+fake-adapter based, and risk-gated. The new request model can represent blocked
+attempts such as `LIVE_DISABLED` so rejections are still auditable. Every
+request is checked against explicit execution mode, demo opt-in, Kalshi Demo
+base URL, price, quantity, notional, position, inventory, and daily-loss limits
+before any adapter method can run.
+
+The execution audit log is JSONL so approved attempts, rejected attempts, and
+adapter errors can be inspected without raw command logs or secret-bearing
+payloads. The local smoke script is disabled by default through missing demo
+opt-in and uses a fake adapter even when opt-in is supplied.
+
+The main tradeoff was not adding authenticated Kalshi order placement yet. That
+keeps Stage 5 focused on the safety contract: execution actions are blocked
+unless risk approval and audit logging are present. A later stage can connect
+the same boundary to broader dry-run/demo workflows only after this guardrail is
+merged and reviewed.
+
 ## Interview narrative
 
 A concise way to explain the current project:
@@ -115,4 +135,6 @@ A concise way to explain the current project:
 > metrics so later quote engines and reports can run from reproducible offline
 > data instead of live API state. The first quote layer then used those replayed
 > books to produce dry-run fair values and inventory-aware quote candidates
-> without creating any executable order path.
+> without creating any executable order path. I then added a fake-adapter Stage
+> 5 execution boundary that proves execution attempts are risk-gated, logged,
+> and blocked when unsafe before any real adapter is introduced.

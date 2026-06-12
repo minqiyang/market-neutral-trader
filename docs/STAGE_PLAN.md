@@ -2,7 +2,7 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages before Stage 5. They are
+These records summarize the locally completed stages before Stage 6. They are
 intended as a durable audit map; implementation details remain in the source,
 tests, changelog, engineering log, and handoff archive.
 
@@ -116,6 +116,32 @@ tests, changelog, engineering log, and handoff archive.
 - Safety status: quote outputs are `dry_run_only`; no adapter execution calls,
   no authentication, no order placement, no cancellation/modification, no fill
   simulation, no production/live trading claims, and no profitability claims.
+
+### Stage 5: Risk-gated demo execution smoke test
+
+- Status: complete.
+- Commit: pending on the Stage 5 PR branch.
+- Purpose: prove demo execution attempts are blocked unless explicit demo
+  opt-in, demo endpoint, risk limits, and structured logging are present.
+- Files/modules added: `src/edmn_trader/execution/demo.py`,
+  `src/edmn_trader/execution/__init__.py`,
+  `src/edmn_trader/scripts/demo_execution_smoke.py`,
+  `scripts/05_demo_execution_smoke.py`, demo execution tests, smoke script
+  tests, and CI validation for the smoke script.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/01_replay_orderbook_fixture.py`,
+  `python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage5_snapshots.jsonl`,
+  `python scripts/03_replay_snapshots.py --input /tmp/edmn_stage5_snapshots.jsonl`,
+  `python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_stage5_snapshots.jsonl`,
+  and `python scripts/05_demo_execution_smoke.py --log-output /tmp/edmn_stage5_execution_smoke.jsonl`.
+- Next-stage boundary: Stage 6 may connect normalized books, fair value,
+  quote generation, risk gates, and dry-run/demo loop behavior. It must still
+  avoid production trading and broad strategy deployment.
+- Safety status: execution paths are fake/offline for tests and local smoke,
+  `LIVE_DISABLED` blocks place/cancel/modify, production endpoints and missing
+  demo opt-in are rejected, all attempts are logged, no credentials are needed,
+  and no live network, WebSocket, strategy optimization, fill simulation,
+  production endpoint, live-trading claim, or profitability claim is added.
 
 ## Stage 0: Repository foundation
 

@@ -11,9 +11,23 @@ from edmn_trader.core.models import (
     RiskDecision,
     RiskLimits,
 )
+from edmn_trader.execution import (
+    DemoExecutionConfig,
+    DemoExecutionRequest,
+    DemoExecutionResult,
+    ExecutionAuditLogger,
+    FakeDemoExecutionAdapter,
+    decide_execution_risk,
+    execute_demo_request,
+)
 
 __all__ = [
+    "DemoExecutionConfig",
+    "DemoExecutionRequest",
+    "DemoExecutionResult",
     "ExecutionMode",
+    "ExecutionAuditLogger",
+    "FakeDemoExecutionAdapter",
     "Instrument",
     "NormalizedOrderBook",
     "OrderBookLevel",
@@ -22,4 +36,6 @@ __all__ = [
     "Quote",
     "RiskDecision",
     "RiskLimits",
+    "decide_execution_risk",
+    "execute_demo_request",
 ]
