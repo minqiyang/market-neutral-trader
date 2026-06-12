@@ -57,15 +57,15 @@ The architecture should later support:
 
 ## Current stage
 
-Stage 3 added deterministic offline research infrastructure: market-data
-snapshot models, Decimal-safe JSONL persistence, fixture-to-snapshot recording,
-and replay metrics over snapshot files.
+Stage 4 added a fair-value and quote engine dry-run. It consumes normalized or
+replayed books, estimates deterministic baseline fair value, applies bounded
+inventory-aware quote skew, and emits non-executable dry-run quote intents.
 
 ## Next stage
 
-Stage 4 should add a fair-value and quote engine dry-run. It must consume
-normalized/replayed books, emit dry-run quote objects only, avoid order
-placement, avoid strategy optimization claims, and document assumptions.
+Stage 5 should add explicit risk checks before any demo execution smoke test.
+It must keep production trading disabled, cover blocked paths with tests, and
+avoid broad strategy deployment.
 
 ## Acceptance standards
 

@@ -77,3 +77,11 @@ serialized as strings and strict replay ordered by observed timestamp.
 Rationale: future research stages need deterministic, inspectable, and
 replayable market-data inputs that preserve price and quantity precision without
 depending on live API state.
+
+## 2026-06-11: Keep quote engine output non-executable
+
+Decision: implement Stage 4 quote output as `dry_run_only` inspection objects
+instead of reusing executable order-intent paths.
+
+Rationale: fair-value and quote research should be testable from replayed local
+data before any risk-gated execution smoke test exists.

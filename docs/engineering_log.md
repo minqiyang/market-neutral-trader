@@ -83,6 +83,25 @@ simulation, no strategy loop, and no execution action. That preserves Stage 3 as
 an offline data layer and leaves quote generation, simulation assumptions, and
 PnL attribution for later stages.
 
+## Stage 4 fair-value and dry-run quotes
+
+Stage 4 added the first quote-generation layer, but kept it explicitly offline
+and non-executable. The baseline fair-value model uses the normalized book
+midpoint when both sides are present and deterministic one-sided fallbacks when
+only one side is available. The quote engine combines fair value, observed book
+spread, tick and price boundaries, quantity, and bounded inventory skew to emit
+dry-run bid and ask candidates.
+
+The important boundary is that these are not executable orders. They are
+inspection objects labeled `dry_run_only`, and the replay script prints them as
+research output from local JSONL snapshots. Stage 4 does not authenticate, call
+execution adapters, place or cancel orders, simulate fills, optimize strategy
+parameters, or make any performance claim.
+
+The main tradeoff was choosing a simple midpoint baseline instead of a more
+ambitious model. That keeps the implementation explainable and testable while
+creating the interface future research stages can replace with richer models.
+
 ## Interview narrative
 
 A concise way to explain the current project:
@@ -94,4 +113,6 @@ A concise way to explain the current project:
 > market-data client with mocked tests, keeping execution and strategy work out
 > of scope. Next, I added Decimal-safe snapshot JSONL and deterministic replay
 > metrics so later quote engines and reports can run from reproducible offline
-> data instead of live API state.
+> data instead of live API state. The first quote layer then used those replayed
+> books to produce dry-run fair values and inventory-aware quote candidates
+> without creating any executable order path.

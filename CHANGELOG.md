@@ -6,9 +6,38 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
-- Stage 4 is expected to add a fair-value and quote engine dry-run.
-- Order placement, WebSocket ingestion, production trading, and profitability
-  claims remain out of scope until separately reviewed.
+- Stage 5 is expected to add risk checks before any demo execution smoke test.
+- Order placement beyond explicitly risk-gated demo smoke tests, WebSocket
+  ingestion, production trading, and profitability claims remain out of scope
+  until separately reviewed.
+
+## Stage 4 - Fair-value and quote engine dry-run - 2026-06-11
+
+### Added
+
+- Baseline midpoint fair-value model with deterministic one-sided book
+  fallbacks.
+- Dry-run quote engine that combines fair value, current orderbook spread,
+  tick/price boundaries, quantity, and bounded inventory skew.
+- Non-executable dry-run order-intent objects labeled `dry_run_only`.
+- Replay-based dry-run quote script for Stage 3 JSONL snapshots.
+- Offline deterministic tests for fair value, one-sided fallbacks, quote
+  generation, inventory skew, tick/price boundaries, dry-run intent safety, and
+  replay-script output.
+
+### Safety
+
+- Quote outputs are inspection-only and do not call adapters, authenticate,
+  place orders, cancel orders, modify orders, simulate fills, or claim
+  profitability.
+
+### Validation
+
+- Required checks include `pytest`, `ruff check .`,
+  `python scripts/01_replay_orderbook_fixture.py`,
+  `python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage4_snapshots.jsonl`,
+  `python scripts/03_replay_snapshots.py --input /tmp/edmn_stage4_snapshots.jsonl`,
+  and `python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_stage4_snapshots.jsonl`.
 
 ## Stage 3 - Local replay simulator and read-only data recorder - 2026-06-11
 

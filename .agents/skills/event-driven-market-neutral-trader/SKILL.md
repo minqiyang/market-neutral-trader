@@ -61,6 +61,9 @@ For staged project work, read `docs/current_handoff.md` and `docs/repo_map.md` b
   are `scripts/02_record_fixture_snapshots.py` and
   `scripts/03_replay_snapshots.py`. Replay is strict by default and sorts only
   when `--no-strict` is explicitly requested.
+- The Stage 4 dry-run quote layer lives under `src/edmn_trader/research/`;
+  `scripts/04_quote_replay_dry_run.py` must remain local/replay-only and must
+  emit non-executable `dry_run_only` quote intents.
 
 ## Verification
 

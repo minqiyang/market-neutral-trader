@@ -64,12 +64,19 @@ context, then read only the files needed for the requested stage. Use `rg` and
   Read for storage behavior and malformed JSONL handling.
 - `src/edmn_trader/data/replay.py`: deterministic replay session and book
   metrics. Read for replay ordering or metric changes.
+- `src/edmn_trader/research/fair_value.py`: baseline fair-value model. Read for
+  midpoint and one-sided fair-value behavior.
+- `src/edmn_trader/research/quotes.py`: dry-run quote engine, inventory skew,
+  tick/price boundaries, and non-executable quote intents. Read for Stage 4
+  quote behavior.
 - `src/edmn_trader/scripts/replay_orderbook_fixture.py`: importable fixture
   replay entry point.
 - `src/edmn_trader/scripts/record_fixture_snapshots.py`: importable Stage 3
   fixture-to-snapshot recorder logic.
 - `src/edmn_trader/scripts/replay_snapshots.py`: importable Stage 3 snapshot
   replay table renderer.
+- `src/edmn_trader/scripts/quote_replay_dry_run.py`: importable Stage 4 replay
+  dry-run quote script and table renderer.
 - `src/edmn_trader/**/__init__.py`: package exports.
 
 ## Scripts
@@ -80,6 +87,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   into JSONL snapshots. Requires `--output`.
 - `scripts/03_replay_snapshots.py`: reads JSONL snapshots and prints book
   metrics. Requires `--input`.
+- `scripts/04_quote_replay_dry_run.py`: reads JSONL snapshots and prints
+  fair-value and dry-run quote metrics. Requires `--input`.
 
 ## Tests and fixtures
 
@@ -91,6 +100,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
   malformed JSONL, append behavior, and snapshot raw-payload safety coverage.
 - `tests/test_replay_snapshots.py`: replay ordering, replay metrics, and
   fixture-to-snapshot conversion coverage.
+- `tests/test_quote_engine.py`: midpoint fair value, one-sided fallback, quote
+  generation, inventory skew, tick/price boundary, and dry-run intent coverage.
+- `tests/test_quote_replay_dry_run.py`: replay-based dry-run quote script
+  coverage.
 - `tests/fixtures/kalshi_orderbook_fp_basic.json`: basic local Kalshi-style
   fixture used by the replay script.
 - `tests/fixtures/kalshi_markets_response.json`: local markets response fixture

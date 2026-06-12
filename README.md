@@ -92,6 +92,13 @@ python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage3_snapshot
 python scripts/03_replay_snapshots.py --input /tmp/edmn_stage3_snapshots.jsonl
 ```
 
+Run the dry-run quote engine over replayed snapshots:
+
+```bash
+python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage4_snapshots.jsonl
+python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_stage4_snapshots.jsonl
+```
+
 ## Project workflow and logs
 
 Long-running project continuity is tracked in:
@@ -116,9 +123,12 @@ Implemented:
   tested with mocked HTTP transport.
 - Decimal-safe JSONL snapshot storage and deterministic replay metrics for
   offline research workflows.
+- Baseline fair-value model and inventory-aware dry-run quote engine over
+  normalized/replayed books.
 - Unit tests for normal conversion, empty sides, multiple levels, precision,
   invalid prices, locked or crossed book detection, client response validation,
-  client error handling, snapshot roundtrips, and replay ordering.
+  client error handling, snapshot roundtrips, replay ordering, fair value, and
+  dry-run quote generation.
 
 Not implemented:
 
@@ -127,4 +137,5 @@ Not implemented:
 - WebSocket ingestion.
 - Strategy optimization.
 - Fill simulation and PnL attribution.
+- Executable order intents.
 - Production trading.
