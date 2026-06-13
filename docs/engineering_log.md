@@ -122,6 +122,21 @@ unless risk approval and audit logging are present. A later stage can connect
 the same boundary to broader dry-run/demo workflows only after this guardrail is
 merged and reviewed.
 
+## Stage 6 plan clarification
+
+The Stage 6 readiness check found that the roadmap heading identified the next
+checkpoint, but the specification was too compact to implement safely. The
+clarified plan keeps Stage 6 finite, replay-driven, and dry-run by default. It
+requires Stage 4 fair-value and quote generation to feed Stage 5 risk-gated
+execution requests, with fake/demo adapter access only after explicit opt-in
+and risk approval.
+
+The clarification also makes the accounting boundary explicit: Stage 6 may
+count quote candidates, risk approvals, rejections, skipped actions, and adapter
+submissions, but it must not infer fills, PnL, profitability, or production
+readiness. That keeps Stage 7 responsible for attribution and research
+reporting assumptions.
+
 ## Interview narrative
 
 A concise way to explain the current project:

@@ -37,6 +37,12 @@ blocked-path tests, execution log format, demo-only smoke constraints,
 offline/fake-adapter test requirements, validation commands, non-goals, and the
 Stage 6 boundary.
 
+`docs/STAGE_PLAN.md` now contains the full Stage 6 specification: finite
+replay-driven dry-run/demo workflow behavior, inventory-aware quoting
+requirements, Stage 5 risk-gate reuse, structured JSONL logging and run summary
+requirements, offline tests, validation commands, explicit non-goals, and the
+Stage 7 boundary.
+
 ## Important files
 
 - `AGENTS.md`: repo rules and first-read instructions.
@@ -111,6 +117,9 @@ python -m pip install -e ".[dev]"
   `6cd1d536fa41e721a998f23eab19d7129938c3da`.
 - Local `main` was fast-forwarded to `origin/main` after the PR #1 merge, and
   post-merge validation passed before this handoff update.
+- A prior handoff-only update was pushed directly to `main` and GitHub reported
+  branch-rule bypass warnings. Future staged work must use branch + PR flow and
+  must not push directly to `main`.
 - `.github/workflows/ci.yml` exists, and the latest observed GitHub Actions CI
   run on `main` completed successfully.
 - GitHub branch protection is enabled on `main` and requires the `Validate`
@@ -144,15 +153,17 @@ ambiguity.
 
 ## Next recommended stage
 
-Stage 6 readiness check, then Stage 6 implementation only after current GitHub
-state, CI, branch protection, and local validation are confirmed.
+Merge the docs-only Stage 6 plan clarification PR. After it lands, run a Stage
+6 readiness check from the expanded `docs/STAGE_PLAN.md` section before any
+implementation.
 
 ## Exact next prompt suggestion
 
-Use Codex Long Session Governance. Verify Stage 6 readiness from
-`docs/STAGE_PLAN.md`; confirm clean synced `main`, passing CI/local validation,
-and branch protection. Do not implement Stage 6.
+Use Codex Long Session Governance. After the Stage 6 plan clarification PR is
+merged, verify Stage 6 readiness from `docs/STAGE_PLAN.md`; confirm clean
+synced `main`, passing CI/local validation, branch protection, and required
+`Validate` status. Do not implement Stage 6 during the readiness check.
 
 ## Last updated timestamp
 
-2026-06-12 17:23:18 -07:00
+2026-06-12 17:45:49 -07:00

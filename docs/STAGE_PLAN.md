@@ -442,16 +442,114 @@ not implement a market-making loop or broad strategy deployment.
 ## Stage 6: Inventory-aware demo market maker in dry-run/demo only
 
 Purpose: connect normalized books, fair value, quote generation, risk checks,
-and demo/paper execution in a controlled workflow.
+and demo/paper execution boundaries in a controlled, finite workflow.
 
-Deliverables: inventory-aware quote adjustments, dry-run/demo loop, risk gates,
-structured logs, and run summaries.
+Deliverables: inventory-aware quote adjustments, finite replay-driven
+dry-run/demo loop, risk-gated execution request conversion, structured decision
+logs, run summaries, offline tests, and limitation notes.
 
-Acceptance checks: dry-run works without credentials, demo mode is explicitly
-configured, risk checks gate all actions, and limitations are reported.
+Workflow requirements:
 
-Explicit non-goals: no production deployment, no aggressive liquidity behavior,
-no spoofing-like behavior, and no performance guarantees.
+- Consume Stage 3 JSONL snapshots or committed local fixtures by default.
+- Reuse Stage 4 fair-value and quote generation; do not add predictive model
+  optimization.
+- Convert dry-run quote intents into Stage 5 demo execution requests only after
+  explicit mode and risk configuration are supplied.
+- Process a finite number of replay frames; no daemon, scheduler, infinite
+  loop, or live market-making process.
+- Keep dry-run mode as the default. Dry-run mode must not call any execution
+  adapter.
+- Demo mode must require explicit opt-in and must use the Kalshi Demo base URL.
+- In this checkpoint, demo execution must remain fake-adapter or mocked unless
+  a later separately reviewed stage adds authenticated Demo order placement.
+- Do not infer fills from accepted fake/demo requests. Run summaries must
+  separate quote candidates, risk approvals, adapter submissions, rejections,
+  and fills or PnL assumptions.
+
+Inventory and quoting requirements:
+
+- Accept initial inventory, current position, and risk limits explicitly.
+- Use `Decimal` for inventory, position, prices, quantities, limits, and
+  notional calculations.
+- Apply bounded inventory-aware quote skew through the Stage 4 quote engine.
+- Respect binary price bounds, tick-size behavior, minimum spread, and
+  configured quote size.
+- Avoid aggressive liquidity behavior; no quote stuffing, spoofing-like
+  behavior, self-trading, wash trading, or misleading liquidity.
+
+Risk and execution-gate requirements:
+
+- Every candidate action must pass through the Stage 5 risk decision before any
+  adapter method can run.
+- `LIVE_DISABLED`, non-demo endpoints, missing demo opt-in, price-boundary,
+  size, notional, position, inventory, and daily-loss checks must remain
+  enforced.
+- Risk rejections must be deterministic and auditable.
+- Adapter calls must be impossible in dry-run mode and impossible before risk
+  approval in demo mode.
+- No credentials, headers, signatures, private keys, tokens, or secret-bearing
+  payloads may be logged or required.
+
+Logging and summary requirements:
+
+- Emit structured JSONL records for each frame, quote candidate, risk decision,
+  skipped action, rejection, fake/demo adapter submission, and adapter error.
+- Include run-level summary output with frame count, quote count, approved
+  actions, rejected actions, skipped actions, adapter calls, and limitation
+  notes.
+- Default generated logs must go to user-provided paths or safe temporary paths
+  and must not be committed.
+- Logs and summaries must avoid performance or profitability claims.
+
+Required script:
+
+- Add a replay-driven script such as `scripts/06_market_maker_replay.py`.
+- Required input: `--input <snapshots.jsonl>`.
+- Required output option: `--log-output <path>` with a safe temp default.
+- Default behavior: dry-run only, no adapter access.
+- Optional fake/demo behavior: an explicit flag such as `--demo-opt-in` may run
+  the fake adapter through the Stage 5 risk gate.
+- The script must print concise run metrics and safety limitations.
+
+Offline deterministic tests:
+
+- Default dry-run never calls an adapter.
+- Explicit demo opt-in can call only a fake or mocked adapter after risk
+  approval.
+- Missing demo opt-in, `LIVE_DISABLED`, non-demo endpoint, and failed risk
+  limits block adapter access and are logged.
+- Inventory skew changes quote candidates deterministically.
+- Run summaries count frames, quotes, approvals, rejections, skipped actions,
+  and adapter calls.
+- Tests remain offline with local fixtures or temporary JSONL snapshots; no
+  live API calls, credentials, or real orders.
+
+Validation commands:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+ruff check .
+python scripts/01_replay_orderbook_fixture.py
+python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage6_snapshots.jsonl
+python scripts/03_replay_snapshots.py --input /tmp/edmn_stage6_snapshots.jsonl
+python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_stage6_snapshots.jsonl
+python scripts/05_demo_execution_smoke.py --log-output /tmp/edmn_stage6_execution_smoke.jsonl
+python scripts/05_demo_execution_smoke.py --demo-opt-in --log-output /tmp/edmn_stage6_execution_smoke_approved.jsonl
+python scripts/06_market_maker_replay.py --input /tmp/edmn_stage6_snapshots.jsonl --log-output /tmp/edmn_stage6_market_maker.jsonl
+python scripts/06_market_maker_replay.py --input /tmp/edmn_stage6_snapshots.jsonl --demo-opt-in --log-output /tmp/edmn_stage6_market_maker_demo.jsonl
+```
+
+Explicit non-goals: no production deployment, no authenticated Kalshi order
+placement, no production endpoints, no WebSocket ingestion, no live
+market-making daemon, no strategy optimization, no fill simulation, no PnL
+attribution, no aggressive liquidity behavior, no spoofing-like behavior, no
+self-trading or wash trading, no credentials, no performance guarantees, and no
+profitability claims.
+
+Next-stage boundary: Stage 7 may add PnL attribution and research reporting
+only after Stage 6 produces bounded run summaries with explicit assumptions.
+Stage 6 must not claim fills, PnL, profitability, or production readiness.
 
 ## Stage 7: PnL attribution and research report
 

@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified the Stage 6 plan for a finite replay-driven inventory-aware demo
+  market-maker workflow, including dry-run defaults, explicit demo opt-in,
+  Stage 5 risk-gate reuse, structured JSONL logs, run summaries, offline tests,
+  validation commands, and out-of-scope boundaries.
 - Order placement beyond explicitly risk-gated demo smoke tests, WebSocket
   ingestion, production trading, and profitability claims remain out of scope
   until separately reviewed.
