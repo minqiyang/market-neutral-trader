@@ -115,6 +115,8 @@ python -m pip install -e ".[dev]"
   push unless the user explicitly asks or the active workflow requires it.
 - PR #1 merged Stage 5 into `main` at
   `6cd1d536fa41e721a998f23eab19d7129938c3da`.
+- PR #2 merged the Stage 6 plan clarification into `main` at
+  `a322310c7c9d1ab82c0307a35b8db79e704b9274`.
 - Local `main` was fast-forwarded to `origin/main` after the PR #1 merge, and
   post-merge validation passed before this handoff update.
 - A prior handoff-only update was pushed directly to `main` and GitHub reported
@@ -153,17 +155,17 @@ ambiguity.
 
 ## Next recommended stage
 
-Merge the docs-only Stage 6 plan clarification PR. After it lands, run a Stage
-6 readiness check from the expanded `docs/STAGE_PLAN.md` section before any
-implementation.
+Stage 6 readiness check from the expanded `docs/STAGE_PLAN.md` section. Start
+implementation only after current GitHub state, CI, branch protection, required
+`Validate` status, and local validation are confirmed.
 
 ## Exact next prompt suggestion
 
-Use Codex Long Session Governance. After the Stage 6 plan clarification PR is
-merged, verify Stage 6 readiness from `docs/STAGE_PLAN.md`; confirm clean
-synced `main`, passing CI/local validation, branch protection, and required
-`Validate` status. Do not implement Stage 6 during the readiness check.
+Use Codex Long Session Governance. Verify Stage 6 readiness from
+`docs/STAGE_PLAN.md`; confirm clean synced `main`, passing CI/local validation,
+branch protection, and required `Validate` status. Do not implement Stage 6
+during the readiness check.
 
 ## Last updated timestamp
 
-2026-06-12 17:45:49 -07:00
+2026-06-12 17:51:01 -07:00
