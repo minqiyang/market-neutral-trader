@@ -72,6 +72,14 @@ normalizes local market-book fixtures into `NormalizedOrderBook` and includes a
 guarded read-only client restricted to the documented Polymarket US public base
 URL. Tests use local fixtures and mocked HTTP only.
 
+## Compact governance audit
+
+Audit after three completed checkpoints: Stage 7 implementation, Stage 8
+readiness clarification, and Stage 8 implementation. Local `main` is synced
+with `origin/main` at `cc31c25`, the worktree is clean, there are no open pull
+requests, and the latest observed `main` CI run `28006772756` passed
+`Validate`. The next checkpoint remains Stage 9 readiness only.
+
 ## Important files
 
 - `AGENTS.md`: repo rules and first-read instructions.
@@ -249,4 +257,4 @@ data redistribution, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-22 23:21:26 -07:00
+2026-06-22 23:26:40 -07:00
