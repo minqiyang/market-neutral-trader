@@ -121,10 +121,12 @@ python -m pip install -e ".[dev]"
 - Local `main` was fast-forwarded to `origin/main` after the PR #1 merge, and
   post-merge validation passed before this handoff update.
 - A prior handoff-only update was pushed directly to `main` and GitHub reported
-  branch-rule bypass warnings. Future staged work must use branch + PR flow and
-  must not push directly to `main`.
+  branch-rule bypass warnings. Future staged work should default to branch +
+  PR flow unless every owner-direct fast-path condition in
+  `docs/codex_long_running_controller.md` is satisfied.
 - `.github/workflows/ci.yml` exists, and the latest observed GitHub Actions CI
-  run on `main` completed successfully.
+  run on `main` completed successfully. CI now runs `Validate` for pushes to
+  `main`, pull requests to `main`, and pushes to `codex/**` branches.
 - GitHub branch protection is enabled on `main` and requires the `Validate`
   status check.
 - The Kalshi Demo client is tested with mocked HTTP and local fixtures; no live
@@ -136,20 +138,30 @@ python -m pip install -e ".[dev]"
 
 ## PR workflow policy
 
-`docs/codex_long_running_controller.md` now contains a conservative auto-merge
-policy: no direct merges to `main`, no branch-protection bypass or admin
-override, and GitHub auto-merge only for clearly low-risk small PRs that are
-narrow, locally validated, protected by required checks/reviews, and free of
-credentials, production endpoints, order placement, WebSocket work, strategy
-optimization, large generated files, dependency surprises, or compliance
-ambiguity.
+`docs/codex_long_running_controller.md` now contains the publish policy for
+future staged work. Default to branch + PR. An owner-direct fast path may skip
+PR creation only when `gh` is authenticated as `minqiyang`, `origin` is
+`minqiyang/market-neutral-trading-research`, work starts from clean synced
+`origin/main`, work occurs on a `codex/` branch, local validation and branch
+`Validate` pass, risk is low or medium, the change avoids all listed safety and
+compliance hazards, no PR/divergence conflict exists, and the final update to
+`main` is a normal push with no force, admin override, or branch-protection
+bypass command. If any condition is false, create a PR or stop for human
+review. High-risk or unclear work always stops for human review.
+
+GitHub auto-merge may still be enabled only for clearly low-risk small PRs that
+are narrow, locally validated, protected by required checks/reviews, and free of
+credentials, production endpoints, order placement, WebSocket work, live
+market-making loops, strategy optimization, large generated files, dependency
+surprises, or compliance ambiguity.
 
 `docs/codex_long_running_controller.md` also contains the compact
 skill-orchestration policy for future staged work: use long-session governance
-on every checkpoint, read only the active stage section, treat optional skills
-as accelerators rather than blockers, reserve Ponytail/TDD/grill-me/handoff for
-the narrow cases named there, and keep skill use bounded unless a stop gate is
-triggered.
+and token-budget rules on every checkpoint, read only the current handoff, repo
+map, controller, active stage section, and project Skill first, treat optional
+skills as accelerators rather than blockers, reserve Ponytail, TDD, grill-me,
+and handoff for the narrow cases named there, and keep skill use bounded unless
+a stop gate is triggered.
 
 ## Safety boundaries
 
@@ -163,18 +175,20 @@ triggered.
 
 ## Next recommended stage
 
-After this documentation-only policy PR merges, continue with Stage 6
+After this documentation-only policy update lands, continue with Stage 6
 implementation from the expanded `docs/STAGE_PLAN.md` section. Reconfirm clean
-synced `main`, CI, branch protection, required `Validate` status, and local
-validation before changing behavior.
+synced `main`, CI, branch protection, required `Validate` status, local
+validation, and whether the owner-direct fast path or PR path applies before
+changing behavior.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Start Stage 6 implementation from only the
 Stage 6 section of `docs/STAGE_PLAN.md`; use TDD for behavior changes, keep
 dry-run as the default, do not add authenticated/live trading, and apply the
-skill-orchestration policy in `docs/codex_long_running_controller.md`.
+publish and skill-orchestration policy in
+`docs/codex_long_running_controller.md`.
 
 ## Last updated timestamp
 
-2026-06-22 21:50:53 -07:00
+2026-06-22 21:57:49 -07:00

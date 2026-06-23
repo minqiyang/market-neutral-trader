@@ -35,6 +35,13 @@ Produce small, reviewable changes that support a demo-first, risk-controlled tra
 
 Start with the safety boundary, then implement the narrowest foundation needed for the requested stage. Keep adapters thin and explicit, normalize exchange-specific inputs into canonical core objects, and prefer deterministic fixtures over external services.
 
+Use `docs/codex_long_running_controller.md` for long-session governance,
+token-budget discipline, publish rules, and optional skill orchestration. Treat
+this project Skill as the required repository-specific skill for staged work;
+use optional Matt Pocock, TDD, Ponytail, and handoff/compaction skills only in
+the cases named by the controller, and fall back to the equivalent checklist if
+an optional skill is unavailable or renamed.
+
 For Kalshi-style binary orderbooks, normalize YES-side books from local data by treating YES bids as canonical bids and NO bids as implied YES asks using `1 - no_price`.
 
 For staged project work, read `docs/current_handoff.md` and `docs/repo_map.md` before broad exploration. After a stage-sized change, update `docs/current_handoff.md`, `docs/engineering_log.md`, and `CHANGELOG.md` with concise durable context.

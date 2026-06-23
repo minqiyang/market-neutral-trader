@@ -35,10 +35,12 @@ unless the task truly requires it.
 
 ## PR and merge policy
 
-Use `docs/codex_long_running_controller.md` for PR workflow rules. Codex must
-not direct-merge to `main`, bypass branch protection, or use admin override.
-GitHub auto-merge may be enabled only for clearly low-risk small PRs that meet
-the controller policy.
+Use `docs/codex_long_running_controller.md` for PR, auto-merge, and
+owner-direct fast-path workflow rules. Codex must not bypass branch protection,
+force push, use admin override, or direct-merge/push to `main` unless every
+owner-direct fast-path condition in the controller is satisfied. GitHub
+auto-merge may be enabled only for clearly low-risk small PRs that meet the
+controller policy.
 
 ## Continuity docs
 

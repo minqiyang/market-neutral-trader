@@ -9,27 +9,33 @@ demo-first, risk-controlled stage plan.
 ## Context-budget policy
 
 - Read `AGENTS.md`, `docs/current_handoff.md`, and `docs/repo_map.md` first.
+- After those first reads, read only this controller, the project Skill, and
+  the active `docs/STAGE_PLAN.md` stage section before staged work.
 - Prefer targeted reads over broad file dumps.
 - Use `rg` and `rg --files` for discovery.
 - Read implementation files only when the requested stage needs them.
+- Do not read old logs unless the handoff is incomplete or a stop gate requires
+  historical evidence.
 - Keep final reports concise and evidence-backed.
 
 ## Skill orchestration policy
 
 - Apply this controller's stage boundary, stop gates, context-budget and
   token-budget rules, and final-report rules on every checkpoint.
-- Read only the active `docs/STAGE_PLAN.md` stage section unless a stop gate or
-  missing context requires more; do not reread old logs by default.
+- Use the project Skill for repository-specific staged work before optional
+  skills.
 - Treat optional skills and preset commands as accelerators, not dependencies.
   If a skill is unavailable, uninstalled, renamed, or noisy to invoke, use the
   equivalent checklist and keep moving.
 - Limit optional skill use to at most one planning skill before implementation
-  and one review skill before PR unless a stop gate triggers deeper review.
-- Use Ponytail only for implementation PRs, mainly as a pre-PR
-  over-engineering review; skip it for readiness checks and documentation-only
-  changes.
+  and one review skill before final merge or PR unless a stop gate triggers
+  deeper review.
+- Use Ponytail review only for implementation diffs, mainly before final
+  merge/push or PR to catch over-engineering; skip it for readiness checks and
+  documentation-only changes.
 - Use Matt Pocock `grill-me` only for ambiguous or high-risk design stages;
-  skip it when `docs/STAGE_PLAN.md` already gives complete acceptance criteria.
+  skip it for simple readiness/docs work and when `docs/STAGE_PLAN.md` already
+  gives complete acceptance criteria.
 - Use TDD-style workflow for implementation stages that add behavior.
 - Use handoff or compaction only when context is large, before switching
   sessions, or when a stop gate requires preserving state.
@@ -49,31 +55,35 @@ demo-first, risk-controlled stage plan.
 - For documentation-only stages, do not touch behavior unless required by a
   failing check.
 
-## Conservative auto-merge policy
+## Publish policy
 
-Codex may not direct-merge to `main`, bypass branch protection, or use admin
-override.
+Default to branch + PR for staged work. Codex may enable GitHub auto-merge only
+for low-risk small PRs that are narrow, locally validated, protected by clear
+required checks, and free of credentials, production endpoints, order
+placement, WebSocket work, live market-making loops, strategy optimization,
+large generated files, dependency surprises, and compliance ambiguity.
 
-Codex may create a pull request and enable GitHub auto-merge only for low-risk
-small PRs. A low-risk small PR must be narrow, in scope, fully validated
-locally, and free of credentials, production endpoints, order placement,
-WebSocket work, strategy optimization, large generated files, dependency
-surprises, and compliance ambiguity.
+Codex may skip PR creation and use an owner-direct fast path only when every
+condition below is true:
 
-When required GitHub checks or reviews are pending, Codex may enable auto-merge
-only if the PR is low-risk and branch protection is clear. GitHub must perform
-the final merge only after all required checks and reviews pass.
+- `gh` is authenticated as `minqiyang`.
+- `origin` points to `minqiyang/market-neutral-trading-research`.
+- Work starts from a clean local branch synced with `origin/main`.
+- Work is done on a `codex/` branch, not directly on `main`.
+- Local validation passes.
+- Branch `Validate` CI passes, or the repo clearly supports equivalent
+  pre-main validation.
+- Risk is low or medium, never high or unclear.
+- The change has no secrets, production endpoints, WebSocket work, live
+  market-making loop, strategy optimization, large generated files, dependency
+  surprises, or compliance ambiguity.
+- There is no open PR for the branch and no remote divergence or merge
+  conflict.
+- The final merge to `main` is a normal push only: no force push, no admin
+  override, and no branch-protection bypass command.
 
-Codex must not enable auto-merge, and must stop for human review, when any of
-these apply:
-
-- no required checks are configured;
-- branch protection is absent or unclear;
-- merge conflicts exist;
-- CI is failing;
-- scope is unclear;
-- the change is medium or high risk;
-- human judgment is needed.
+If any owner-direct condition is false, Codex must create a PR or stop for
+human review. High-risk or unclear work must always stop for human review.
 
 ## Stop gates
 
@@ -88,6 +98,8 @@ Stop and report clearly when any of these occur:
 - Destructive command.
 - Live or production trading request.
 - Unclear compliance boundary.
+- High-risk or unclear work.
+- Owner-direct fast path is requested but any required condition is false.
 - Auto-merge is requested but the PR is not clearly low-risk, protected, and
   locally validated.
 - Completion of one stage-sized change.
@@ -134,20 +146,24 @@ Return:
 - Git status.
 - Branch.
 - Commit hash if created.
+- PR URL if created.
+- Merge or push status.
 - Files created.
 - Files changed.
 - Checks run and results.
+- CI status when applicable.
 - Any issues or assumptions.
 - Exact recommended next prompt.
 - Risk classification.
-- Auto-merge status.
+- Auto-merge or owner-direct fast-path status.
 
 ## What not to do
 
 - Do not make profitability claims.
 - Do not add credentials or secrets.
-- Do not direct-merge to `main`, bypass branch protection, or use admin
-  override.
+- Do not bypass branch protection, force push, or use admin override.
+- Do not direct-merge or push to `main` unless every owner-direct fast-path
+  condition is satisfied.
 - Do not implement authenticated Kalshi requests before the read-only client
   stage is explicitly requested.
 - Do not implement order placement, WebSocket ingestion, strategies, or
