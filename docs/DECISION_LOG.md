@@ -85,3 +85,14 @@ instead of reusing executable order-intent paths.
 
 Rationale: fair-value and quote research should be testable from replayed local
 data before any risk-gated execution smoke test exists.
+
+## 2026-06-22: Limit Stage 8 to Polymarket US public market data
+
+Decision: target only Polymarket US public market-data sources for Stage 8 and
+avoid international Polymarket endpoints, trading endpoints, wallets,
+authentication, WebSockets, and region bypass.
+
+Rationale: Polymarket US documents a public market-data API and regulated U.S.
+exchange context, while international Polymarket materials include geographic
+restrictions for the United States. A fixture-first, read-only adapter keeps
+the checkpoint useful without crossing compliance or execution boundaries.

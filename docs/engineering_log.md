@@ -202,6 +202,18 @@ calculations. Stage 7 proves the reporting boundary and disclosure hygiene
 without adding live data access, production endpoints, strategy optimization,
 or profitability framing.
 
+## Stage 8 readiness clarification
+
+The Stage 8 readiness check found that "Polymarket" is not one uniform target.
+The safe implementation boundary is Polymarket US public market data only, with
+local fixtures first and no trading, authentication, wallets, WebSockets, or
+international Polymarket endpoint usage.
+
+The main tradeoff is postponing live HTTP smoke and any richer market-data
+surface until terms, rate limits, and endpoint stability are reviewed again.
+That keeps the next implementation useful while avoiding region-bypass and
+execution ambiguity.
+
 ## Interview narrative
 
 A concise way to explain the current project:

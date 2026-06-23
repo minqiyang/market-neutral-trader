@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 8 readiness: future work may target only Polymarket US public
+  market data with local fixtures and an unauthenticated read-only adapter;
+  international endpoints, trading, wallets, WebSockets, and region bypass
+  remain out of scope.
 - Added Stage 7 offline research report generation from Stage 6 logs and
   optional explicit local fill fixtures, with Decimal-safe realized PnL, fee,
   and inventory attribution.

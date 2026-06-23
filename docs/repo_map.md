@@ -38,6 +38,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   checks, logging, and final report format. Read before long-running stage work.
 - `docs/STAGE_PLAN.md`: staged roadmap from foundation through later research
   adapters. Read when planning or validating stage boundaries.
+- `docs/stage8_polymarket_readiness.md`: Stage 8 compliance/readiness note.
+  Read before any Polymarket US adapter work.
 - `docs/DECISION_LOG.md`: architecture and product decisions. Read before
   reversing or expanding a foundational decision.
 - `docs/engineering_log.md`: human-readable narrative for interviews and

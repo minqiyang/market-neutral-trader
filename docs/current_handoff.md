@@ -60,6 +60,13 @@ consumes Stage 6 JSONL logs and optional explicit local fill fixtures, separates
 observed counts from supplied assumptions, rejects secret-like fill fields, and
 does not infer fills from fake/demo adapter submissions.
 
+`docs/STAGE_PLAN.md` now contains the clarified Stage 8 specification and
+`docs/stage8_polymarket_readiness.md` records the readiness review. Stage 8 is
+ready only for a fixture-first Polymarket US public market-data adapter. It
+must not use international Polymarket endpoints, trading endpoints, wallets,
+authentication, WebSockets, region bypass, live HTTP smoke by default, or
+production execution.
+
 ## Important files
 
 - `AGENTS.md`: repo rules and first-read instructions.
@@ -68,6 +75,8 @@ does not infer fills from fake/demo adapter submissions.
 - `docs/repo_map.md`: context-budget map for targeted reads.
 - `docs/codex_long_running_controller.md`: staged continuation rules.
 - `docs/STAGE_PLAN.md`: staged roadmap and non-goals.
+- `docs/stage8_polymarket_readiness.md`: Stage 8 readiness note and source
+  links for the Polymarket US public market-data boundary.
 - `docs/engineering_log.md`: narrative engineering record.
 - `src/edmn_trader/core/models.py`: exchange-agnostic core models.
 - `src/edmn_trader/adapters/kalshi/client.py`: guarded read-only Kalshi Demo
@@ -213,20 +222,21 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Stage 8 readiness check: additional research data adapters or richer reporting
-only after compliance, data-source, and source-redistribution boundaries are
-reviewed. Start only after reconfirming clean synced `main`, CI, branch
-protection, required `Validate` status, local validation, and whether the
-owner-direct fast path or PR path applies.
+Stage 8 implementation: fixture-first Polymarket US public market-data adapter.
+Start only after reconfirming clean synced `main`, CI, branch protection,
+required `Validate` status, local validation, and whether the owner-direct fast
+path or PR path applies.
 
 ## Exact next prompt suggestion
 
-Use Codex Long Session Governance. Start with a Stage 8 readiness check from
-only the Stage 8 section of `docs/STAGE_PLAN.md`; do not implement Stage 8 until
-readiness is confirmed, and do not add authenticated/live trading, WebSocket
-ingestion, production endpoints, strategy optimization, unsupported data
-redistribution, or profitability claims.
+Use Codex Long Session Governance. Implement only the fixture-first Stage 8
+Polymarket US public market-data adapter from the Stage 8 section of
+`docs/STAGE_PLAN.md` and `docs/stage8_polymarket_readiness.md`; use TDD, keep
+tests offline, and do not add international Polymarket endpoints,
+authenticated/live trading, WebSocket ingestion, wallets, production endpoints,
+strategy optimization, unsupported data redistribution, or profitability
+claims.
 
 ## Last updated timestamp
 
-2026-06-22 23:07:39 -07:00
+2026-06-22 23:15:51 -07:00

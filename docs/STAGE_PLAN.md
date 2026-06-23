@@ -714,14 +714,51 @@ profitability claims.
 
 Purpose: explore a second prediction-market data adapter for research only.
 
-Deliverables: compliance review note, market-data adapter, fixtures, parser
-tests, and docs on availability and limitations.
+Readiness status: clarified for a future fixture-first Polymarket US public
+market-data adapter. See `docs/stage8_polymarket_readiness.md`.
 
-Acceptance checks: no trading path exists, adapter stays separate from core, and
-use is compliant with availability and platform rules.
+Deliverables: compliance/readiness note, Polymarket US public market-data
+adapter, local fixtures, parser tests, and docs on availability and limitations.
+
+Allowed scope:
+
+- Use Polymarket US public market-data documentation and local fixtures only.
+- Keep any adapter under `src/edmn_trader/adapters/polymarket_us`.
+- Keep the adapter read-only, unauthenticated, and market-data only.
+- Restrict any future HTTP base URL to the documented Polymarket US public API.
+- Convert public market/orderbook-style data into existing exchange-agnostic
+  core or replay structures without changing execution behavior.
+- Keep tests offline and deterministic.
+
+Acceptance checks:
+
+- No trading path exists.
+- No wallet, private key, API key, authenticated endpoint, or account data is
+  introduced.
+- The international Polymarket endpoint is not used for a U.S. workflow.
+- No geoblock, region, platform-rule, or rate-limit bypass exists.
+- Adapter code stays separate from core and exchange-specific logic stays under
+  `src/edmn_trader/adapters`.
+- Docs state availability, compliance assumptions, data-source limits, and
+  remaining non-goals.
+
+Validation commands:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+ruff check .
+python scripts/01_replay_orderbook_fixture.py
+```
 
 Explicit non-goals: no Polymarket trading, no bypassing restrictions, no wallet
-integration, and no production execution.
+integration, no authenticated API calls, no WebSocket ingestion, no production
+execution, no international Polymarket adapter, no live HTTP smoke by default,
+and no profitability claims.
+
+Next-stage boundary: Stage 9 may add U.S. equities research data only after
+Stage 8 proves a second prediction-market adapter can remain read-only,
+fixture-tested, exchange-contained, and compliance-bound.
 
 ## Stage 9: U.S. equities research adapter, paper/research only
 
