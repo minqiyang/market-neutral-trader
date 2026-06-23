@@ -786,12 +786,50 @@ fixture-tested, exchange-contained, and compliance-bound.
 Purpose: extend the research architecture toward equities data without enabling
 live equities trading.
 
-Deliverables: equities research adapter, local fixtures, parser tests, and
-paper/research documentation.
+Readiness status: clarified for a future fixture-first SEC EDGAR public
+fundamentals adapter. See `docs/stage9_equities_readiness.md`.
 
-Acceptance checks: no live execution path exists, data assumptions are
-documented, and core workflow remains exchange-agnostic.
+Deliverables: readiness note, SEC EDGAR equities fundamentals adapter, local
+fixtures, parser tests, and paper/research documentation.
+
+Allowed scope:
+
+- Use SEC EDGAR public JSON data and local fixtures only.
+- Keep any adapter under `src/edmn_trader/adapters/sec_edgar`.
+- Keep the adapter read-only, unauthenticated, and fundamentals-only.
+- Restrict any future HTTP base URL to `https://data.sec.gov`.
+- Require explicit identifying User-Agent configuration for future live HTTP
+  access.
+- Convert public company facts or company concept data into exchange-agnostic
+  research structures.
+- Keep tests offline and deterministic.
+
+Acceptance checks:
+
+- No live execution path exists.
+- No broker integration, account data, portfolio data, API key, or credential
+  is introduced.
+- No live quote feed, paid-vendor feed, or proprietary exchange data is used.
+- No data redistribution assumption is hidden.
+- Adapter code stays separate from core and exchange/source-specific logic
+  stays under `src/edmn_trader/adapters`.
+- Docs state SEC fair-access assumptions, data-source limits, and remaining
+  non-goals.
+
+Validation commands:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+ruff check .
+python scripts/01_replay_orderbook_fixture.py
+```
 
 Explicit non-goals: no live equities orders, no broker integration for
-production trading, no credentials in repo, and no claims of guaranteed
-performance.
+production trading, no credentials in repo, no account or portfolio data, no
+live quote feeds, no paid-vendor market data, no strategy optimization, no
+production execution, and no claims of guaranteed performance.
+
+Next-stage boundary: a later stage may add richer paper/research reporting only
+after Stage 9 proves SEC fundamentals ingestion remains fixture-tested,
+read-only, and credential-free.

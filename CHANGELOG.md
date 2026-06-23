@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 9 readiness: future work may target only SEC EDGAR public
+  fundamentals with local fixtures and a read-only adapter; broker integration,
+  credentials, account data, live quote feeds, paid-vendor data, trading, and
+  strategy optimization remain out of scope.
 - Added a fixture-first Polymarket US public market-data adapter under
   `src/edmn_trader/adapters/polymarket_us`.
 - Added local Polymarket US market-book fixture coverage for normalization into

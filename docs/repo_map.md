@@ -40,6 +40,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   adapters. Read when planning or validating stage boundaries.
 - `docs/stage8_polymarket_readiness.md`: Stage 8 compliance/readiness note.
   Read before any Polymarket US adapter work.
+- `docs/stage9_equities_readiness.md`: Stage 9 SEC EDGAR equities readiness
+  note. Read before any U.S. equities adapter work.
 - `docs/DECISION_LOG.md`: architecture and product decisions. Read before
   reversing or expanding a foundational decision.
 - `docs/engineering_log.md`: human-readable narrative for interviews and
