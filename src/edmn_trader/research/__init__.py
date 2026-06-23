@@ -1,5 +1,6 @@
 """Offline research models and dry-run quote generation."""
 
+from edmn_trader.research.equities import EquityFundamentalFact
 from edmn_trader.research.fair_value import MidpointFairValueModel
 from edmn_trader.research.quotes import (
     DRY_RUN_LIMITATION,
@@ -14,6 +15,7 @@ __all__ = [
     "DryRunOrderIntent",
     "DryRunQuoteEngine",
     "DryRunQuoteResult",
+    "EquityFundamentalFact",
     "MidpointFairValueModel",
     "QuoteEngineConfig",
 ]

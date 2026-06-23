@@ -66,6 +66,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
   Polymarket US public market-data client.
 - `src/edmn_trader/adapters/polymarket_us/orderbook.py`: Polymarket US
   market-book normalizer. Read for Stage 8 parsing only.
+- `src/edmn_trader/adapters/sec_edgar/client.py`: guarded read-only SEC EDGAR
+  public companyfacts client.
+- `src/edmn_trader/adapters/sec_edgar/companyfacts.py`: SEC companyfacts
+  normalizer. Read for Stage 9 parsing only.
 - `src/edmn_trader/data/snapshots.py`: offline market-data snapshot model and
   snapshot JSONL persistence helpers. Read for recorded data schema changes.
 - `src/edmn_trader/data/jsonl.py`: Decimal-safe JSONL read/write/append helpers.
@@ -77,6 +81,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/research/quotes.py`: dry-run quote engine, inventory skew,
   tick/price boundaries, and non-executable quote intents. Read for Stage 4
   quote behavior.
+- `src/edmn_trader/research/equities.py`: exchange-agnostic equities research
+  fact model for SEC fundamentals.
 - `src/edmn_trader/execution/demo.py`: Stage 5 risk-gated fake/demo execution
   boundary, risk decisions, fake adapter, and JSONL audit logging. Read for
   execution smoke behavior.
@@ -137,8 +143,12 @@ context, then read only the files needed for the requested stage. Use `rg` and
   attribution, secret-like fill field rejection, and CLI coverage.
 - `tests/test_polymarket_us_adapter.py`: Stage 8 Polymarket US fixture
   normalization, guarded public client, and malformed-book coverage.
+- `tests/test_sec_edgar_adapter.py`: Stage 9 SEC companyfacts normalization,
+  guarded public client, explicit User-Agent, and malformed-value coverage.
 - `tests/fixtures/kalshi_orderbook_fp_basic.json`: basic local Kalshi-style
   fixture used by the replay script.
+- `tests/fixtures/sec_companyfacts_aapl.json`: local SEC companyfacts fixture
+  for Stage 9 adapter tests.
 - `tests/fixtures/polymarket_us_market_book.json`: local Polymarket US
   market-book fixture for Stage 8 adapter tests.
 - `tests/fixtures/kalshi_markets_response.json`: local markets response fixture

@@ -19,17 +19,16 @@ signals.
   and security policy:
   <https://data.sec.gov/>.
 
-## Allowed next implementation slice
+## Implemented slice
 
-- Add an SEC EDGAR equities fundamentals adapter under
+- Added an SEC EDGAR equities fundamentals adapter under
   `src/edmn_trader/adapters/sec_edgar`.
-- Use committed local fixtures for tests.
-- Parse public company facts or company concept JSON into a small
-  exchange-agnostic research data object.
-- Keep any HTTP client unauthenticated and restricted to `https://data.sec.gov`.
-- Require an explicit identifying User-Agent for any future live HTTP client.
-- Keep live HTTP smoke out of scope until fair-access behavior, caching, and
-  request pacing are reviewed.
+- Added committed local fixtures and offline tests.
+- Parsed public companyfacts JSON into `EquityFundamentalFact`.
+- Kept the HTTP client unauthenticated and restricted to `https://data.sec.gov`.
+- Required an explicit identifying User-Agent for the HTTP client.
+- Deferred live HTTP smoke until fair-access behavior, caching, and request
+  pacing are reviewed.
 
 ## Stop conditions
 

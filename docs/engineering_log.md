@@ -237,6 +237,18 @@ The next implementation should be fixture-first and read-only. Future live SEC
 HTTP access must identify itself with an explicit User-Agent, obey SEC
 fair-access limits, and remain outside the first implementation slice.
 
+## Stage 9 SEC EDGAR fundamentals adapter
+
+Stage 9 added a fixture-first SEC EDGAR adapter for public companyfacts data.
+The parser normalizes SEC JSON into an exchange-agnostic
+`EquityFundamentalFact`, and the guarded client is restricted to
+`https://data.sec.gov` with an explicit User-Agent.
+
+The implementation does not add broker integration, account or portfolio data,
+live quote feeds, paid-vendor data, proprietary exchange data, order placement,
+strategy optimization, or production execution. Tests use local fixtures and
+mocked HTTP only.
+
 ## Interview narrative
 
 A concise way to explain the current project:

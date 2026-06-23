@@ -90,6 +90,13 @@ For staged project work, read `docs/current_handoff.md` and `docs/repo_map.md` b
   only, fixture-tested by default, restricted to the Polymarket US public base
   URL, and free of international endpoints, auth, wallets, WebSockets, trading,
   execution paths, and profitability claims.
+- The Stage 9 SEC EDGAR adapter lives under
+  `src/edmn_trader/adapters/sec_edgar/`, with normalized equities facts in
+  `src/edmn_trader/research/equities.py`. It must stay public-fundamentals
+  only, fixture-tested by default, restricted to `https://data.sec.gov`, and
+  free of broker APIs, credentials, account data, live quote feeds, paid-vendor
+  data, orders, strategy optimization, execution paths, and profitability
+  claims.
 
 ## Verification
 

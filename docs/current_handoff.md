@@ -10,16 +10,17 @@ client, local fixtures, mocked HTTP tests, Decimal-safe JSONL snapshot storage,
 deterministic offline replay metrics, a fair-value/quote-engine dry run,
 risk-gated fake-adapter demo execution smoke infrastructure, and a finite
 Stage 6 market-maker replay workflow, and an offline Stage 7 research report
-workflow, and a fixture-first Polymarket US public market-data adapter.
+workflow, a fixture-first Polymarket US public market-data adapter, and a
+fixture-first SEC EDGAR public fundamentals adapter.
 
 ## Last completed stage
 
-Stage 8: Polymarket US market-data research adapter.
+Stage 9: U.S. equities research adapter, paper/research only.
 
 ## Stage plan status
 
 `docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
-1, 1.5, 2, 3, 4, 5, 6, 7, and 8. The ledger records purpose, known commit hashes,
+1, 1.5, 2, 3, 4, 5, 6, 7, 8, and 9. The ledger records purpose, known commit hashes,
 files/modules added, validation commands, status, next-stage boundary, and
 safety status for each completed stage.
 
@@ -87,6 +88,12 @@ not add broker integration, credentials, account data, portfolio data, live
 quote feeds, paid-vendor market data, order placement, strategy optimization,
 production execution, or profitability claims.
 
+Stage 9 is now implemented as an SEC EDGAR public fundamentals adapter. It
+normalizes local companyfacts fixtures into `EquityFundamentalFact` and
+includes a guarded read-only client restricted to `https://data.sec.gov` with
+explicit User-Agent configuration. Tests use local fixtures and mocked HTTP
+only.
+
 ## Important files
 
 - `AGENTS.md`: repo rules and first-read instructions.
@@ -108,6 +115,10 @@ production execution, or profitability claims.
   Polymarket US public market-data client.
 - `src/edmn_trader/adapters/polymarket_us/orderbook.py`: Polymarket US
   market-book normalizer.
+- `src/edmn_trader/adapters/sec_edgar/client.py`: guarded read-only SEC EDGAR
+  public companyfacts client.
+- `src/edmn_trader/adapters/sec_edgar/companyfacts.py`: SEC companyfacts
+  normalizer.
 - `src/edmn_trader/data/snapshots.py`: snapshot model and snapshot JSONL
   persistence helpers.
 - `src/edmn_trader/data/jsonl.py`: Decimal-safe JSONL helpers.
@@ -116,6 +127,8 @@ production execution, or profitability claims.
   model.
 - `src/edmn_trader/research/quotes.py`: non-executable dry-run quote engine and
   quote intents.
+- `src/edmn_trader/research/equities.py`: exchange-agnostic equities
+  fundamentals fact model.
 - `src/edmn_trader/execution/demo.py`: Stage 5 risk decisions, fake adapter,
   execution boundary, and JSONL audit logging.
 - `scripts/02_record_fixture_snapshots.py`: converts local fixtures to JSONL
@@ -147,6 +160,8 @@ production execution, or profitability claims.
   attribution, secret-like fill rejection, and CLI coverage.
 - `tests/test_polymarket_us_adapter.py`: Stage 8 Polymarket US fixture
   normalization, guarded public client, and malformed-book coverage.
+- `tests/test_sec_edgar_adapter.py`: Stage 9 SEC companyfacts normalization,
+  guarded public client, explicit User-Agent, and malformed-value coverage.
 
 ## Commands that currently pass
 
@@ -176,6 +191,7 @@ python scripts/06_market_maker_replay.py --input /tmp/edmn_stage7_snapshots.json
 python scripts/06_market_maker_replay.py --input /tmp/edmn_stage7_snapshots.jsonl --demo-opt-in --log-output /tmp/edmn_stage7_market_maker_demo.jsonl
 python scripts/07_research_report.py --market-maker-log /tmp/edmn_stage7_market_maker.jsonl --output /tmp/edmn_stage7_report.md
 pytest tests/test_polymarket_us_adapter.py
+pytest tests/test_sec_edgar_adapter.py
 ```
 
 Optional environment validation:
@@ -251,21 +267,19 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Stage 9 implementation: fixture-first SEC EDGAR public fundamentals adapter.
-Start only after reconfirming clean synced `main`, CI, branch protection,
-required `Validate` status, local validation, and whether the owner-direct fast
-path or PR path applies.
+A richer paper/research reporting checkpoint may follow only after reconfirming
+clean synced `main`, CI, branch protection, required `Validate` status, local
+validation, and whether the owner-direct fast path or PR path applies.
 
 ## Exact next prompt suggestion
 
-Use Codex Long Session Governance. Implement only the fixture-first Stage 9 SEC
-EDGAR public fundamentals adapter from the Stage 9 section of
-`docs/STAGE_PLAN.md` and `docs/stage9_equities_readiness.md`; use TDD, keep
-tests offline, and do not add broker integration, credentials, account data,
-portfolio data, live quote feeds, paid-vendor market data, live equities
-orders, production endpoints, strategy optimization, unsupported data
-redistribution, or profitability claims.
+Use Codex Long Session Governance. Start with the next-stage readiness check
+from `docs/STAGE_PLAN.md`; do not implement it until readiness is confirmed,
+and do not add broker integration, credentials, account data, portfolio data,
+live quote feeds, paid-vendor market data, live equities orders, production
+endpoints, strategy optimization, unsupported data redistribution, or
+profitability claims.
 
 ## Last updated timestamp
 
-2026-06-22 23:30:37 -07:00
+2026-06-22 23:35:56 -07:00

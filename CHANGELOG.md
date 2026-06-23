@@ -6,6 +6,12 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added a fixture-first SEC EDGAR public fundamentals adapter under
+  `src/edmn_trader/adapters/sec_edgar`.
+- Added an exchange-agnostic `EquityFundamentalFact` research model and local
+  SEC companyfacts fixture coverage for normalized public fundamentals,
+  explicit User-Agent behavior, guarded `data.sec.gov` access, and malformed
+  value rejection.
 - Clarified Stage 9 readiness: future work may target only SEC EDGAR public
   fundamentals with local fixtures and a read-only adapter; broker integration,
   credentials, account data, live quote feeds, paid-vendor data, trading, and

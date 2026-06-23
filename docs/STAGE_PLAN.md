@@ -2,7 +2,7 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages through Stage 8. They are
+These records summarize the locally completed stages through Stage 9. They are
 intended as a durable audit map; implementation details remain in the source,
 tests, changelog, engineering log, and handoff archive.
 
@@ -214,6 +214,28 @@ tests, changelog, engineering log, and handoff archive.
   no authenticated endpoint, no account data, no WebSocket, no live HTTP smoke
   by default, no geoblock or platform-rule bypass, no production execution, and
   no profitability claim.
+
+### Stage 9: U.S. equities research adapter, paper/research only
+
+- Status: complete.
+- Commit: pending on the Stage 9 implementation branch.
+- Purpose: prove U.S. equities research data ingestion can remain
+  fixture-first, SEC-public-fundamentals only, read-only, and credential-free.
+- Files/modules added: `src/edmn_trader/adapters/sec_edgar/client.py`,
+  `src/edmn_trader/adapters/sec_edgar/companyfacts.py`,
+  `src/edmn_trader/adapters/sec_edgar/__init__.py`,
+  `src/edmn_trader/research/equities.py`, local SEC companyfacts fixture,
+  adapter tests, and readiness documentation.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, and `python scripts/01_replay_orderbook_fixture.py`.
+- Next-stage boundary: a later stage may add richer paper/research reporting
+  only after SEC fundamentals ingestion remains read-only, fixture-tested, and
+  credential-free.
+- Safety status: SEC EDGAR public fundamentals only, no broker integration, no
+  credentials, no account or portfolio data, no live quote feed, no paid-vendor
+  market data, no proprietary exchange data, no live HTTP smoke by default, no
+  order placement, no strategy optimization, no production execution, and no
+  profitability claim.
 
 ## Stage 0: Repository foundation
 

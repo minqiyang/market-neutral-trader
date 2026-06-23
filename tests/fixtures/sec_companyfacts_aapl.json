@@ -1,0 +1,34 @@
+{
+  "cik": 320193,
+  "entityName": "Apple Inc.",
+  "facts": {
+    "us-gaap": {
+      "Revenues": {
+        "label": "Revenues",
+        "description": "Revenue from contract with customer.",
+        "units": {
+          "USD": [
+            {
+              "fy": 2023,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2023-11-03",
+              "end": "2023-09-30",
+              "val": 383285000000,
+              "accn": "0000320193-23-000106"
+            },
+            {
+              "fy": 2022,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2022-10-28",
+              "end": "2022-09-24",
+              "val": 394328000000,
+              "accn": "0000320193-22-000108"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
