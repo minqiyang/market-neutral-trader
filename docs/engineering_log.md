@@ -183,6 +183,25 @@ only allowed to prove deterministic offline attribution and disclosure hygiene;
 production endpoints, WebSockets, optimization, and profitability framing remain
 out of scope.
 
+## Stage 7 offline research reports
+
+Stage 7 added a Markdown research report generator that consumes structured
+Stage 6 market-maker replay logs and, optionally, an explicit local fill JSONL
+fixture. The report separates observed decision counts from hypothetical fill
+assumptions so fake/demo adapter submissions never become implied fills.
+
+The attribution is deliberately small and auditable: explicit fills produce
+FIFO-style realized gross PnL, total fees, net PnL, and ending inventory using
+`Decimal`. Empty/no-fill runs still produce a valid report with zero supplied
+fills and zero realized PnL. Fill fixtures reject secret-like field names so
+account or credential-bearing data does not become part of the reporting path.
+
+The main tradeoff was avoiding richer charts, mark-to-market assumptions, and
+adverse-selection metrics until explicit input data exists for those
+calculations. Stage 7 proves the reporting boundary and disclosure hygiene
+without adding live data access, production endpoints, strategy optimization,
+or profitability framing.
+
 ## Interview narrative
 
 A concise way to explain the current project:

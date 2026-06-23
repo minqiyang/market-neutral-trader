@@ -55,3 +55,6 @@ jobs:
 
       - name: Run market maker replay demo opt-in
         run: python scripts/06_market_maker_replay.py --input /tmp/edmn_ci_snapshots.jsonl --demo-opt-in --log-output /tmp/edmn_ci_market_maker_demo.jsonl
+
+      - name: Run research report
+        run: python scripts/07_research_report.py --market-maker-log /tmp/edmn_ci_market_maker.jsonl --output /tmp/edmn_ci_research_report.md

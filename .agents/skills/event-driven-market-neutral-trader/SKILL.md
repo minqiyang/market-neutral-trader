@@ -80,6 +80,11 @@ For staged project work, read `docs/current_handoff.md` and `docs/repo_map.md` b
   `scripts/06_market_maker_replay.py`. It must remain finite, dry-run by
   default, fake-adapter only after explicit `--demo-opt-in`, and must not infer
   fills, PnL, profitability, or production readiness.
+- The Stage 7 offline research report lives at
+  `src/edmn_trader/scripts/research_report.py`; the root script is
+  `scripts/07_research_report.py`. It consumes Stage 6 logs and optional
+  explicit local fill fixtures only, rejects secret-like fill fields, and must
+  not infer fills from adapter submissions or claim profitability.
 
 ## Verification
 

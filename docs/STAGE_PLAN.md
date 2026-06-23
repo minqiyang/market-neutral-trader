@@ -2,7 +2,7 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages through Stage 6. They are
+These records summarize the locally completed stages through Stage 7. They are
 intended as a durable audit map; implementation details remain in the source,
 tests, changelog, engineering log, and handoff archive.
 
@@ -170,6 +170,29 @@ tests, changelog, engineering log, and handoff archive.
   placement, no production endpoint, no WebSocket, no live market-making loop,
   no fill simulation, no strategy optimization, no secrets, and no
   profitability claim.
+
+### Stage 7: PnL attribution and research report
+
+- Status: complete.
+- Commit: pending on the Stage 7 implementation branch.
+- Purpose: generate offline research reports from Stage 6 decision logs and
+  optional explicit local fill assumptions.
+- Files/modules added: `src/edmn_trader/scripts/research_report.py`,
+  `scripts/07_research_report.py`, Stage 7 report tests, package script entry
+  point, and CI validation for report generation.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/01_replay_orderbook_fixture.py`,
+  `python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage7_snapshots.jsonl`,
+  `python scripts/06_market_maker_replay.py --input /tmp/edmn_stage7_snapshots.jsonl --log-output /tmp/edmn_stage7_market_maker.jsonl`,
+  `python scripts/06_market_maker_replay.py --input /tmp/edmn_stage7_snapshots.jsonl --demo-opt-in --log-output /tmp/edmn_stage7_market_maker_demo.jsonl`,
+  and `python scripts/07_research_report.py --market-maker-log /tmp/edmn_stage7_market_maker.jsonl --output /tmp/edmn_stage7_report.md`.
+- Next-stage boundary: Stage 8 may add additional research data adapters or
+  richer reporting only after compliance and source-data boundaries are
+  reviewed.
+- Safety status: local/offline only, explicit fill assumptions only, no fill
+  inference from fake/demo adapter submissions, no network calls, no
+  authenticated execution, no production endpoints, no WebSocket ingestion, no
+  strategy optimization, no secrets, and no profitability claim.
 
 ## Stage 0: Repository foundation
 

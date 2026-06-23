@@ -82,6 +82,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
   dry-run quote script and table renderer.
 - `src/edmn_trader/scripts/demo_execution_smoke.py`: importable Stage 5
   fake-adapter demo execution smoke script.
+- `src/edmn_trader/scripts/market_maker_replay.py`: importable Stage 6 finite
+  replay workflow for quote lifecycle, risk gates, logs, and run summaries.
+- `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
+  report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/**/__init__.py`: package exports.
 
 ## Scripts
@@ -97,6 +101,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `scripts/05_demo_execution_smoke.py`: runs a local fake-adapter Stage 5
   execution smoke check and appends JSONL audit logs. Use `--demo-opt-in` only
   for fake-adapter approved-path validation.
+- `scripts/06_market_maker_replay.py`: runs the finite Stage 6 replay workflow
+  and writes structured JSONL logs.
+- `scripts/07_research_report.py`: writes a local/offline Markdown attribution
+  report from Stage 6 JSONL logs and optional explicit fill fixtures.
 
 ## Tests and fixtures
 
@@ -115,6 +123,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `tests/test_demo_execution.py`: Stage 5 risk gate, blocked path, fake
   adapter, and execution audit log coverage.
 - `tests/test_demo_execution_smoke.py`: Stage 5 smoke script coverage.
+- `tests/test_market_maker_replay.py`: Stage 6 dry-run/demo, lifecycle,
+  run-control, adapter-error, and script-summary coverage.
+- `tests/test_research_report.py`: Stage 7 report generation, explicit fill
+  attribution, secret-like fill field rejection, and CLI coverage.
 - `tests/fixtures/kalshi_orderbook_fp_basic.json`: basic local Kalshi-style
   fixture used by the replay script.
 - `tests/fixtures/kalshi_markets_response.json`: local markets response fixture

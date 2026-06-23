@@ -27,6 +27,7 @@ edmn-replay-snapshots = "edmn_trader.scripts.replay_snapshots:main"
 edmn-quote-replay-dry-run = "edmn_trader.scripts.quote_replay_dry_run:main"
 edmn-demo-execution-smoke = "edmn_trader.scripts.demo_execution_smoke:main"
 edmn-market-maker-replay = "edmn_trader.scripts.market_maker_replay:main"
+edmn-research-report = "edmn_trader.scripts.research_report:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

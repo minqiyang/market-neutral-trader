@@ -6,6 +6,15 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 7 offline research report generation from Stage 6 logs and
+  optional explicit local fill fixtures, with Decimal-safe realized PnL, fee,
+  and inventory attribution.
+- Added `scripts/07_research_report.py` and the `edmn-research-report` package
+  entry point. Reports separate observed Stage 6 counts from supplied fill
+  assumptions, reject secret-like fill fields, and do not infer fills from
+  fake/demo adapter submissions.
+- Added offline tests and CI validation for no-fill reports, explicit fill
+  attribution, secret-like fill field rejection, and report CLI output.
 - Clarified the Stage 7 plan for offline PnL attribution and research reports:
   local Stage 6 logs as required input, explicit optional fill assumptions,
   no fill inference from fake/demo submissions, Decimal-safe attribution,

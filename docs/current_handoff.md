@@ -9,16 +9,17 @@ fixed-point orderbook normalization, a guarded read-only Kalshi Demo REST
 client, local fixtures, mocked HTTP tests, Decimal-safe JSONL snapshot storage,
 deterministic offline replay metrics, a fair-value/quote-engine dry run,
 risk-gated fake-adapter demo execution smoke infrastructure, and a finite
-Stage 6 market-maker replay workflow.
+Stage 6 market-maker replay workflow, and an offline Stage 7 research report
+workflow.
 
 ## Last completed stage
 
-Stage 6: Inventory-aware demo market maker in dry-run/demo only.
+Stage 7: PnL attribution and research report.
 
 ## Stage plan status
 
 `docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
-1, 1.5, 2, 3, 4, 5, and 6. The ledger records purpose, known commit hashes,
+1, 1.5, 2, 3, 4, 5, 6, and 7. The ledger records purpose, known commit hashes,
 files/modules added, validation commands, status, next-stage boundary, and
 safety status for each completed stage.
 
@@ -54,6 +55,11 @@ research report inputs, optional explicit fill assumptions, Decimal-safe
 attribution requirements, no-fill report behavior, Markdown report script,
 offline tests, validation commands, non-goals, and the Stage 8 boundary.
 
+Stage 7 is now implemented as an offline Markdown research report workflow. It
+consumes Stage 6 JSONL logs and optional explicit local fill fixtures, separates
+observed counts from supplied assumptions, rejects secret-like fill fields, and
+does not infer fills from fake/demo adapter submissions.
+
 ## Important files
 
 - `AGENTS.md`: repo rules and first-read instructions.
@@ -88,6 +94,9 @@ offline tests, validation commands, non-goals, and the Stage 8 boundary.
 - `src/edmn_trader/scripts/market_maker_replay.py`: importable Stage 6 finite
   replay workflow for quote lifecycle, risk gates, logs, and run summaries.
 - `scripts/06_market_maker_replay.py`: root wrapper for Stage 6 replay.
+- `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
+  Markdown report generator for Stage 6 logs and explicit fill assumptions.
+- `scripts/07_research_report.py`: root wrapper for Stage 7 reporting.
 - `tests/test_kalshi_client.py`: mocked HTTP coverage for the Stage 2 client.
 - `tests/test_kalshi_orderbook.py`: normalizer coverage.
 - `tests/test_snapshots_jsonl.py`: snapshot/JSONL coverage.
@@ -99,6 +108,8 @@ offline tests, validation commands, non-goals, and the Stage 8 boundary.
 - `tests/test_demo_execution_smoke.py`: Stage 5 smoke script coverage.
 - `tests/test_market_maker_replay.py`: Stage 6 dry-run/demo, lifecycle,
   run-control, adapter-error, and script-summary coverage.
+- `tests/test_research_report.py`: Stage 7 no-fill report, explicit fill
+  attribution, secret-like fill rejection, and CLI coverage.
 
 ## Commands that currently pass
 
@@ -123,6 +134,10 @@ python scripts/05_demo_execution_smoke.py --log-output /tmp/edmn_stage6_executio
 python scripts/05_demo_execution_smoke.py --demo-opt-in --log-output /tmp/edmn_stage6_execution_smoke_approved.jsonl
 python scripts/06_market_maker_replay.py --input /tmp/edmn_stage6_snapshots.jsonl --log-output /tmp/edmn_stage6_market_maker.jsonl
 python scripts/06_market_maker_replay.py --input /tmp/edmn_stage6_snapshots.jsonl --demo-opt-in --log-output /tmp/edmn_stage6_market_maker_demo.jsonl
+python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage7_snapshots.jsonl
+python scripts/06_market_maker_replay.py --input /tmp/edmn_stage7_snapshots.jsonl --log-output /tmp/edmn_stage7_market_maker.jsonl
+python scripts/06_market_maker_replay.py --input /tmp/edmn_stage7_snapshots.jsonl --demo-opt-in --log-output /tmp/edmn_stage7_market_maker_demo.jsonl
+python scripts/07_research_report.py --market-maker-log /tmp/edmn_stage7_market_maker.jsonl --output /tmp/edmn_stage7_report.md
 ```
 
 Optional environment validation:
@@ -148,7 +163,8 @@ python -m pip install -e ".[dev]"
   `docs/codex_long_running_controller.md` is satisfied.
 - `.github/workflows/ci.yml` exists, and the latest observed GitHub Actions CI
   run on `main` completed successfully. CI now runs `Validate` for pushes to
-  `main`, pull requests to `main`, and pushes to `codex/**` branches.
+  `main`, pull requests to `main`, and pushes to `codex/**` branches, including
+  the Stage 7 research report command.
 - GitHub branch protection is enabled on `main` and requires the `Validate`
   status check.
 - The Kalshi Demo client is tested with mocked HTTP and local fixtures; no live
@@ -197,19 +213,20 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Stage 7 implementation: offline PnL attribution and research reporting from
-Stage 6 logs and optional explicit fill fixtures. Start only after reconfirming
-clean synced `main`, CI, branch protection, required `Validate` status, local
-validation, and whether the owner-direct fast path or PR path applies.
+Stage 8 readiness check: additional research data adapters or richer reporting
+only after compliance, data-source, and source-redistribution boundaries are
+reviewed. Start only after reconfirming clean synced `main`, CI, branch
+protection, required `Validate` status, local validation, and whether the
+owner-direct fast path or PR path applies.
 
 ## Exact next prompt suggestion
 
-Use Codex Long Session Governance. Start Stage 7 implementation from only the
-Stage 7 section of `docs/STAGE_PLAN.md`; use TDD for behavior changes, keep the
-report workflow local/offline, do not infer fills from fake/demo submissions,
-and do not add authenticated/live trading, WebSocket ingestion, production
-endpoints, strategy optimization, or profitability claims.
+Use Codex Long Session Governance. Start with a Stage 8 readiness check from
+only the Stage 8 section of `docs/STAGE_PLAN.md`; do not implement Stage 8 until
+readiness is confirmed, and do not add authenticated/live trading, WebSocket
+ingestion, production endpoints, strategy optimization, unsupported data
+redistribution, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-22 22:58:58 -07:00
+2026-06-22 23:07:39 -07:00
