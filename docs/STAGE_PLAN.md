@@ -146,7 +146,7 @@ tests, changelog, engineering log, and handoff archive.
 ### Stage 6: Inventory-aware demo market maker in dry-run/demo only
 
 - Status: complete.
-- Commit: pending on the Stage 6 branch.
+- Commit: `3f6633e`.
 - Purpose: connect replayed books, baseline fair value, dry-run quote
   generation, quote lifecycle decisions, Stage 5 risk gates, and fake-adapter
   demo submissions in a finite offline workflow.
