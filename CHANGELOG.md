@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 10 as an offline paper research report pack that may combine
+  Stage 7 attribution outputs and Stage 9 SEC fundamentals, while excluding
+  trading signals, security ranking, broker integration, live feeds, and
+  profitability claims.
 - Added a fixture-first SEC EDGAR public fundamentals adapter under
   `src/edmn_trader/adapters/sec_edgar`.
 - Added an exchange-agnostic `EquityFundamentalFact` research model and local

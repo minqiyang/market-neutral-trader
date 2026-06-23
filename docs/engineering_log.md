@@ -249,6 +249,16 @@ live quote feeds, paid-vendor data, proprietary exchange data, order placement,
 strategy optimization, or production execution. Tests use local fixtures and
 mocked HTTP only.
 
+## Stage 10 plan clarification
+
+After Stage 9, the next useful step is reporting, not another data source.
+Stage 10 is scoped as an offline paper research report pack that can combine
+existing Stage 7 attribution outputs with Stage 9 SEC fundamentals.
+
+The boundary stays narrow: reports may summarize observed metrics and public
+fundamentals, but they must not rank securities, emit trading signals, optimize
+strategies, or imply production readiness or profitability.
+
 ## Interview narrative
 
 A concise way to explain the current project:

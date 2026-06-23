@@ -855,3 +855,53 @@ production execution, and no claims of guaranteed performance.
 Next-stage boundary: a later stage may add richer paper/research reporting only
 after Stage 9 proves SEC fundamentals ingestion remains fixture-tested,
 read-only, and credential-free.
+
+## Stage 10: Paper research report pack
+
+Purpose: combine existing offline Stage 7 attribution reports and Stage 9 SEC
+fundamentals into a paper/research report pack without introducing trading
+signals, execution, live feeds, or performance marketing.
+
+Deliverables: report-pack generator, local fixtures, Markdown output, tests,
+and limitation notes.
+
+Allowed scope:
+
+- Use local Stage 7 Markdown/JSONL outputs and local SEC fundamentals fixtures
+  only.
+- Produce an offline Markdown report pack or directory of Markdown files.
+- Separate observed run metrics, supplied assumptions, and SEC fundamentals.
+- Include source/limitation notes for SEC EDGAR data and any supplied fill
+  assumptions.
+- Keep all calculations deterministic and `Decimal`-safe when money or numeric
+  fundamentals are used.
+- Keep tests offline and deterministic.
+
+Acceptance checks:
+
+- Reports do not rank securities, optimize strategies, emit trading signals,
+  or claim profitability.
+- Reports do not use broker APIs, credentials, account data, portfolio data,
+  live quote feeds, paid-vendor feeds, proprietary exchange data, WebSockets, or
+  production endpoints.
+- Missing optional inputs produce explicit "not supplied" sections instead of
+  inferred data.
+- Output separates observed facts from assumptions and limitations.
+
+Validation commands:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+ruff check .
+python scripts/01_replay_orderbook_fixture.py
+```
+
+Explicit non-goals: no live equities orders, no broker integration, no
+credentials, no account or portfolio data, no live quote feeds, no paid-vendor
+market data, no strategy optimization, no security ranking, no allocation
+advice, no production execution, and no profitability claims.
+
+Next-stage boundary: later stages may add additional report sections only after
+the report pack keeps all data local/offline, assumption-labeled, and
+non-executable.

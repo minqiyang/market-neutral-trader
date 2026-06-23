@@ -94,6 +94,11 @@ includes a guarded read-only client restricted to `https://data.sec.gov` with
 explicit User-Agent configuration. Tests use local fixtures and mocked HTTP
 only.
 
+`docs/STAGE_PLAN.md` now contains the full Stage 10 specification: offline
+paper research report pack inputs, Markdown output, separation of observed
+metrics, supplied assumptions, SEC fundamentals and limitations, offline tests,
+validation commands, non-goals, and the next-stage boundary.
+
 ## Important files
 
 - `AGENTS.md`: repo rules and first-read instructions.
@@ -267,19 +272,20 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-A richer paper/research reporting checkpoint may follow only after reconfirming
-clean synced `main`, CI, branch protection, required `Validate` status, local
-validation, and whether the owner-direct fast path or PR path applies.
+Stage 10 implementation: offline paper research report pack. Start only after
+reconfirming clean synced `main`, CI, branch protection, required `Validate`
+status, local validation, and whether the owner-direct fast path or PR path
+applies.
 
 ## Exact next prompt suggestion
 
-Use Codex Long Session Governance. Start with the next-stage readiness check
-from `docs/STAGE_PLAN.md`; do not implement it until readiness is confirmed,
-and do not add broker integration, credentials, account data, portfolio data,
-live quote feeds, paid-vendor market data, live equities orders, production
-endpoints, strategy optimization, unsupported data redistribution, or
-profitability claims.
+Use Codex Long Session Governance. Implement only the offline Stage 10 paper
+research report pack from the Stage 10 section of `docs/STAGE_PLAN.md`; use
+TDD, keep tests offline, and do not add broker integration, credentials,
+account data, portfolio data, live quote feeds, paid-vendor market data, live
+equities orders, production endpoints, strategy optimization, security ranking,
+allocation advice, unsupported data redistribution, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-22 23:35:56 -07:00
+2026-06-22 23:40:10 -07:00
