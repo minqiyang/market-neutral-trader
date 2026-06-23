@@ -7,17 +7,18 @@ risk-controlled event-driven prediction-market research platform. Current
 implemented code includes exchange-agnostic core models, Kalshi-style
 fixed-point orderbook normalization, a guarded read-only Kalshi Demo REST
 client, local fixtures, mocked HTTP tests, Decimal-safe JSONL snapshot storage,
-deterministic offline replay metrics, a fair-value/quote-engine dry run, and
-risk-gated fake-adapter demo execution smoke infrastructure.
+deterministic offline replay metrics, a fair-value/quote-engine dry run,
+risk-gated fake-adapter demo execution smoke infrastructure, and a finite
+Stage 6 market-maker replay workflow.
 
 ## Last completed stage
 
-Stage 5: Risk-gated demo execution smoke test.
+Stage 6: Inventory-aware demo market maker in dry-run/demo only.
 
 ## Stage plan status
 
 `docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
-1, 1.5, 2, 3, 4, and 5. The ledger records purpose, known commit hashes,
+1, 1.5, 2, 3, 4, 5, and 6. The ledger records purpose, known commit hashes,
 files/modules added, validation commands, status, next-stage boundary, and
 safety status for each completed stage.
 
@@ -43,6 +44,10 @@ requirements, Stage 5 risk-gate reuse, structured JSONL logging and run summary
 requirements, explicit quote lifecycle handling, max-position/max-open-orders/
 max-notional/max-loss/kill-switch controls, offline tests, validation commands,
 explicit non-goals, and the Stage 7 boundary.
+
+Stage 6 is now implemented as a finite replay workflow. It remains dry-run by
+default, uses only fake-adapter demo submissions after explicit opt-in and risk
+approval, and does not infer fills, PnL, profitability, or production readiness.
 
 ## Important files
 
@@ -75,6 +80,9 @@ explicit non-goals, and the Stage 7 boundary.
   dry-run quote engine and prints fair value and quote metrics.
 - `scripts/05_demo_execution_smoke.py`: runs a local fake-adapter Stage 5
   smoke check with explicit demo opt-in support.
+- `src/edmn_trader/scripts/market_maker_replay.py`: importable Stage 6 finite
+  replay workflow for quote lifecycle, risk gates, logs, and run summaries.
+- `scripts/06_market_maker_replay.py`: root wrapper for Stage 6 replay.
 - `tests/test_kalshi_client.py`: mocked HTTP coverage for the Stage 2 client.
 - `tests/test_kalshi_orderbook.py`: normalizer coverage.
 - `tests/test_snapshots_jsonl.py`: snapshot/JSONL coverage.
@@ -84,6 +92,8 @@ explicit non-goals, and the Stage 7 boundary.
 - `tests/test_demo_execution.py`: Stage 5 risk gate, blocked path, fake
   adapter, and audit log coverage.
 - `tests/test_demo_execution_smoke.py`: Stage 5 smoke script coverage.
+- `tests/test_market_maker_replay.py`: Stage 6 dry-run/demo, lifecycle,
+  run-control, adapter-error, and script-summary coverage.
 
 ## Commands that currently pass
 
@@ -101,6 +111,13 @@ python scripts/03_replay_snapshots.py --input /tmp/edmn_stage5_snapshots.jsonl
 python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_stage5_snapshots.jsonl
 python scripts/05_demo_execution_smoke.py --log-output /tmp/edmn_stage5_execution_smoke.jsonl
 python scripts/05_demo_execution_smoke.py --demo-opt-in --log-output /tmp/edmn_stage5_execution_smoke_approved.jsonl
+python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage6_snapshots.jsonl
+python scripts/03_replay_snapshots.py --input /tmp/edmn_stage6_snapshots.jsonl
+python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_stage6_snapshots.jsonl
+python scripts/05_demo_execution_smoke.py --log-output /tmp/edmn_stage6_execution_smoke.jsonl
+python scripts/05_demo_execution_smoke.py --demo-opt-in --log-output /tmp/edmn_stage6_execution_smoke_approved.jsonl
+python scripts/06_market_maker_replay.py --input /tmp/edmn_stage6_snapshots.jsonl --log-output /tmp/edmn_stage6_market_maker.jsonl
+python scripts/06_market_maker_replay.py --input /tmp/edmn_stage6_snapshots.jsonl --demo-opt-in --log-output /tmp/edmn_stage6_market_maker_demo.jsonl
 ```
 
 Optional environment validation:
@@ -131,10 +148,10 @@ python -m pip install -e ".[dev]"
   status check.
 - The Kalshi Demo client is tested with mocked HTTP and local fixtures; no live
   network smoke script exists.
-- Quote dry-runs emit non-executable intents. Stage 5 converts those boundaries
-  into fake-adapter demo execution requests only after explicit risk approval;
-  no fill simulation, WebSocket ingestion, production trading path, or live
-  market-making loop exists.
+- Quote dry-runs emit non-executable intents. Stage 6 can convert those
+  boundaries into fake-adapter demo execution requests only after explicit
+  opt-in and Stage 5 risk approval; no fill simulation, WebSocket ingestion,
+  production trading path, or live market-making loop exists.
 
 ## PR workflow policy
 
@@ -175,20 +192,17 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-After this documentation-only policy update lands, continue with Stage 6
-implementation from the expanded `docs/STAGE_PLAN.md` section. Reconfirm clean
-synced `main`, CI, branch protection, required `Validate` status, local
-validation, and whether the owner-direct fast path or PR path applies before
-changing behavior.
+Stage 7: PnL attribution and research reporting. Start only after reconfirming
+clean synced `main`, CI, branch protection, required `Validate` status, local
+validation, and whether the owner-direct fast path or PR path applies.
 
 ## Exact next prompt suggestion
 
-Use Codex Long Session Governance. Start Stage 6 implementation from only the
-Stage 6 section of `docs/STAGE_PLAN.md`; use TDD for behavior changes, keep
-dry-run as the default, do not add authenticated/live trading, and apply the
-publish and skill-orchestration policy in
-`docs/codex_long_running_controller.md`.
+Use Codex Long Session Governance. Start Stage 7 planning from only the Stage 7
+section of `docs/STAGE_PLAN.md`; if the Stage 7 spec is incomplete, create a
+docs-only clarification checkpoint and stop. Do not add authenticated/live
+trading, WebSocket ingestion, production endpoints, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-22 21:57:49 -07:00
+2026-06-22 22:13:11 -07:00

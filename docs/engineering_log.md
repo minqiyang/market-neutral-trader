@@ -144,6 +144,26 @@ cancel, or hold intents, and audit those decisions before any adapter access.
 It also must enforce max position, max open orders, max notional exposure, max
 loss, and a kill switch in deterministic offline tests.
 
+## Stage 6 finite market-maker replay
+
+Stage 6 connected the previously separate offline pieces into one bounded
+workflow. The replay runner consumes JSONL snapshots, uses the Stage 4 quote
+engine to generate bid and ask candidates with bounded inventory skew, compares
+those desired quotes with an in-memory open quote state, and emits explicit
+place, replace, cancel, or hold lifecycle decisions.
+
+The execution boundary remains deliberately narrow. Dry-run mode is the
+default and never calls an adapter. Demo opt-in still uses only the fake adapter
+and only after Stage 5 risk approval. The runner logs frames, quote candidates,
+lifecycle decisions, risk decisions, adapter submissions or errors, and a run
+summary that separates quotes, approvals, rejections, skipped actions, and
+adapter calls. It does not infer fills or PnL.
+
+The main tradeoff was keeping the market-maker loop finite and script-driven
+instead of adding a daemon or live event loop. That gives Stage 7 enough audited
+state for attribution/reporting work while preserving the no-production,
+no-WebSocket, no-live-market-making boundary.
+
 ## Interview narrative
 
 A concise way to explain the current project:

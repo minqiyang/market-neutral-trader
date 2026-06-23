@@ -2,7 +2,7 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages before Stage 6. They are
+These records summarize the locally completed stages through Stage 6. They are
 intended as a durable audit map; implementation details remain in the source,
 tests, changelog, engineering log, and handoff archive.
 
@@ -142,6 +142,34 @@ tests, changelog, engineering log, and handoff archive.
   demo opt-in are rejected, all attempts are logged, no credentials are needed,
   and no live network, WebSocket, strategy optimization, fill simulation,
   production endpoint, live-trading claim, or profitability claim is added.
+
+### Stage 6: Inventory-aware demo market maker in dry-run/demo only
+
+- Status: complete.
+- Commit: pending on the Stage 6 branch.
+- Purpose: connect replayed books, baseline fair value, dry-run quote
+  generation, quote lifecycle decisions, Stage 5 risk gates, and fake-adapter
+  demo submissions in a finite offline workflow.
+- Files/modules added: `src/edmn_trader/scripts/market_maker_replay.py`,
+  `scripts/06_market_maker_replay.py`, Stage 6 market-maker replay tests, and
+  package script entry point.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/01_replay_orderbook_fixture.py`,
+  `python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage6_snapshots.jsonl`,
+  `python scripts/03_replay_snapshots.py --input /tmp/edmn_stage6_snapshots.jsonl`,
+  `python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_stage6_snapshots.jsonl`,
+  `python scripts/05_demo_execution_smoke.py --log-output /tmp/edmn_stage6_execution_smoke.jsonl`,
+  `python scripts/05_demo_execution_smoke.py --demo-opt-in --log-output /tmp/edmn_stage6_execution_smoke_approved.jsonl`,
+  `python scripts/06_market_maker_replay.py --input /tmp/edmn_stage6_snapshots.jsonl --log-output /tmp/edmn_stage6_market_maker.jsonl`,
+  and `python scripts/06_market_maker_replay.py --input /tmp/edmn_stage6_snapshots.jsonl --demo-opt-in --log-output /tmp/edmn_stage6_market_maker_demo.jsonl`.
+- Next-stage boundary: Stage 7 may add PnL attribution and research reporting
+  only after Stage 6 run summaries make explicit that fills and PnL are not
+  inferred.
+- Safety status: finite replay only, dry-run by default, fake adapter only
+  after explicit demo opt-in and Stage 5 risk approval, no authenticated order
+  placement, no production endpoint, no WebSocket, no live market-making loop,
+  no fill simulation, no strategy optimization, no secrets, and no
+  profitability claim.
 
 ## Stage 0: Repository foundation
 

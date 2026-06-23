@@ -6,6 +6,19 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 6 finite market-maker replay workflow that consumes JSONL
+  snapshots, generates inventory-aware quote candidates, compares them with
+  in-memory open quote state, emits place/replace/cancel/hold lifecycle
+  decisions, applies Stage 5 risk gates, and writes structured JSONL logs plus
+  run summaries.
+- Added `scripts/06_market_maker_replay.py` and the
+  `edmn-market-maker-replay` package entry point. Default mode remains
+  dry-run/fake-adapter only; explicit `--demo-opt-in` is required before fake
+  adapter submissions can occur.
+- Added offline tests for dry-run adapter blocking, explicit demo opt-in, quote
+  lifecycle decisions, max position, max open orders, max notional, max loss,
+  kill switch, non-demo endpoints, `LIVE_DISABLED`, adapter errors, and script
+  summary output.
 - Clarified the Stage 6 plan for a finite replay-driven inventory-aware demo
   market-maker workflow, including dry-run defaults, explicit demo opt-in,
   Stage 5 risk-gate reuse, structured JSONL logs, run summaries, offline tests,

@@ -75,6 +75,11 @@ For staged project work, read `docs/current_handoff.md` and `docs/repo_map.md` b
   `scripts/05_demo_execution_smoke.py` must remain fake-adapter/local by
   default, require explicit `--demo-opt-in` for approved fake execution, and log
   every attempt as JSONL.
+- The Stage 6 finite market-maker replay lives at
+  `src/edmn_trader/scripts/market_maker_replay.py`; the root script is
+  `scripts/06_market_maker_replay.py`. It must remain finite, dry-run by
+  default, fake-adapter only after explicit `--demo-opt-in`, and must not infer
+  fills, PnL, profitability, or production readiness.
 
 ## Verification
 
