@@ -76,9 +76,16 @@ URL. Tests use local fixtures and mocked HTTP only.
 
 Audit after three completed checkpoints: Stage 7 implementation, Stage 8
 readiness clarification, and Stage 8 implementation. Local `main` is synced
-with `origin/main` at `cc31c25`, the worktree is clean, there are no open pull
-requests, and the latest observed `main` CI run `28006772756` passed
+with `origin/main` at `cbfce85`, the worktree is clean, there are no open pull
+requests, and the latest observed `main` CI run `28006884201` passed
 `Validate`. The next checkpoint remains Stage 9 readiness only.
+
+`docs/STAGE_PLAN.md` now contains the clarified Stage 9 specification and
+`docs/stage9_equities_readiness.md` records the readiness review. Stage 9 is
+ready only for a fixture-first SEC EDGAR public fundamentals adapter. It must
+not add broker integration, credentials, account data, portfolio data, live
+quote feeds, paid-vendor market data, order placement, strategy optimization,
+production execution, or profitability claims.
 
 ## Important files
 
@@ -90,6 +97,8 @@ requests, and the latest observed `main` CI run `28006772756` passed
 - `docs/STAGE_PLAN.md`: staged roadmap and non-goals.
 - `docs/stage8_polymarket_readiness.md`: Stage 8 readiness note and source
   links for the Polymarket US public market-data boundary.
+- `docs/stage9_equities_readiness.md`: Stage 9 readiness note and source links
+  for the SEC EDGAR public fundamentals boundary.
 - `docs/engineering_log.md`: narrative engineering record.
 - `src/edmn_trader/core/models.py`: exchange-agnostic core models.
 - `src/edmn_trader/adapters/kalshi/client.py`: guarded read-only Kalshi Demo
@@ -242,19 +251,21 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Stage 9 readiness check: U.S. equities research adapter, paper/research only.
+Stage 9 implementation: fixture-first SEC EDGAR public fundamentals adapter.
 Start only after reconfirming clean synced `main`, CI, branch protection,
 required `Validate` status, local validation, and whether the owner-direct fast
-path or PR path applies. Do not implement Stage 9 until readiness is confirmed.
+path or PR path applies.
 
 ## Exact next prompt suggestion
 
-Use Codex Long Session Governance. Start with a Stage 9 readiness check from
-only the Stage 9 section of `docs/STAGE_PLAN.md`; do not implement Stage 9
-until readiness is confirmed, and do not add broker integration, credentials,
-live equities orders, production endpoints, strategy optimization, unsupported
-data redistribution, or profitability claims.
+Use Codex Long Session Governance. Implement only the fixture-first Stage 9 SEC
+EDGAR public fundamentals adapter from the Stage 9 section of
+`docs/STAGE_PLAN.md` and `docs/stage9_equities_readiness.md`; use TDD, keep
+tests offline, and do not add broker integration, credentials, account data,
+portfolio data, live quote feeds, paid-vendor market data, live equities
+orders, production endpoints, strategy optimization, unsupported data
+redistribution, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-22 23:26:40 -07:00
+2026-06-22 23:30:37 -07:00

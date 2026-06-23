@@ -226,6 +226,17 @@ international Polymarket endpoint, authentication, wallets, account data,
 WebSockets, trading endpoints, live HTTP smoke by default, or execution paths.
 Tests use local fixtures and mocked HTTP only.
 
+## Stage 9 readiness clarification
+
+The Stage 9 readiness check narrowed "U.S. equities research adapter" to SEC
+EDGAR public fundamentals. That avoids the ambiguous and higher-risk meanings
+of equities data: broker APIs, live quote feeds, paid vendor feeds,
+proprietary exchange data, account data, or trading signals.
+
+The next implementation should be fixture-first and read-only. Future live SEC
+HTTP access must identify itself with an explicit User-Agent, obey SEC
+fair-access limits, and remain outside the first implementation slice.
+
 ## Interview narrative
 
 A concise way to explain the current project:
