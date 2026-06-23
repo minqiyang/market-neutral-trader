@@ -18,6 +18,10 @@ the project-specific Skill at `.agents/skills/event-driven-market-neutral-trader
 for implementation, review, documentation, risk-policy, adapter, and testing
 work in this repository.
 
+For staged work, use `docs/codex_long_running_controller.md` for optional
+skill and preset-command orchestration; optional skills should not block the
+checkpoint when the equivalent checklist is clear.
+
 ## First-read workflow
 
 For future Codex runs, read these before broad exploration:

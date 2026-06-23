@@ -14,6 +14,26 @@ demo-first, risk-controlled stage plan.
 - Read implementation files only when the requested stage needs them.
 - Keep final reports concise and evidence-backed.
 
+## Skill orchestration policy
+
+- Apply this controller's stage boundary, stop gates, context-budget and
+  token-budget rules, and final-report rules on every checkpoint.
+- Read only the active `docs/STAGE_PLAN.md` stage section unless a stop gate or
+  missing context requires more; do not reread old logs by default.
+- Treat optional skills and preset commands as accelerators, not dependencies.
+  If a skill is unavailable, uninstalled, renamed, or noisy to invoke, use the
+  equivalent checklist and keep moving.
+- Limit optional skill use to at most one planning skill before implementation
+  and one review skill before PR unless a stop gate triggers deeper review.
+- Use Ponytail only for implementation PRs, mainly as a pre-PR
+  over-engineering review; skip it for readiness checks and documentation-only
+  changes.
+- Use Matt Pocock `grill-me` only for ambiguous or high-risk design stages;
+  skip it when `docs/STAGE_PLAN.md` already gives complete acceptance criteria.
+- Use TDD-style workflow for implementation stages that add behavior.
+- Use handoff or compaction only when context is large, before switching
+  sessions, or when a stop gate requires preserving state.
+
 ## Stage progression policy
 
 - Work on one stage-sized change at a time.

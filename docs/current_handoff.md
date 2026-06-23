@@ -144,6 +144,13 @@ credentials, production endpoints, order placement, WebSocket work, strategy
 optimization, large generated files, dependency surprises, or compliance
 ambiguity.
 
+`docs/codex_long_running_controller.md` also contains the compact
+skill-orchestration policy for future staged work: use long-session governance
+on every checkpoint, read only the active stage section, treat optional skills
+as accelerators rather than blockers, reserve Ponytail/TDD/grill-me/handoff for
+the narrow cases named there, and keep skill use bounded unless a stop gate is
+triggered.
+
 ## Safety boundaries
 
 - Do not add credentials or secrets.
@@ -156,17 +163,18 @@ ambiguity.
 
 ## Next recommended stage
 
-Stage 6 readiness check from the expanded `docs/STAGE_PLAN.md` section. Start
-implementation only after current GitHub state, CI, branch protection, required
-`Validate` status, and local validation are confirmed.
+After this documentation-only policy PR merges, continue with Stage 6
+implementation from the expanded `docs/STAGE_PLAN.md` section. Reconfirm clean
+synced `main`, CI, branch protection, required `Validate` status, and local
+validation before changing behavior.
 
 ## Exact next prompt suggestion
 
-Use Codex Long Session Governance. Verify Stage 6 readiness from
-`docs/STAGE_PLAN.md`; confirm clean synced `main`, passing CI/local validation,
-branch protection, and required `Validate` status. Do not implement Stage 6
-during the readiness check.
+Use Codex Long Session Governance. Start Stage 6 implementation from only the
+Stage 6 section of `docs/STAGE_PLAN.md`; use TDD for behavior changes, keep
+dry-run as the default, do not add authenticated/live trading, and apply the
+skill-orchestration policy in `docs/codex_long_running_controller.md`.
 
 ## Last updated timestamp
 
-2026-06-12 18:02:57 -07:00
+2026-06-22 21:50:53 -07:00
