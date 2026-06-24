@@ -58,3 +58,6 @@ jobs:
 
       - name: Run research report
         run: python scripts/07_research_report.py --market-maker-log /tmp/edmn_ci_market_maker.jsonl --output /tmp/edmn_ci_research_report.md
+
+      - name: Run paper report pack
+        run: python scripts/10_paper_report_pack.py --market-maker-log /tmp/edmn_ci_market_maker.jsonl --sec-companyfacts tests/fixtures/sec_companyfacts_aapl.json --output-dir /tmp/edmn_ci_report_pack

@@ -8,19 +8,20 @@ implemented code includes exchange-agnostic core models, Kalshi-style
 fixed-point orderbook normalization, a guarded read-only Kalshi Demo REST
 client, local fixtures, mocked HTTP tests, Decimal-safe JSONL snapshot storage,
 deterministic offline replay metrics, a fair-value/quote-engine dry run,
-risk-gated fake-adapter demo execution smoke infrastructure, and a finite
-Stage 6 market-maker replay workflow, and an offline Stage 7 research report
-workflow, a fixture-first Polymarket US public market-data adapter, and a
-fixture-first SEC EDGAR public fundamentals adapter.
+risk-gated fake-adapter demo execution smoke infrastructure, a finite Stage 6
+market-maker replay workflow, an offline Stage 7 research report workflow, a
+fixture-first Polymarket US public market-data adapter, a fixture-first SEC
+EDGAR public fundamentals adapter, and an offline Stage 10 paper research
+report pack.
 
 ## Last completed stage
 
-Stage 9: U.S. equities research adapter, paper/research only.
+Stage 10: Paper research report pack.
 
 ## Stage plan status
 
 `docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
-1, 1.5, 2, 3, 4, 5, 6, 7, 8, and 9. The ledger records purpose, known commit hashes,
+1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, and 10. The ledger records purpose, known commit hashes,
 files/modules added, validation commands, status, next-stage boundary, and
 safety status for each completed stage.
 
@@ -105,6 +106,15 @@ paper research report pack inputs, Markdown output, separation of observed
 metrics, supplied assumptions, SEC fundamentals and limitations, offline tests,
 validation commands, non-goals, and the next-stage boundary.
 
+Stage 10 is now implemented as an offline paper research report pack. It reuses
+the Stage 7 attribution workflow, adds local SEC companyfacts fixtures, labels
+missing optional inputs as not supplied, and does not add ranking, allocation
+advice, live feeds, broker integration, execution, strategy optimization, or
+profitability claims.
+
+Next checkpoint: later report-section work needs a docs-only readiness
+clarification first unless a complete next-stage section is added.
+
 ## Important files
 
 - `AGENTS.md`: repo rules and first-read instructions.
@@ -156,6 +166,9 @@ validation commands, non-goals, and the next-stage boundary.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   Markdown report generator for Stage 6 logs and explicit fill assumptions.
 - `scripts/07_research_report.py`: root wrapper for Stage 7 reporting.
+- `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage 10 offline
+  paper research report-pack generator.
+- `scripts/10_paper_report_pack.py`: root wrapper for Stage 10 report packs.
 - `tests/test_kalshi_client.py`: mocked HTTP coverage for the Stage 2 client.
 - `tests/test_kalshi_orderbook.py`: normalizer coverage.
 - `tests/test_snapshots_jsonl.py`: snapshot/JSONL coverage.
@@ -173,6 +186,8 @@ validation commands, non-goals, and the next-stage boundary.
   normalization, guarded public client, and malformed-book coverage.
 - `tests/test_sec_edgar_adapter.py`: Stage 9 SEC companyfacts normalization,
   guarded public client, explicit User-Agent, and malformed-value coverage.
+- `tests/test_paper_report_pack.py`: Stage 10 report-pack coverage for
+  observed metrics, missing optional inputs, local SEC facts, and CLI output.
 
 ## Commands that currently pass
 
@@ -201,8 +216,10 @@ python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage7_snapshot
 python scripts/06_market_maker_replay.py --input /tmp/edmn_stage7_snapshots.jsonl --log-output /tmp/edmn_stage7_market_maker.jsonl
 python scripts/06_market_maker_replay.py --input /tmp/edmn_stage7_snapshots.jsonl --demo-opt-in --log-output /tmp/edmn_stage7_market_maker_demo.jsonl
 python scripts/07_research_report.py --market-maker-log /tmp/edmn_stage7_market_maker.jsonl --output /tmp/edmn_stage7_report.md
+python scripts/10_paper_report_pack.py --market-maker-log /tmp/edmn_stage7_market_maker.jsonl --sec-companyfacts tests/fixtures/sec_companyfacts_aapl.json --output-dir /tmp/edmn_stage10_report_pack
 pytest tests/test_polymarket_us_adapter.py
 pytest tests/test_sec_edgar_adapter.py
+pytest tests/test_paper_report_pack.py
 ```
 
 Optional environment validation:
@@ -229,7 +246,7 @@ python -m pip install -e ".[dev]"
 - `.github/workflows/ci.yml` exists, and the latest observed GitHub Actions CI
   run on `main` completed successfully. CI now runs `Validate` for pushes to
   `main`, pull requests to `main`, and pushes to `codex/**` branches, including
-  the Stage 7 research report command.
+  the Stage 7 research report and Stage 10 report-pack commands.
 - GitHub branch protection is enabled on `main` and requires the `Validate`
   status check.
 - The Kalshi Demo client is tested with mocked HTTP and local fixtures; no live

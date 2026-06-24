@@ -2,7 +2,7 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages through Stage 9. They are
+These records summarize the locally completed stages through Stage 10. They are
 intended as a durable audit map; implementation details remain in the source,
 tests, changelog, engineering log, and handoff archive.
 
@@ -236,6 +236,28 @@ tests, changelog, engineering log, and handoff archive.
   market data, no proprietary exchange data, no live HTTP smoke by default, no
   order placement, no strategy optimization, no production execution, and no
   profitability claim.
+
+### Stage 10: Paper research report pack
+
+- Status: complete.
+- Commit: pending on the Stage 10 implementation branch.
+- Purpose: combine existing offline attribution outputs and local SEC
+  fundamentals fixtures into a descriptive paper/research report pack.
+- Files/modules added: `src/edmn_trader/scripts/paper_report_pack.py`,
+  `scripts/10_paper_report_pack.py`, report-pack tests, CI validation, and
+  documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/01_replay_orderbook_fixture.py`,
+  `python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_stage10_snapshots.jsonl`,
+  `python scripts/06_market_maker_replay.py --input /tmp/edmn_stage10_snapshots.jsonl --log-output /tmp/edmn_stage10_market_maker.jsonl`,
+  and `python scripts/10_paper_report_pack.py --market-maker-log /tmp/edmn_stage10_market_maker.jsonl --sec-companyfacts tests/fixtures/sec_companyfacts_aapl.json --output-dir /tmp/edmn_stage10_report_pack`.
+- Next-stage boundary: later stages may add additional report sections only
+  after the report pack keeps all data local/offline, assumption-labeled, and
+  non-executable.
+- Safety status: local/offline report output only, no broker integration, no
+  credentials, no account or portfolio data, no live quote feed, no paid-vendor
+  market data, no order placement, no ranking, no allocation advice, no
+  strategy optimization, no production execution, and no profitability claim.
 
 ## Stage 0: Repository foundation
 

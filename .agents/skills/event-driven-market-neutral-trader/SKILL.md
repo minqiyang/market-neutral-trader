@@ -97,6 +97,12 @@ For staged project work, read `docs/current_handoff.md` and `docs/repo_map.md` b
   free of broker APIs, credentials, account data, live quote feeds, paid-vendor
   data, orders, strategy optimization, execution paths, and profitability
   claims.
+- The Stage 10 paper report pack lives at
+  `src/edmn_trader/scripts/paper_report_pack.py`; the root script is
+  `scripts/10_paper_report_pack.py`. It must stay local/offline, reuse Stage 7
+  attribution and Stage 9 SEC fixtures, separate observed metrics, supplied
+  assumptions, fundamentals, and limitations, and avoid rankings, allocation
+  advice, execution, live feeds, and profitability claims.
 
 ## Verification
 

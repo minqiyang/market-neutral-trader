@@ -100,6 +100,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   replay workflow for quote lifecycle, risk gates, logs, and run summaries.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
+- `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage 10 offline
+  report-pack generator combining Stage 7 attribution with local SEC
+  companyfacts fixtures.
 - `src/edmn_trader/**/__init__.py`: package exports.
 
 ## Scripts
@@ -119,6 +122,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   and writes structured JSONL logs.
 - `scripts/07_research_report.py`: writes a local/offline Markdown attribution
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
+- `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
+  pack from Stage 6/7 attribution inputs and optional local SEC companyfacts
+  fixtures.
 
 ## Tests and fixtures
 
@@ -145,6 +151,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   normalization, guarded public client, and malformed-book coverage.
 - `tests/test_sec_edgar_adapter.py`: Stage 9 SEC companyfacts normalization,
   guarded public client, explicit User-Agent, and malformed-value coverage.
+- `tests/test_paper_report_pack.py`: Stage 10 offline report-pack coverage for
+  observed metrics, not-supplied optional inputs, local SEC facts, and CLI
+  output.
 - `tests/fixtures/kalshi_orderbook_fp_basic.json`: basic local Kalshi-style
   fixture used by the replay script.
 - `tests/fixtures/sec_companyfacts_aapl.json`: local SEC companyfacts fixture

@@ -259,6 +259,17 @@ The boundary stays narrow: reports may summarize observed metrics and public
 fundamentals, but they must not rank securities, emit trading signals, optimize
 strategies, or imply production readiness or profitability.
 
+## Stage 10 paper research report pack
+
+Stage 10 added a local Markdown report-pack generator. It reuses the Stage 7
+research report path for observed replay metrics and explicit fill assumptions,
+then adds a separate SEC fundamentals section from local companyfacts fixtures.
+
+The report pack labels missing optional inputs as not supplied and keeps
+limitations visible in the output. It does not add broker integration, account
+data, live feeds, order paths, ranking, allocation advice, strategy
+optimization, production execution, or profitability claims.
+
 ## Interview narrative
 
 A concise way to explain the current project:

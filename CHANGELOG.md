@@ -6,6 +6,13 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 10 offline paper research report-pack generation from local
+  Stage 6/7 attribution inputs and local SEC companyfacts fixtures, with
+  Markdown output, explicit not-supplied sections, and limitation notes.
+- Added `scripts/10_paper_report_pack.py` and the `edmn-paper-report-pack`
+  package entry point. The report pack remains descriptive, non-executable,
+  offline, and free of security ranking, allocation advice, live feeds,
+  execution, and profitability claims.
 - Clarified Stage 10 as an offline paper research report pack that may combine
   Stage 7 attribution outputs and Stage 9 SEC fundamentals, while excluding
   trading signals, security ranking, broker integration, live feeds, and
