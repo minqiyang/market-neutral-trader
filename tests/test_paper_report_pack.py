@@ -30,6 +30,9 @@ def test_paper_report_pack_combines_stage_7_metrics_and_sec_facts(tmp_path: Path
     assert "Observed Stage 7 Attribution" in text
     assert "frames | 1" in text
     assert "Fill assumptions | not supplied" in text
+    assert "Local Source Inventory" in text
+    assert "market_maker.jsonl" in text
+    assert "sec_companyfacts_aapl.json" in text
     assert "SEC Fundamentals" in text
     assert "Apple Inc." in text
     assert "Revenues" in text
@@ -50,6 +53,8 @@ def test_paper_report_pack_marks_missing_sec_fundamentals_not_supplied(tmp_path:
 
     text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
     assert "SEC fundamentals | not supplied" in text
+    assert "SEC companyfacts | not supplied" in text
+    assert "Fills | not supplied" in text
     assert "missing optional inputs are reported as not supplied" in text
 
 

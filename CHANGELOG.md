@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 11 local/offline report-section expansion to the paper report
+  pack, including a source inventory section that labels missing inputs as not
+  supplied.
 - Clarified Stage 11 readiness for local/offline report-section expansion of
   the Stage 10 paper report pack, with no new data adapters, live feeds,
   security ranking, allocation advice, strategy optimization, execution paths,

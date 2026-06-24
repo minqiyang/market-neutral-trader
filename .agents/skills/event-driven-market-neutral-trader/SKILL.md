@@ -103,6 +103,9 @@ For staged project work, read `docs/current_handoff.md` and `docs/repo_map.md` b
   attribution and Stage 9 SEC fixtures, separate observed metrics, supplied
   assumptions, fundamentals, and limitations, and avoid rankings, allocation
   advice, execution, live feeds, and profitability claims.
+- Stage 11 extends that same report pack with a local source inventory section
+  only; it must continue to use local files and fixtures, label missing inputs
+  as not supplied, and avoid new data adapters or executable advice.
 
 ## Verification
 

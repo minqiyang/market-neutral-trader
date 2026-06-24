@@ -282,6 +282,17 @@ The main tradeoff is deliberately postponing richer data sourcing, dashboards,
 recommendations, and optimization. Stage 11 should improve report readability
 without changing the project into a ranking or allocation system.
 
+## Stage 11 local report-section expansion
+
+Stage 11 added a source inventory section to the existing Stage 10 report pack.
+The implementation stays inside the report-pack generator and uses only local
+paths already supplied to the command.
+
+Missing fills or SEC companyfacts inputs are shown as not supplied instead of
+being inferred. The report remains descriptive and non-executable; it does not
+add new data adapters, live feeds, ranking, allocation advice, optimization, or
+profitability framing.
+
 ## Interview narrative
 
 A concise way to explain the current project:
