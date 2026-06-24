@@ -52,6 +52,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
+            pack_input=pack_input,
             stage7_report=stage7_report,
             stage7_report_path=stage7_report_path,
             sec_facts=sec_facts,
@@ -125,6 +126,7 @@ def _read_sec_facts(paths: tuple[Path, ...]) -> tuple[EquityFundamentalFact, ...
 
 def _render_markdown(
     *,
+    pack_input: PaperReportPackInput,
     stage7_report: ResearchReport,
     stage7_report_path: Path,
     sec_facts: tuple[EquityFundamentalFact, ...],
@@ -155,6 +157,15 @@ def _render_markdown(
             "| --- | --- |",
             _fill_assumption_row(stage7_report),
             "",
+            "## Local Source Inventory",
+            "",
+            "| source | status |",
+            "| --- | --- |",
+            f"| Market-maker logs | supplied: {_path_names(pack_input.market_maker_logs)} |",
+            f"| Fills | {_optional_path_status(pack_input.fills_path)} |",
+            f"| SEC companyfacts | {_optional_paths_status(pack_input.sec_companyfacts)} |",
+            f"| Generated Stage 7 report | supplied: {stage7_report_path.name} |",
+            "",
             "## SEC Fundamentals",
             "",
             _render_sec_facts(sec_facts),
@@ -176,6 +187,22 @@ def _fill_assumption_row(stage7_report: ResearchReport) -> str:
     if stage7_report.supplied_fills == 0:
         return "| Fill assumptions | not supplied |"
     return f"| Fill assumptions | supplied: {stage7_report.supplied_fills} |"
+
+
+def _optional_path_status(path: Path | None) -> str:
+    if path is None:
+        return "not supplied"
+    return f"supplied: {path.name}"
+
+
+def _optional_paths_status(paths: tuple[Path, ...]) -> str:
+    if not paths:
+        return "not supplied"
+    return f"supplied: {_path_names(paths)}"
+
+
+def _path_names(paths: tuple[Path, ...]) -> str:
+    return ", ".join(path.name for path in paths)
 
 
 def _render_sec_facts(sec_facts: tuple[EquityFundamentalFact, ...]) -> str:

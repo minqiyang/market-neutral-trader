@@ -12,16 +12,16 @@ risk-gated fake-adapter demo execution smoke infrastructure, a finite Stage 6
 market-maker replay workflow, an offline Stage 7 research report workflow, a
 fixture-first Polymarket US public market-data adapter, a fixture-first SEC
 EDGAR public fundamentals adapter, and an offline Stage 10 paper research
-report pack.
+report pack with a Stage 11 local source inventory section.
 
 ## Last completed stage
 
-Stage 10: Paper research report pack.
+Stage 11: Additional report sections, local/offline only.
 
 ## Stage plan status
 
 `docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
-1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, and 10. The ledger records purpose, known commit hashes,
+1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, and 11. The ledger records purpose, known commit hashes,
 files/modules added, validation commands, status, next-stage boundary, and
 safety status for each completed stage.
 
@@ -119,9 +119,14 @@ of the Stage 10 pack. It must not add new data adapters, live feeds, broker
 integration, credentials, account or portfolio data, ranking, allocation
 advice, strategy optimization, execution, or profitability claims.
 
-Next checkpoint: Stage 11 implementation only.
+Stage 11 is now implemented as a local/offline report-section expansion. It
+adds a source inventory section to the paper report pack, labels missing fills
+or SEC companyfacts as not supplied, and does not add new data adapters, live
+feeds, ranking, allocation advice, executable advice, strategy optimization,
+execution, or profitability claims.
 
-Exact next prompt: `Use Codex Long Session Governance. Implement only the local/offline Stage 11 report-section expansion from docs/STAGE_PLAN.md; use TDD, keep tests offline, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, production endpoints, strategy optimization, security ranking, allocation advice, executable advice, or profitability claims.`
+Next checkpoint: compact governance audit after Stage 10 implementation, Stage
+11 readiness clarification, and Stage 11 implementation.
 
 ## Important files
 
@@ -176,9 +181,9 @@ Exact next prompt: `Use Codex Long Session Governance. Implement only the local/
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   Markdown report generator for Stage 6 logs and explicit fill assumptions.
 - `scripts/07_research_report.py`: root wrapper for Stage 7 reporting.
-- `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage 10 offline
-  paper research report-pack generator.
-- `scripts/10_paper_report_pack.py`: root wrapper for Stage 10 report packs.
+- `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage 10/11
+  offline paper research report-pack generator.
+- `scripts/10_paper_report_pack.py`: root wrapper for Stage 10/11 report packs.
 - `tests/test_kalshi_client.py`: mocked HTTP coverage for the Stage 2 client.
 - `tests/test_kalshi_orderbook.py`: normalizer coverage.
 - `tests/test_snapshots_jsonl.py`: snapshot/JSONL coverage.
@@ -196,8 +201,9 @@ Exact next prompt: `Use Codex Long Session Governance. Implement only the local/
   normalization, guarded public client, and malformed-book coverage.
 - `tests/test_sec_edgar_adapter.py`: Stage 9 SEC companyfacts normalization,
   guarded public client, explicit User-Agent, and malformed-value coverage.
-- `tests/test_paper_report_pack.py`: Stage 10 report-pack coverage for
-  observed metrics, missing optional inputs, local SEC facts, and CLI output.
+- `tests/test_paper_report_pack.py`: Stage 10/11 report-pack coverage for
+  observed metrics, source inventory, missing optional inputs, local SEC facts,
+  and CLI output.
 
 ## Commands that currently pass
 
