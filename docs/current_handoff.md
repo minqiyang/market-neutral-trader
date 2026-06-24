@@ -88,6 +88,12 @@ with `origin/main` at `7ef2a2f`, the worktree is clean, there are no open pull
 requests, and the latest observed `main` CI run `28007536118` passed
 `Validate`. The next checkpoint is Stage 10 implementation only.
 
+Audit after three more completed checkpoints: Stage 10 implementation, Stage
+11 readiness clarification, and Stage 11 implementation. Local `main` is synced
+with `origin/main` at `2d38dd1`, the worktree is clean, there are no open pull
+requests, and the latest observed `main` CI run `28073147659` passed
+`Validate`. The next checkpoint is report-input readiness clarification only.
+
 `docs/STAGE_PLAN.md` now contains the clarified Stage 9 specification and
 `docs/stage9_equities_readiness.md` records the readiness review. Stage 9 is
 ready only for a fixture-first SEC EDGAR public fundamentals adapter. It must
@@ -125,8 +131,9 @@ or SEC companyfacts as not supplied, and does not add new data adapters, live
 feeds, ranking, allocation advice, executable advice, strategy optimization,
 execution, or profitability claims.
 
-Next checkpoint: compact governance audit after Stage 10 implementation, Stage
-11 readiness clarification, and Stage 11 implementation.
+Next checkpoint: report-input readiness clarification only.
+
+Exact next prompt: `Use Codex Long Session Governance. Clarify only the next local/offline report-input stage in docs/STAGE_PLAN.md; do not implement it yet, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, production endpoints, strategy optimization, security ranking, allocation advice, executable advice, or profitability claims.`
 
 ## Important files
 
