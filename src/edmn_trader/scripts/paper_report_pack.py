@@ -39,6 +39,7 @@ class PaperReportPack:
     sec_fact_count: int
     manifest_entry_count: int
     run_comparison_count: int
+    validation_summary_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +74,29 @@ class MissingRunComparisonInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalValidationSummary:
+    """One descriptive local validation-summary row."""
+
+    source_label: str
+    command_label: str
+    status: str
+    artifact_path: str
+    observed_at: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingValidationSummaryInput:
+    """Optional local validation-summary descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
+VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
+
+
 def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportPack:
     """Generate an offline Markdown report pack from local inputs only."""
 
@@ -95,6 +119,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    validation_summaries, missing_validation_summaries = _read_validation_summaries(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -105,6 +133,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             manifest_entries=manifest_entries,
             run_comparisons=run_comparisons,
             missing_run_comparisons=missing_run_comparisons,
+            validation_summaries=validation_summaries,
+            missing_validation_summaries=missing_validation_summaries,
         ),
         encoding="utf-8",
         newline="\n",
@@ -116,6 +146,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         sec_fact_count=len(sec_facts),
         manifest_entry_count=len(manifest_entries),
         run_comparison_count=len(run_comparisons),
+        validation_summary_count=len(validation_summaries),
     )
 
 
@@ -130,6 +161,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"sec_facts={pack.sec_fact_count}",
             f"manifest_inputs={pack.manifest_entry_count}",
             f"run_comparisons={pack.run_comparison_count}",
+            f"validation_summaries={pack.validation_summary_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -372,6 +404,114 @@ def _parse_run_comparison(
     )
 
 
+def _read_validation_summaries(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[tuple[LocalValidationSummary, ...], tuple[MissingValidationSummaryInput, ...]]:
+    if manifest_path is None:
+        return (), ()
+
+    summaries: list[LocalValidationSummary] = []
+    missing: list[MissingValidationSummaryInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_validation_summary":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local validation-summary input is missing: "
+                    f"{entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingValidationSummaryInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        summaries.extend(
+            _read_validation_summary_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(summaries), tuple(missing)
+
+
+def _read_validation_summary_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalValidationSummary, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local validation-summary descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+
+    checks = payload.get("checks")
+    if not isinstance(checks, list):
+        msg = f"{path}: local validation-summary descriptor must contain a checks list"
+        raise ValueError(msg)
+
+    parsed_checks: list[LocalValidationSummary] = []
+    for index, item in enumerate(checks, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local validation-summary check {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        parsed_checks.append(
+            _parse_validation_summary(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_checks)
+
+
+def _parse_validation_summary(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalValidationSummary:
+    required_fields = (
+        "command_label",
+        "status",
+        "artifact_path",
+        "observed_at",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local validation-summary check {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    artifact_path = str(item["artifact_path"])
+    parsed = urlparse(artifact_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local validation-summary check {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    status = str(item["status"])
+    if status not in VALIDATION_SUMMARY_STATUSES:
+        allowed = ", ".join(sorted(VALIDATION_SUMMARY_STATUSES))
+        msg = f"{path}: local validation-summary check {index} status must be one of: {allowed}"
+        raise ValueError(msg)
+
+    return LocalValidationSummary(
+        source_label=source_label,
+        command_label=str(item["command_label"]),
+        status=status,
+        artifact_path=artifact_path,
+        observed_at=str(item["observed_at"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -381,6 +521,8 @@ def _render_markdown(
     manifest_entries: tuple[ReportInputManifestEntry, ...],
     run_comparisons: tuple[LocalRunComparison, ...],
     missing_run_comparisons: tuple[MissingRunComparisonInput, ...],
+    validation_summaries: tuple[LocalValidationSummary, ...],
+    missing_validation_summaries: tuple[MissingValidationSummaryInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -426,6 +568,10 @@ def _render_markdown(
             "## Local Run Comparison",
             "",
             _render_run_comparisons(run_comparisons, missing_run_comparisons),
+            "",
+            "## Local Validation Summary",
+            "",
+            _render_validation_summaries(validation_summaries, missing_validation_summaries),
             "",
             "## SEC Fundamentals",
             "",
@@ -511,6 +657,30 @@ def _format_not_supplied_inputs(values: tuple[str, ...]) -> str:
     if not values:
         return "none"
     return ", ".join(values)
+
+
+def _render_validation_summaries(
+    summaries: tuple[LocalValidationSummary, ...],
+    missing_inputs: tuple[MissingValidationSummaryInput, ...],
+) -> str:
+    if not summaries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local validation summary | not supplied |"
+
+    rows = [
+        "| source | command | status | artifact path | observed at | limitation |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {summary.source_label} | {summary.command_label} | {summary.status} | "
+        f"{summary.artifact_path} | {summary.observed_at} | {summary.limitation_note} |"
+        for summary in summaries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
 
 
 def _render_sec_facts(sec_facts: tuple[EquityFundamentalFact, ...]) -> str:

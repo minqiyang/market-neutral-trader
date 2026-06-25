@@ -185,6 +185,100 @@ def test_paper_report_pack_rejects_unsafe_run_comparison_descriptor(tmp_path: Pa
         )
 
 
+def test_paper_report_pack_renders_local_validation_summary_input(tmp_path: Path) -> None:
+    validation_path = _write_validation_summary_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=validation_path.name,
+        input_kind="local_validation_summary",
+        display_label="Local validation summary",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.validation_summary_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Validation Summary" in text
+    assert "pytest" in text
+    assert "ruff check ." in text
+    assert "pass" in text
+    assert "skipped" in text
+    assert "pytest.log" in text
+    assert "metadata about checks already run" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_validation_summary_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-validation-summary.json",
+        input_kind="local_validation_summary",
+        display_label="Missing validation summary",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Validation Summary" in text
+    assert "Missing validation summary | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_validation_summary_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_validation_summary_descriptor(
+        tmp_path,
+        extra_check_field={"api_secret": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_validation_summary",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-validation-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_validation_summary_descriptor(
+        tmp_path,
+        artifact_path="https://example.com/pytest.log",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_validation_summary",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-validation-pack",
+            )
+        )
+
+
 def test_paper_report_pack_cli_writes_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
     output_dir = tmp_path / "pack"
     manifest_path = _write_report_input_manifest(tmp_path)
@@ -269,6 +363,42 @@ def _write_run_comparison_descriptor(
                         "observed_decision_count": 4,
                         "not_supplied_inputs": [],
                         "limitation_note": "fake adapter only",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_validation_summary_descriptor(
+    tmp_path: Path,
+    *,
+    artifact_path: str = "pytest.log",
+    extra_check_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "validation_summary.json"
+    first_check = {
+        "command_label": "pytest",
+        "status": "pass",
+        "artifact_path": artifact_path,
+        "observed_at": "2026-06-24T22:00:00-07:00",
+        "limitation_note": "metadata about checks already run",
+    }
+    if extra_check_field:
+        first_check.update(extra_check_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "checks": [
+                    first_check,
+                    {
+                        "command_label": "ruff check .",
+                        "status": "skipped",
+                        "artifact_path": "ruff.log",
+                        "observed_at": "2026-06-24T22:01:00-07:00",
+                        "limitation_note": "not rerun for this descriptor",
                     },
                 ]
             }

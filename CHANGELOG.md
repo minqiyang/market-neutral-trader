@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 14 local/offline `local_validation_summary` report-input support
+  to the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields and remote URLs.
 - Clarified Stage 14 readiness for a local/offline `local_validation_summary`
   report-input kind that describes already-run local checks and artifacts
   without executing commands, fetching remote data, adding adapters, implying

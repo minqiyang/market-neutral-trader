@@ -356,6 +356,19 @@ limitation notes, but it must not execute commands, fetch remote data, imply
 production readiness, optimize strategies, produce advice, or claim
 profitability.
 
+## Stage 14 local validation-summary input
+
+Stage 14 added support for `local_validation_summary` manifest entries in the
+paper report pack. The implementation reads a local validation descriptor as
+metadata, renders a separate Markdown section, reports missing optional
+validation descriptors as not supplied, and rejects secret-like fields or
+remote URLs.
+
+The report pack still does not execute commands from report inputs. Validation
+summaries describe checks and artifacts supplied by the user, which keeps the
+report useful for local review without turning it into a production-readiness
+claim or advice system.
+
 ## Interview narrative
 
 A concise way to explain the current project:
