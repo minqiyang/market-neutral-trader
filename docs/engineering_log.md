@@ -305,6 +305,17 @@ source rights and missing-input behavior explicit without reading private data
 contents, fetching remote data, ranking assets, recommending allocations, or
 creating executable advice.
 
+## Stage 12 local report-input manifest
+
+Stage 12 added an optional local JSON manifest for the paper report pack. The
+manifest describes local report inputs by path, kind, display label,
+rights/redistribution note, assumption scope, and required/optional status.
+
+The report renders those entries in a separate Markdown section and reports a
+missing manifest as not supplied. Manifest parsing rejects secret-like field
+names and remote URLs, and it does not fetch data, add adapters, rank assets,
+recommend allocations, or create executable advice.
+
 ## Interview narrative
 
 A concise way to explain the current project:

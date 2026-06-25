@@ -104,9 +104,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
   replay workflow for quote lifecycle, risk gates, logs, and run summaries.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
-- `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage 10/11
+- `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage 10/12
   offline report-pack generator combining Stage 7 attribution with local SEC
-  companyfacts fixtures and local report-section metadata.
+  companyfacts fixtures, local report-section metadata, and optional manifest
+  input metadata.
 - `src/edmn_trader/**/__init__.py`: package exports.
 
 ## Scripts
@@ -128,7 +129,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
 - `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
   pack from Stage 6/7 attribution inputs, optional local SEC companyfacts
-  fixtures and the Stage 11 local source inventory section.
+  fixtures, the Stage 11 local source inventory section, and optional Stage 12
+  manifest input metadata.
 
 ## Tests and fixtures
 
@@ -155,9 +157,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   normalization, guarded public client, and malformed-book coverage.
 - `tests/test_sec_edgar_adapter.py`: Stage 9 SEC companyfacts normalization,
   guarded public client, explicit User-Agent, and malformed-value coverage.
-- `tests/test_paper_report_pack.py`: Stage 10/11 offline report-pack coverage
+- `tests/test_paper_report_pack.py`: Stage 10/12 offline report-pack coverage
   for observed metrics, source inventory, not-supplied optional inputs, local
-  SEC facts, and CLI output.
+  SEC facts, manifest input metadata, unsafe manifest rejection, and CLI output.
 - `tests/fixtures/kalshi_orderbook_fp_basic.json`: basic local Kalshi-style
   fixture used by the replay script.
 - `tests/fixtures/sec_companyfacts_aapl.json`: local SEC companyfacts fixture

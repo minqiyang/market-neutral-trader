@@ -28,6 +28,14 @@ optimization, executable advice, production endpoints, or profitability claims.
   private data contents beyond the manifest itself.
 - Keep missing optional manifest inputs as not supplied.
 
+## Implemented slice
+
+- Added an optional `--report-input-manifest` path to the report-pack command.
+- Added manifest parsing for descriptive local input metadata.
+- Rendered manifest entries in a separate Markdown section.
+- Reported missing manifests as not supplied.
+- Rejected secret-like manifest fields and unsupported remote URLs.
+
 ## Stop conditions
 
 - Any need for broker APIs, credentials, account data, portfolio data, live

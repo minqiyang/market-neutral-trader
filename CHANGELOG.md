@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 12 local/offline report-input manifest support for the paper
+  report pack, with manifest Markdown output, missing-input disclosure, and
+  rejection of secret-like fields and remote URLs.
 - Clarified Stage 12 readiness for a local/offline report-input manifest that
   records source rights, assumption scope, and required/optional status without
   adding new data adapters or executable advice.
