@@ -316,6 +316,19 @@ missing manifest as not supplied. Manifest parsing rejects secret-like field
 names and remote URLs, and it does not fetch data, add adapters, rank assets,
 recommend allocations, or create executable advice.
 
+## Stage 13 readiness clarification
+
+After Stage 12, the next concrete input kind should use data the project
+already knows how to produce. The clarified Stage 13 boundary is a local
+run-comparison report input that can describe multiple existing project outputs
+without creating a new market-data adapter or fetching remote data.
+
+The tradeoff is intentionally limiting comparison output to descriptive local
+metadata and observed facts. Stage 13 may make report packs easier to compare
+across local runs, but it must not rank securities, choose a best run, optimize
+strategy parameters, recommend allocations, emit executable advice, or claim
+profitability.
+
 ## Interview narrative
 
 A concise way to explain the current project:

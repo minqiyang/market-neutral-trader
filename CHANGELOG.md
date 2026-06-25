@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 13 readiness for a local/offline `local_run_comparison`
+  report-input kind that compares already generated project outputs without
+  adding remote fetching, new adapters, ranking, allocation advice, executable
+  advice, unsupported redistribution, or profitability claims.
 - Added Stage 12 local/offline report-input manifest support for the paper
   report pack, with manifest Markdown output, missing-input disclosure, and
   rejection of secret-like fields and remote URLs.

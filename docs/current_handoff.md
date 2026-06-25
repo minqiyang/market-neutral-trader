@@ -13,7 +13,8 @@ market-maker replay workflow, an offline Stage 7 research report workflow, a
 fixture-first Polymarket US public market-data adapter, a fixture-first SEC
 EDGAR public fundamentals adapter, and an offline Stage 10 paper research
 report pack with a Stage 11 local source inventory section and Stage 12 local
-report-input manifest support.
+report-input manifest support. `docs/STAGE_PLAN.md` also now clarifies Stage
+13 as a local/offline run-comparison report input.
 
 ## Last completed stage
 
@@ -163,9 +164,17 @@ and remote URLs, and does not add new data adapters, remote fetching,
 unsupported redistribution, executable advice, ranking, allocation advice,
 strategy optimization, execution, or profitability claims.
 
-Next checkpoint: next concrete report-input-kind readiness clarification only.
+`docs/STAGE_PLAN.md` now contains the full Stage 13 readiness specification for
+a local/offline `local_run_comparison` report-input kind. Stage 13 may compare
+only already generated local project outputs and must not add new adapters,
+remote fetching, account or portfolio data, live feeds, paid-vendor data,
+ranking, allocation advice, strategy optimization, executable advice,
+unsupported redistribution, production endpoints, or profitability claims.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Clarify only the next concrete local/offline report-input kind in docs/STAGE_PLAN.md; do not implement it yet, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, production endpoints, strategy optimization, security ranking, allocation advice, executable advice, unsupported data redistribution, or profitability claims.`
+Next checkpoint: Stage 13 local run-comparison report-input implementation
+only.
+
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only the Stage 13 local/offline local_run_comparison report-input kind for the paper report pack, with offline tests and docs updates; do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, strategy optimization, security ranking, allocation advice, executable advice, unsupported data redistribution, or profitability claims.`
 
 ## Important files
 
@@ -352,20 +361,22 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Report-input-kind readiness clarification only. Start only after reconfirming
-clean synced `main`, CI, branch protection, required `Validate` status, local
-validation, and whether the owner-direct fast path or PR path applies.
+Stage 13 local run-comparison report-input implementation only. Start only
+after reconfirming clean synced `main`, CI, branch protection, required
+`Validate` status, local validation, and whether the owner-direct fast path or
+PR path applies.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Clarify only the next concrete local/offline
-report-input kind in `docs/STAGE_PLAN.md`; do not implement it yet, and do not
-add new market-data adapters, broker integration, credentials, account data,
-portfolio data, live quote feeds, paid-vendor data, WebSockets, production
-endpoints, strategy optimization, security ranking, allocation advice,
-executable advice, unsupported data redistribution, or profitability claims.
+the verified current handoff. Implement only the Stage 13 local/offline
+`local_run_comparison` report-input kind for the paper report pack, with
+offline tests and docs updates; do not add new market-data adapters, broker
+integration, credentials, account data, portfolio data, live quote feeds,
+paid-vendor data, WebSockets, remote fetching, production endpoints, strategy
+optimization, security ranking, allocation advice, executable advice,
+unsupported data redistribution, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-24 22:41:09 -07:00
+2026-06-24 22:45:51 -07:00
