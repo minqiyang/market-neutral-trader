@@ -40,6 +40,7 @@ class PaperReportPack:
     manifest_entry_count: int
     run_comparison_count: int
     validation_summary_count: int
+    review_note_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +95,26 @@ class MissingValidationSummaryInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalReviewNote:
+    """One descriptive local review note."""
+
+    source_label: str
+    note_label: str
+    source_path: str
+    note_text: str
+    follow_up_question: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingReviewNotesInput:
+    """Optional local review-notes descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
 
 
@@ -123,6 +144,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    review_notes, missing_review_notes = _read_review_notes(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -135,6 +160,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_run_comparisons=missing_run_comparisons,
             validation_summaries=validation_summaries,
             missing_validation_summaries=missing_validation_summaries,
+            review_notes=review_notes,
+            missing_review_notes=missing_review_notes,
         ),
         encoding="utf-8",
         newline="\n",
@@ -147,6 +174,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         manifest_entry_count=len(manifest_entries),
         run_comparison_count=len(run_comparisons),
         validation_summary_count=len(validation_summaries),
+        review_note_count=len(review_notes),
     )
 
 
@@ -162,6 +190,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"manifest_inputs={pack.manifest_entry_count}",
             f"run_comparisons={pack.run_comparison_count}",
             f"validation_summaries={pack.validation_summary_count}",
+            f"review_notes={pack.review_note_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -512,6 +541,105 @@ def _parse_validation_summary(
     )
 
 
+def _read_review_notes(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[tuple[LocalReviewNote, ...], tuple[MissingReviewNotesInput, ...]]:
+    if manifest_path is None:
+        return (), ()
+
+    notes: list[LocalReviewNote] = []
+    missing: list[MissingReviewNotesInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_review_notes":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local review-notes input is missing: "
+                    f"{entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingReviewNotesInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        notes.extend(
+            _read_review_notes_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(notes), tuple(missing)
+
+
+def _read_review_notes_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalReviewNote, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local review-notes descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+
+    notes = payload.get("notes")
+    if not isinstance(notes, list):
+        msg = f"{path}: local review-notes descriptor must contain a notes list"
+        raise ValueError(msg)
+
+    parsed_notes: list[LocalReviewNote] = []
+    for index, item in enumerate(notes, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local review note {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        parsed_notes.append(
+            _parse_review_note(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_notes)
+
+
+def _parse_review_note(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalReviewNote:
+    required_fields = (
+        "note_label",
+        "source_path",
+        "note_text",
+        "follow_up_question",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = f"{path}: local review note {index} missing field(s): {', '.join(missing)}"
+        raise ValueError(msg)
+
+    source_path = str(item["source_path"])
+    parsed = urlparse(source_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local review note {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalReviewNote(
+        source_label=source_label,
+        note_label=str(item["note_label"]),
+        source_path=source_path,
+        note_text=str(item["note_text"]),
+        follow_up_question=str(item["follow_up_question"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -523,6 +651,8 @@ def _render_markdown(
     missing_run_comparisons: tuple[MissingRunComparisonInput, ...],
     validation_summaries: tuple[LocalValidationSummary, ...],
     missing_validation_summaries: tuple[MissingValidationSummaryInput, ...],
+    review_notes: tuple[LocalReviewNote, ...],
+    missing_review_notes: tuple[MissingReviewNotesInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -572,6 +702,10 @@ def _render_markdown(
             "## Local Validation Summary",
             "",
             _render_validation_summaries(validation_summaries, missing_validation_summaries),
+            "",
+            "## Local Review Notes",
+            "",
+            _render_review_notes(review_notes, missing_review_notes),
             "",
             "## SEC Fundamentals",
             "",
@@ -678,6 +812,30 @@ def _render_validation_summaries(
     rows.extend(
         f"| {missing_input.display_label} | not supplied | not supplied | "
         f"{missing_input.local_path} | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_review_notes(
+    notes: tuple[LocalReviewNote, ...],
+    missing_inputs: tuple[MissingReviewNotesInput, ...],
+) -> str:
+    if not notes and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local review notes | not supplied |"
+
+    rows = [
+        "| source | note | source path | note text | follow-up question | limitation |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {note.source_label} | {note.note_label} | {note.source_path} | "
+        f"{note.note_text} | {note.follow_up_question} | {note.limitation_note} |"
+        for note in notes
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | {missing_input.local_path} | "
+        "not supplied | not supplied | not supplied |"
         for missing_input in missing_inputs
     )
     return "\n".join(rows)

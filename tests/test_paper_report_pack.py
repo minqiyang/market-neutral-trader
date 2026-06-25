@@ -279,6 +279,96 @@ def test_paper_report_pack_rejects_unsafe_validation_summary_descriptor(
         )
 
 
+def test_paper_report_pack_renders_local_review_notes_input(tmp_path: Path) -> None:
+    review_notes_path = _write_review_notes_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=review_notes_path.name,
+        input_kind="local_review_notes",
+        display_label="Local review notes",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.review_note_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Review Notes" in text
+    assert "input coverage caveat" in text
+    assert "review-notes.json" in text
+    assert "confirm optional inputs remain not supplied" in text
+    assert "manual review context only" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_review_notes_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-review-notes.json",
+        input_kind="local_review_notes",
+        display_label="Missing review notes",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Review Notes" in text
+    assert "Missing review notes | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_review_notes_descriptor(tmp_path: Path) -> None:
+    secret_descriptor_path = _write_review_notes_descriptor(
+        tmp_path,
+        extra_note_field={"secret_token": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_review_notes",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-review-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_review_notes_descriptor(
+        tmp_path,
+        source_path="https://example.com/private-note.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_review_notes",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-review-pack",
+            )
+        )
+
+
 def test_paper_report_pack_cli_writes_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
     output_dir = tmp_path / "pack"
     manifest_path = _write_report_input_manifest(tmp_path)
@@ -399,6 +489,42 @@ def _write_validation_summary_descriptor(
                         "artifact_path": "ruff.log",
                         "observed_at": "2026-06-24T22:01:00-07:00",
                         "limitation_note": "not rerun for this descriptor",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_review_notes_descriptor(
+    tmp_path: Path,
+    *,
+    source_path: str = "review-notes.json",
+    extra_note_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "review_notes.json"
+    first_note = {
+        "note_label": "input coverage caveat",
+        "source_path": source_path,
+        "note_text": "manual review context only",
+        "follow_up_question": "confirm optional inputs remain not supplied",
+        "limitation_note": "not investment advice",
+    }
+    if extra_note_field:
+        first_note.update(extra_note_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "notes": [
+                    first_note,
+                    {
+                        "note_label": "assumption caveat",
+                        "source_path": "review-notes.json",
+                        "note_text": "fills are supplied assumptions only",
+                        "follow_up_question": "",
+                        "limitation_note": "descriptive only",
                     },
                 ]
             }
