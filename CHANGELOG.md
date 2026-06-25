@@ -6,6 +6,11 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 18 readiness for a local/offline `local_citation_index`
+  report-input kind that records citation labels, source paths, citation
+  purpose, rights notes, and limitations without reading source contents,
+  embedding private/proprietary excerpts, fetching remote data, or producing
+  advice.
 - Added Stage 17 local/offline `local_data_dictionary` report-input support to
   the paper report pack, with descriptor Markdown output, missing-input
   disclosure, and rejection of secret-like fields and remote URLs.

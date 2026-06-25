@@ -282,9 +282,19 @@ private data contents, add adapters, fetch remote data, rank securities,
 recommend allocations, optimize strategies, emit executable advice, imply
 production readiness, or claim profitability.
 
-Next checkpoint: next concrete report-input-kind readiness clarification only.
+`docs/STAGE_PLAN.md` now contains the full Stage 18 readiness specification for
+a local/offline `local_citation_index` report-input kind. Stage 18 may
+describe only reviewer-supplied citation labels, local source paths, citation
+purpose, rights notes, and limitation notes, and it must not execute commands,
+read source contents, read raw private data contents, fetch remote data, add
+adapters, use account or portfolio data, use live feeds, rank sources or
+securities, recommend allocations, optimize strategies, emit executable
+advice, imply production readiness, or claim profitability.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Clarify only the next concrete local/offline report-input kind in docs/STAGE_PLAN.md; do not implement it yet, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, strategy optimization, security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
+Next checkpoint: Stage 18 local citation-index report-input implementation
+only.
+
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only the Stage 18 local/offline local_citation_index report-input kind for the paper report pack, with offline tests and docs updates; do not execute commands from report inputs, read source contents, read raw private data contents, embed private or proprietary excerpts, add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, strategy optimization, source or security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
 
 ## Important files
 
@@ -477,22 +487,25 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Next concrete report-input-kind readiness clarification only. Start only after
-reconfirming clean synced `main`, CI, branch protection, required `Validate`
-status, local validation, and whether the owner-direct fast path or PR path
-applies.
+Stage 18 local citation-index report-input implementation only. Start only
+after reconfirming clean synced `main`, CI, branch protection, required
+`Validate` status, local validation, and whether the owner-direct fast path or
+PR path applies.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Clarify only the next concrete local/offline
-report-input kind in `docs/STAGE_PLAN.md`; do not implement it yet, and do not
-add new market-data adapters, broker integration, credentials, account data,
-portfolio data, live quote feeds, paid-vendor data, WebSockets, remote
-fetching, production endpoints, strategy optimization, security ranking,
-allocation advice, executable advice, production-readiness claims, unsupported
-data redistribution, or profitability claims.
+the verified current handoff. Implement only the Stage 18 local/offline
+`local_citation_index` report-input kind for the paper report pack, with
+offline tests and docs updates; do not execute commands from report inputs,
+read source contents, read raw private data contents, embed private or
+proprietary excerpts, add new market-data adapters, broker integration,
+credentials, account data, portfolio data, live quote feeds, paid-vendor data,
+WebSockets, remote fetching, production endpoints, strategy optimization,
+source or security ranking, allocation advice, executable advice,
+production-readiness claims, unsupported data redistribution, or profitability
+claims.
 
 ## Last updated timestamp
 
-2026-06-24 23:37:22 -07:00
+2026-06-24 23:40:59 -07:00

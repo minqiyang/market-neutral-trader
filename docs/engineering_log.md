@@ -442,6 +442,16 @@ labels, units, definitions, rights/sensitivity labels, and limitation notes as
 descriptive context without turning field metadata into ranking, advice, or
 production-readiness claims.
 
+After Stage 17, the next safe report-input kind is a citation index. The
+clarified Stage 18 boundary allows a local citation-index descriptor to record
+reviewer-supplied citation labels, local source paths, citation purpose,
+rights notes, and limitation notes.
+
+The boundary stays descriptive. Stage 18 should make source attribution
+metadata visible in the report pack without reading source contents, embedding
+private or proprietary excerpts, fetching remote data, ranking sources,
+producing advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:
