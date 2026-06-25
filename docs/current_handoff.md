@@ -76,6 +76,12 @@ URL. Tests use local fixtures and mocked HTTP only.
 
 ## Compact governance audit
 
+Policy update: compact governance audits after every three completed
+checkpoints are mandatory but non-terminal when they pass. A passing audit must
+be published under the controller policy, followed by `main` `Validate`, local
+sync, clean-state verification, checkpoint-counter reset, and a fresh read of
+this handoff before continuing. Stop only when the audit finds a real stop gate.
+
 Audit after three completed checkpoints: Stage 7 implementation, Stage 8
 readiness clarification, and Stage 8 implementation. Local `main` is synced
 with `origin/main` at `cbfce85`, the worktree is clean, there are no open pull
@@ -133,7 +139,7 @@ execution, or profitability claims.
 
 Next checkpoint: report-input readiness clarification only.
 
-Exact next prompt: `Use Codex Long Session Governance. Clarify only the next local/offline report-input stage in docs/STAGE_PLAN.md; do not implement it yet, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, production endpoints, strategy optimization, security ranking, allocation advice, executable advice, or profitability claims.`
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Start with the report-input readiness clarification only; do not implement the next product stage yet. Keep governance audits mandatory but non-terminal when they pass, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, production endpoints, strategy optimization, security ranking, allocation advice, executable advice, or profitability claims.`
 
 ## Important files
 
@@ -318,20 +324,21 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Stage 10 implementation: offline paper research report pack. Start only after
-reconfirming clean synced `main`, CI, branch protection, required `Validate`
-status, local validation, and whether the owner-direct fast path or PR path
-applies.
+Report-input readiness clarification only. Start only after reconfirming clean
+synced `main`, CI, branch protection, required `Validate` status, local
+validation, and whether the owner-direct fast path or PR path applies.
 
 ## Exact next prompt suggestion
 
-Use Codex Long Session Governance. Implement only the offline Stage 10 paper
-research report pack from the Stage 10 section of `docs/STAGE_PLAN.md`; use
-TDD, keep tests offline, and do not add broker integration, credentials,
-account data, portfolio data, live quote feeds, paid-vendor market data, live
-equities orders, production endpoints, strategy optimization, security ranking,
-allocation advice, unsupported data redistribution, or profitability claims.
+Use Codex Long Session Governance. Continue continuous staged autopilot from
+the verified current handoff. Start with the report-input readiness
+clarification only; do not implement the next product stage yet. Keep
+governance audits mandatory but non-terminal when they pass, and do not add new
+market-data adapters, broker integration, credentials, account data, portfolio
+data, live quote feeds, paid-vendor data, WebSockets, production endpoints,
+strategy optimization, security ranking, allocation advice, executable advice,
+or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-22 23:43:21 -07:00
+2026-06-24 22:24:07 -07:00

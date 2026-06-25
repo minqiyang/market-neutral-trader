@@ -22,6 +22,11 @@ For staged work, use `docs/codex_long_running_controller.md` for optional
 skill and preset-command orchestration; optional skills should not block the
 checkpoint when the equivalent checklist is clear.
 
+For continuous staged autopilot, compact governance audits after every three
+completed checkpoints are mandatory but non-terminal when they pass. Continue
+after a passing audit once `main` validation, local sync, clean state, and the
+updated handoff are verified.
+
 ## First-read workflow
 
 For future Codex runs, read these before broad exploration:
@@ -40,7 +45,8 @@ owner-direct fast-path workflow rules. Codex must not bypass branch protection,
 force push, use admin override, or direct-merge/push to `main` unless every
 owner-direct fast-path condition in the controller is satisfied. GitHub
 auto-merge may be enabled only for clearly low-risk small PRs that meet the
-controller policy.
+controller policy. Passing governance audits do not by themselves require a
+final report or pause.
 
 ## Continuity docs
 
