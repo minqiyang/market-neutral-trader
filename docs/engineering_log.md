@@ -381,6 +381,18 @@ produce recommendations. Stage 15 should render local notes as descriptive
 context while avoiding command execution, remote fetching, ranking, allocation
 advice, production-readiness claims, and profitability framing.
 
+## Stage 15 local review-notes input
+
+Stage 15 added support for `local_review_notes` manifest entries in the paper
+report pack. The implementation reads a local review-notes descriptor as
+metadata, renders a separate Markdown section, reports missing optional review
+descriptors as not supplied, and rejects secret-like fields or remote URLs.
+
+The report pack still does not read private note files referenced by the
+descriptor. It renders reviewer-supplied labels, source paths, note text,
+follow-up questions, and limitation notes as descriptive context without
+turning those notes into recommendations or production-readiness claims.
+
 ## Interview narrative
 
 A concise way to explain the current project:

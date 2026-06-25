@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 15 local/offline `local_review_notes` report-input support to
+  the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields and remote URLs.
 - Clarified Stage 15 readiness for a local/offline `local_review_notes`
   report-input kind that records reviewer notes, caveats, and follow-up
   questions without reading private data contents, fetching remote data, or
