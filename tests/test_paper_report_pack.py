@@ -461,6 +461,99 @@ def test_paper_report_pack_rejects_unsafe_methodology_notes_descriptor(
         )
 
 
+def test_paper_report_pack_renders_local_data_dictionary_input(tmp_path: Path) -> None:
+    data_dictionary_path = _write_data_dictionary_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=data_dictionary_path.name,
+        input_kind="local_data_dictionary",
+        display_label="Local data dictionary",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.data_dictionary_field_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Data Dictionary" in text
+    assert "observed spread" in text
+    assert "data-dictionary.json" in text
+    assert "Decimal string" in text
+    assert "percentage points" in text
+    assert "local generated artifact" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_data_dictionary_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-data-dictionary.json",
+        input_kind="local_data_dictionary",
+        display_label="Missing data dictionary",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Data Dictionary" in text
+    assert "Missing data dictionary | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_data_dictionary_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_data_dictionary_descriptor(
+        tmp_path,
+        extra_field_metadata={"access_token": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_data_dictionary",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-data-dictionary-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_data_dictionary_descriptor(
+        tmp_path,
+        source_path="https://example.com/raw-data.csv",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_data_dictionary",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-data-dictionary-pack",
+            )
+        )
+
+
 def test_paper_report_pack_cli_writes_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
     output_dir = tmp_path / "pack"
     manifest_path = _write_report_input_manifest(tmp_path)
@@ -653,6 +746,46 @@ def _write_methodology_notes_descriptor(
                         "methodology_text": "fills are supplied explicitly",
                         "assumption_scope": "hypothetical local fills only",
                         "limitation_note": "descriptive only",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_data_dictionary_descriptor(
+    tmp_path: Path,
+    *,
+    source_path: str = "data-dictionary.json",
+    extra_field_metadata: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "data_dictionary.json"
+    first_field = {
+        "field_label": "observed spread",
+        "source_path": source_path,
+        "data_type_label": "Decimal string",
+        "unit": "percentage points",
+        "definition": "observed yes ask minus best yes bid",
+        "rights_sensitivity_label": "local generated artifact",
+        "limitation_note": "descriptive field metadata only",
+    }
+    if extra_field_metadata:
+        first_field.update(extra_field_metadata)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "fields": [
+                    first_field,
+                    {
+                        "field_label": "bid depth",
+                        "source_path": "data-dictionary.json",
+                        "data_type_label": "Decimal string",
+                        "unit": "contracts",
+                        "definition": "summed local fixture bid quantity",
+                        "rights_sensitivity_label": "local fixture metadata",
+                        "limitation_note": "not a live feed",
                     },
                 ]
             }

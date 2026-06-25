@@ -428,6 +428,20 @@ the report pack without reading raw private data contents, fetching remote
 data, ranking fields or sources, optimizing strategies, producing advice, or
 implying production readiness.
 
+## Stage 17 local data-dictionary input
+
+Stage 17 added support for `local_data_dictionary` manifest entries in the
+paper report pack. The implementation reads a local data-dictionary descriptor
+as metadata, renders a separate Markdown section, reports missing optional
+data-dictionary descriptors as not supplied, and rejects secret-like fields or
+remote URLs.
+
+The report pack still does not read raw local data files referenced by the
+descriptor. It renders reviewer-supplied field labels, source paths, data type
+labels, units, definitions, rights/sensitivity labels, and limitation notes as
+descriptive context without turning field metadata into ranking, advice, or
+production-readiness claims.
+
 ## Interview narrative
 
 A concise way to explain the current project:
