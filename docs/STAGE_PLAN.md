@@ -2,7 +2,7 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages through Stage 11. They are
+These records summarize the locally completed stages through Stage 12. They are
 intended as a durable audit map; implementation details remain in the source,
 tests, changelog, engineering log, and handoff archive.
 
@@ -277,6 +277,25 @@ tests, changelog, engineering log, and handoff archive.
   data, no live quote feed, no paid-vendor market data, no WebSocket, no order
   placement, no ranking, no allocation advice, no strategy optimization, no
   production execution, and no profitability claim.
+
+### Stage 12: Report input manifest, local/offline only
+
+- Status: complete.
+- Commit: pending on the Stage 12 implementation branch.
+- Purpose: add a descriptive local manifest for optional report-pack inputs.
+- Files/modules changed: `src/edmn_trader/scripts/paper_report_pack.py`,
+  `tests/test_paper_report_pack.py`, and documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, and `python scripts/01_replay_orderbook_fixture.py`.
+- Next-stage boundary: later stages may add concrete new input kinds only after
+  each input kind's data-source rights, offline fixture behavior, and
+  non-executable report boundaries are clarified first.
+- Safety status: local/offline descriptive manifest only, no new data adapters,
+  no broker integration, no credentials, no account or portfolio data, no live
+  quote feed, no paid-vendor market data, no WebSocket, no remote fetch, no
+  order placement, no ranking, no allocation advice, no executable advice, no
+  strategy optimization, no production execution, no unsupported redistribution,
+  and no profitability claim.
 
 ## Stage 0: Repository foundation
 
