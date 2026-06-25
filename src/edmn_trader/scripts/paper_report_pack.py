@@ -42,6 +42,7 @@ class PaperReportPack:
     validation_summary_count: int
     review_note_count: int
     methodology_note_count: int
+    data_dictionary_field_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,6 +137,28 @@ class MissingMethodologyNotesInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalDataDictionaryField:
+    """One descriptive local data-dictionary field."""
+
+    source_label: str
+    field_label: str
+    source_path: str
+    data_type_label: str
+    unit: str
+    definition: str
+    rights_sensitivity_label: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingDataDictionaryInput:
+    """Optional local data-dictionary descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
 
 
@@ -173,6 +196,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    data_dictionary_fields, missing_data_dictionary = _read_data_dictionary(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -189,6 +216,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_review_notes=missing_review_notes,
             methodology_notes=methodology_notes,
             missing_methodology_notes=missing_methodology_notes,
+            data_dictionary_fields=data_dictionary_fields,
+            missing_data_dictionary=missing_data_dictionary,
         ),
         encoding="utf-8",
         newline="\n",
@@ -203,6 +232,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         validation_summary_count=len(validation_summaries),
         review_note_count=len(review_notes),
         methodology_note_count=len(methodology_notes),
+        data_dictionary_field_count=len(data_dictionary_fields),
     )
 
 
@@ -220,6 +250,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"validation_summaries={pack.validation_summary_count}",
             f"review_notes={pack.review_note_count}",
             f"methodology_notes={pack.methodology_note_count}",
+            f"data_dictionary_fields={pack.data_dictionary_field_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -768,6 +799,112 @@ def _parse_methodology_note(
     )
 
 
+def _read_data_dictionary(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[tuple[LocalDataDictionaryField, ...], tuple[MissingDataDictionaryInput, ...]]:
+    if manifest_path is None:
+        return (), ()
+
+    fields: list[LocalDataDictionaryField] = []
+    missing: list[MissingDataDictionaryInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_data_dictionary":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local data-dictionary input is missing: "
+                    f"{entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingDataDictionaryInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        fields.extend(
+            _read_data_dictionary_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(fields), tuple(missing)
+
+
+def _read_data_dictionary_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalDataDictionaryField, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local data-dictionary descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+
+    fields = payload.get("fields")
+    if not isinstance(fields, list):
+        msg = f"{path}: local data-dictionary descriptor must contain a fields list"
+        raise ValueError(msg)
+
+    parsed_fields: list[LocalDataDictionaryField] = []
+    for index, item in enumerate(fields, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local data-dictionary field {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        parsed_fields.append(
+            _parse_data_dictionary_field(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_fields)
+
+
+def _parse_data_dictionary_field(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalDataDictionaryField:
+    required_fields = (
+        "field_label",
+        "source_path",
+        "data_type_label",
+        "unit",
+        "definition",
+        "rights_sensitivity_label",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local data-dictionary field {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    source_path = str(item["source_path"])
+    parsed = urlparse(source_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local data-dictionary field {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalDataDictionaryField(
+        source_label=source_label,
+        field_label=str(item["field_label"]),
+        source_path=source_path,
+        data_type_label=str(item["data_type_label"]),
+        unit=str(item["unit"]),
+        definition=str(item["definition"]),
+        rights_sensitivity_label=str(item["rights_sensitivity_label"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -783,6 +920,8 @@ def _render_markdown(
     missing_review_notes: tuple[MissingReviewNotesInput, ...],
     methodology_notes: tuple[LocalMethodologyNote, ...],
     missing_methodology_notes: tuple[MissingMethodologyNotesInput, ...],
+    data_dictionary_fields: tuple[LocalDataDictionaryField, ...],
+    missing_data_dictionary: tuple[MissingDataDictionaryInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -840,6 +979,10 @@ def _render_markdown(
             "## Local Methodology Notes",
             "",
             _render_methodology_notes(methodology_notes, missing_methodology_notes),
+            "",
+            "## Local Data Dictionary",
+            "",
+            _render_data_dictionary(data_dictionary_fields, missing_data_dictionary),
             "",
             "## SEC Fundamentals",
             "",
@@ -994,6 +1137,32 @@ def _render_methodology_notes(
     rows.extend(
         f"| {missing_input.display_label} | not supplied | {missing_input.local_path} | "
         "not supplied | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_data_dictionary(
+    fields: tuple[LocalDataDictionaryField, ...],
+    missing_inputs: tuple[MissingDataDictionaryInput, ...],
+) -> str:
+    if not fields and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local data dictionary | not supplied |"
+
+    rows = [
+        "| source | field | source path | data type | unit | definition | "
+        "rights/sensitivity | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {field.source_label} | {field.field_label} | {field.source_path} | "
+        f"{field.data_type_label} | {field.unit} | {field.definition} | "
+        f"{field.rights_sensitivity_label} | {field.limitation_note} |"
+        for field in fields
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | {missing_input.local_path} | "
+        "not supplied | not supplied | not supplied | not supplied | not supplied |"
         for missing_input in missing_inputs
     )
     return "\n".join(rows)
