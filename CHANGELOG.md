@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 12 readiness for a local/offline report-input manifest that
+  records source rights, assumption scope, and required/optional status without
+  adding new data adapters or executable advice.
 - Added Stage 11 local/offline report-section expansion to the paper report
   pack, including a source inventory section that labels missing inputs as not
   supplied.

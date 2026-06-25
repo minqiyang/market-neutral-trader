@@ -44,6 +44,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   note. Read before any U.S. equities adapter work.
 - `docs/stage11_report_sections_readiness.md`: Stage 11 readiness note for
   local/offline report-section expansion.
+- `docs/stage12_report_inputs_readiness.md`: Stage 12 readiness note for a
+  local/offline report-input manifest.
 - `docs/DECISION_LOG.md`: architecture and product decisions. Read before
   reversing or expanding a foundational decision.
 - `docs/engineering_log.md`: human-readable narrative for interviews and

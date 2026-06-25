@@ -293,6 +293,18 @@ being inferred. The report remains descriptive and non-executable; it does not
 add new data adapters, live feeds, ranking, allocation advice, optimization, or
 profitability framing.
 
+## Stage 12 readiness clarification
+
+After Stage 11, the safe next input expansion is a local manifest rather than a
+new data adapter. The clarified Stage 12 boundary lets the report pack describe
+additional local inputs with path, label, rights note, assumption scope, and
+required/optional status.
+
+The main tradeoff is keeping the manifest descriptive. Stage 12 should make
+source rights and missing-input behavior explicit without reading private data
+contents, fetching remote data, ranking assets, recommending allocations, or
+creating executable advice.
+
 ## Interview narrative
 
 A concise way to explain the current project:

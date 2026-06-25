@@ -111,6 +111,10 @@ For staged project work, read `docs/current_handoff.md` and `docs/repo_map.md` b
 - Stage 11 extends that same report pack with a local source inventory section
   only; it must continue to use local files and fixtures, label missing inputs
   as not supplied, and avoid new data adapters or executable advice.
+- Stage 12 may add a local/offline report-input manifest for the report pack;
+  it must keep manifest entries descriptive, reject secret-like fields and
+  remote URLs, label missing optional inputs as not supplied, and avoid new
+  data adapters, unsupported redistribution, or executable advice.
 
 ## Verification
 

@@ -996,3 +996,53 @@ claims.
 Next-stage boundary: later stages may add new report inputs only after their
 data-source rights, offline fixture behavior, and non-executable report
 boundaries are clarified first.
+
+## Stage 12: Report input manifest, local/offline only
+
+Purpose: add a local manifest that describes additional report inputs for the
+paper report pack without adding new data adapters, remote fetching, or
+executable advice.
+
+Deliverables: optional manifest input, Markdown manifest section, offline tests,
+and limitation notes.
+
+Allowed scope:
+
+- Use a local manifest file only.
+- Manifest entries may describe local paths, input kind, display label,
+  rights/redistribution note, assumption scope, and required/optional status.
+- Keep the manifest descriptive and non-executable.
+- Reject secret-like fields and unsupported remote URLs.
+- Label missing optional manifest inputs as not supplied.
+- Keep observed metrics, supplied assumptions, SEC fundamentals, source
+  inventory, manifest inputs, and limitations separate.
+
+Acceptance checks:
+
+- Reports do not rank securities, recommend allocations, optimize strategies,
+  emit executable advice, or claim profitability.
+- Reports do not use broker APIs, credentials, account data, portfolio data,
+  live quote feeds, paid-vendor feeds, proprietary exchange data, WebSockets,
+  production endpoints, or unsupported redistribution.
+- Manifest parsing is offline and deterministic.
+- Missing optional manifest inputs produce explicit not-supplied text instead
+  of inferred values.
+
+Validation commands:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+ruff check .
+python scripts/01_replay_orderbook_fixture.py
+```
+
+Explicit non-goals: no new market-data adapters, no live equities orders, no
+broker integration, no credentials, no account or portfolio data, no live quote
+feeds, no paid-vendor market data, no WebSockets, no production endpoints, no
+strategy optimization, no security ranking, no allocation advice, no executable
+advice, no unsupported data redistribution, and no profitability claims.
+
+Next-stage boundary: later stages may add concrete new input kinds only after
+each input kind's data-source rights, offline fixture behavior, and
+non-executable report boundaries are clarified first.

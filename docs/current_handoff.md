@@ -137,9 +137,17 @@ or SEC companyfacts as not supplied, and does not add new data adapters, live
 feeds, ranking, allocation advice, executable advice, strategy optimization,
 execution, or profitability claims.
 
-Next checkpoint: report-input readiness clarification only.
+`docs/STAGE_PLAN.md` now contains the full Stage 12 specification and
+`docs/stage12_report_inputs_readiness.md` records the readiness review. Stage
+12 is ready only for a local/offline report-input manifest. It must not add new
+data adapters, remote fetching, broker integration, credentials, account or
+portfolio data, live feeds, ranking, allocation advice, executable advice,
+strategy optimization, unsupported redistribution, production endpoints, or
+profitability claims.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Start with the report-input readiness clarification only; do not implement the next product stage yet. Keep governance audits mandatory but non-terminal when they pass, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, production endpoints, strategy optimization, security ranking, allocation advice, executable advice, or profitability claims.`
+Next checkpoint: Stage 12 implementation only.
+
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only the local/offline Stage 12 report-input manifest from docs/STAGE_PLAN.md; use TDD, keep tests offline, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, production endpoints, strategy optimization, security ranking, allocation advice, executable advice, unsupported data redistribution, or profitability claims.`
 
 ## Important files
 
@@ -155,6 +163,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   for the SEC EDGAR public fundamentals boundary.
 - `docs/stage11_report_sections_readiness.md`: Stage 11 readiness note for
   local/offline report-section expansion.
+- `docs/stage12_report_inputs_readiness.md`: Stage 12 readiness note for a
+  local/offline report-input manifest.
 - `docs/engineering_log.md`: narrative engineering record.
 - `src/edmn_trader/core/models.py`: exchange-agnostic core models.
 - `src/edmn_trader/adapters/kalshi/client.py`: guarded read-only Kalshi Demo
@@ -324,21 +334,22 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Report-input readiness clarification only. Start only after reconfirming clean
-synced `main`, CI, branch protection, required `Validate` status, local
-validation, and whether the owner-direct fast path or PR path applies.
+Stage 12 implementation: local/offline report-input manifest. Start only after
+reconfirming clean synced `main`, CI, branch protection, required `Validate`
+status, local validation, and whether the owner-direct fast path or PR path
+applies.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Start with the report-input readiness
-clarification only; do not implement the next product stage yet. Keep
-governance audits mandatory but non-terminal when they pass, and do not add new
-market-data adapters, broker integration, credentials, account data, portfolio
-data, live quote feeds, paid-vendor data, WebSockets, production endpoints,
-strategy optimization, security ranking, allocation advice, executable advice,
-or profitability claims.
+the verified current handoff. Implement only the local/offline Stage 12
+report-input manifest from `docs/STAGE_PLAN.md`; use TDD, keep tests offline,
+and do not add new market-data adapters, broker integration, credentials,
+account data, portfolio data, live quote feeds, paid-vendor data, WebSockets,
+production endpoints, strategy optimization, security ranking, allocation
+advice, executable advice, unsupported data redistribution, or profitability
+claims.
 
 ## Last updated timestamp
 
-2026-06-24 22:24:07 -07:00
+2026-06-24 22:30:08 -07:00
