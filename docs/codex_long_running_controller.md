@@ -24,6 +24,10 @@ demo-first, risk-controlled stage plan.
   token-budget rules, and final-report rules on every checkpoint.
 - Use the project Skill for repository-specific staged work before optional
   skills.
+- Keep optional skills token-efficient: project Skill and token-budget rules
+  always apply, TDD applies to behavior changes, Ponytail review applies before
+  publish for implementation diffs, and Matt Pocock `grill-me` applies only for
+  ambiguous or high-risk design.
 - Treat optional skills and preset commands as accelerators, not dependencies.
   If a skill is unavailable, uninstalled, renamed, or noisy to invoke, use the
   equivalent checklist and keep moving.
@@ -44,8 +48,31 @@ demo-first, risk-controlled stage plan.
 
 - Work on one stage-sized change at a time.
 - Confirm the requested stage and stop at that boundary.
-- Do not begin the next stage in the same run unless explicitly requested.
+- In continuous autopilot runs, continue to the next checkpoint after a
+  successful publish and clean post-merge verification.
+- Outside continuous autopilot runs, do not begin the next stage in the same
+  run unless explicitly requested.
 - Update handoff and logs before reporting completion.
+
+## Governance audit cadence
+
+- After every three completed checkpoints, run a compact governance audit.
+- The audit must check clean/synced `main`, latest `main` CI, open PRs, branch
+  protection, required `Validate`, handoff accuracy, stage-plan continuity,
+  risk drift, and token/context drift.
+- Publish the audit under this controller's publish policy.
+- After the audit PR/merge or owner-direct publish completes, wait for `main`
+  `Validate`, sync local `main`, verify a clean worktree, reset the checkpoint
+  counter, read the updated `docs/current_handoff.md`, and continue to the next
+  checkpoint.
+- A passing audit is mandatory but non-terminal. Do not emit the final report
+  after a passing audit.
+- Stop only when the audit finds a real stop gate: high or unclear risk,
+  compliance ambiguity, CI failure, unclear branch protection or required
+  `Validate`, open PR conflict, merge conflict, remote divergence, stale or
+  contradictory handoff that cannot be safely fixed, secrets/credentials or
+  production endpoint need, context too large to continue safely, or user
+  judgment required.
 
 ## PR-sized / commit-sized work policy
 
@@ -102,7 +129,8 @@ Stop and report clearly when any of these occur:
 - Owner-direct fast path is requested but any required condition is false.
 - Auto-merge is requested but the PR is not clearly low-risk, protected, and
   locally validated.
-- Completion of one stage-sized change.
+- Completion of one stage-sized change only when the run is not explicitly in
+  continuous autopilot mode.
 
 ## Required checks
 
@@ -139,6 +167,9 @@ Before final handoff for a stage-sized change:
 - Include the next recommended stage and exact next prompt suggestion.
 
 ## Final report format
+
+Emit a final report only when Codex actually stops. Do not emit a final report
+after a passing non-terminal governance audit.
 
 Return:
 

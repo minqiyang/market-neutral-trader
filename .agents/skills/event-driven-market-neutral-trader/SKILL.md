@@ -42,6 +42,11 @@ use optional Matt Pocock, TDD, Ponytail, and handoff/compaction skills only in
 the cases named by the controller, and fall back to the equivalent checklist if
 an optional skill is unavailable or renamed.
 
+In continuous autopilot, compact governance audits after every three completed
+checkpoints are mandatory but non-terminal when they pass. After a passing audit
+publish, wait for `main` `Validate`, sync local `main`, verify a clean state,
+read the updated handoff, reset the checkpoint counter, and continue.
+
 For Kalshi-style binary orderbooks, normalize YES-side books from local data by treating YES bids as canonical bids and NO bids as implied YES asks using `1 - no_price`.
 
 For staged project work, read `docs/current_handoff.md` and `docs/repo_map.md` before broad exploration. After a stage-sized change, update `docs/current_handoff.md`, `docs/engineering_log.md`, and `CHANGELOG.md` with concise durable context.
