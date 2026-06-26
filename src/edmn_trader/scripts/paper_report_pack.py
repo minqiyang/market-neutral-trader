@@ -46,6 +46,7 @@ class PaperReportPack:
     citation_index_entry_count: int
     term_glossary_entry_count: int
     assumption_register_entry_count: int
+    coverage_matrix_entry_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,6 +223,27 @@ class MissingAssumptionRegisterInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalCoverageMatrixEntry:
+    """One descriptive local coverage-matrix entry."""
+
+    source_label: str
+    section_label: str
+    source_path: str
+    input_label: str
+    validation_label: str
+    coverage_note: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingCoverageMatrixInput:
+    """Optional local coverage-matrix descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
 SOURCE_CONTENT_FIELDS = frozenset(
     (
@@ -286,6 +308,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    coverage_matrix_entries, missing_coverage_matrix = _read_coverage_matrix(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -310,6 +336,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_term_glossary=missing_term_glossary,
             assumption_register_entries=assumption_register_entries,
             missing_assumption_register=missing_assumption_register,
+            coverage_matrix_entries=coverage_matrix_entries,
+            missing_coverage_matrix=missing_coverage_matrix,
         ),
         encoding="utf-8",
         newline="\n",
@@ -328,6 +356,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         citation_index_entry_count=len(citation_index_entries),
         term_glossary_entry_count=len(term_glossary_entries),
         assumption_register_entry_count=len(assumption_register_entries),
+        coverage_matrix_entry_count=len(coverage_matrix_entries),
     )
 
 
@@ -349,6 +378,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"citation_index_entries={pack.citation_index_entry_count}",
             f"term_glossary_entries={pack.term_glossary_entry_count}",
             f"assumption_register_entries={pack.assumption_register_entry_count}",
+            f"coverage_matrix_entries={pack.coverage_matrix_entry_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -1331,6 +1361,112 @@ def _parse_assumption_register_entry(
     )
 
 
+def _read_coverage_matrix(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[tuple[LocalCoverageMatrixEntry, ...], tuple[MissingCoverageMatrixInput, ...]]:
+    if manifest_path is None:
+        return (), ()
+
+    coverage_entries: list[LocalCoverageMatrixEntry] = []
+    missing: list[MissingCoverageMatrixInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_coverage_matrix":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local coverage-matrix input is missing: "
+                    f"{entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingCoverageMatrixInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        coverage_entries.extend(
+            _read_coverage_matrix_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(coverage_entries), tuple(missing)
+
+
+def _read_coverage_matrix_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalCoverageMatrixEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local coverage-matrix descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="coverage-matrix")
+
+    coverage = payload.get("coverage")
+    if not isinstance(coverage, list):
+        msg = f"{path}: local coverage-matrix descriptor must contain a coverage list"
+        raise ValueError(msg)
+
+    parsed_coverage: list[LocalCoverageMatrixEntry] = []
+    for index, item in enumerate(coverage, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local coverage-matrix entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="coverage-matrix")
+        parsed_coverage.append(
+            _parse_coverage_matrix_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_coverage)
+
+
+def _parse_coverage_matrix_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalCoverageMatrixEntry:
+    required_fields = (
+        "section_label",
+        "source_path",
+        "input_label",
+        "validation_label",
+        "coverage_note",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local coverage-matrix entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    source_path = str(item["source_path"])
+    parsed = urlparse(source_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local coverage-matrix entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalCoverageMatrixEntry(
+        source_label=source_label,
+        section_label=str(item["section_label"]),
+        source_path=source_path,
+        input_label=str(item["input_label"]),
+        validation_label=str(item["validation_label"]),
+        coverage_note=str(item["coverage_note"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -1354,6 +1490,8 @@ def _render_markdown(
     missing_term_glossary: tuple[MissingTermGlossaryInput, ...],
     assumption_register_entries: tuple[LocalAssumptionRegisterEntry, ...],
     missing_assumption_register: tuple[MissingAssumptionRegisterInput, ...],
+    coverage_matrix_entries: tuple[LocalCoverageMatrixEntry, ...],
+    missing_coverage_matrix: tuple[MissingCoverageMatrixInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -1430,6 +1568,10 @@ def _render_markdown(
                 assumption_register_entries,
                 missing_assumption_register,
             ),
+            "",
+            "## Local Coverage Matrix",
+            "",
+            _render_coverage_matrix(coverage_matrix_entries, missing_coverage_matrix),
             "",
             "## SEC Fundamentals",
             "",
@@ -1684,6 +1826,31 @@ def _render_assumption_register(
     rows.extend(
         f"| {missing_input.display_label} | not supplied | {missing_input.local_path} | "
         "not supplied | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_coverage_matrix(
+    coverage_entries: tuple[LocalCoverageMatrixEntry, ...],
+    missing_inputs: tuple[MissingCoverageMatrixInput, ...],
+) -> str:
+    if not coverage_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local coverage matrix | not supplied |"
+
+    rows = [
+        "| source | section | source path | input | validation | coverage note | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.section_label} | {entry.source_path} | "
+        f"{entry.input_label} | {entry.validation_label} | {entry.coverage_note} | "
+        f"{entry.limitation_note} |"
+        for entry in coverage_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | {missing_input.local_path} | "
+        "not supplied | not supplied | not supplied | not supplied |"
         for missing_input in missing_inputs
     )
     return "\n".join(rows)

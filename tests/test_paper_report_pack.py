@@ -884,6 +884,116 @@ def test_paper_report_pack_rejects_unsafe_assumption_register_descriptor(
         )
 
 
+def test_paper_report_pack_renders_local_coverage_matrix_input(tmp_path: Path) -> None:
+    coverage_matrix_path = _write_coverage_matrix_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=coverage_matrix_path.name,
+        input_kind="local_coverage_matrix",
+        display_label="Local coverage matrix",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.coverage_matrix_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Coverage Matrix" in text
+    assert "Observed metrics" in text
+    assert "coverage-matrix.json" in text
+    assert "stage7 attribution" in text
+    assert "pytest already run locally" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_coverage_matrix_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-coverage-matrix.json",
+        input_kind="local_coverage_matrix",
+        display_label="Missing coverage matrix",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Coverage Matrix" in text
+    assert "Missing coverage matrix | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_coverage_matrix_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_coverage_matrix_descriptor(
+        tmp_path,
+        extra_coverage_field={"secret_token": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_coverage_matrix",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-coverage-matrix-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_coverage_matrix_descriptor(
+        tmp_path,
+        source_path="https://example.com/coverage.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_coverage_matrix",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-coverage-matrix-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_coverage_matrix_descriptor(
+        tmp_path,
+        extra_coverage_field={"text": "private source contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_coverage_matrix",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-coverage-matrix-pack",
+            )
+        )
+
+
 def test_paper_report_pack_cli_writes_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
     output_dir = tmp_path / "pack"
     manifest_path = _write_report_input_manifest(tmp_path)
@@ -1224,6 +1334,44 @@ def _write_assumption_register_descriptor(
                         "rationale": "avoid remote fetching",
                         "scope": "local/offline report inputs",
                         "limitation_note": "not investment advice",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_coverage_matrix_descriptor(
+    tmp_path: Path,
+    *,
+    source_path: str = "coverage-matrix.json",
+    extra_coverage_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "coverage_matrix.json"
+    first_coverage = {
+        "section_label": "Observed metrics",
+        "source_path": source_path,
+        "input_label": "stage7 attribution",
+        "validation_label": "pytest already run locally",
+        "coverage_note": "metrics are covered by generated Stage 7 report",
+        "limitation_note": "metadata only; does not execute checks",
+    }
+    if extra_coverage_field:
+        first_coverage.update(extra_coverage_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "coverage": [
+                    first_coverage,
+                    {
+                        "section_label": "Local source inventory",
+                        "source_path": "coverage-matrix.json",
+                        "input_label": "manifest descriptors",
+                        "validation_label": "not executed from descriptor",
+                        "coverage_note": "inputs are listed as supplied or not supplied",
+                        "limitation_note": "descriptive coverage only",
                     },
                 ]
             }

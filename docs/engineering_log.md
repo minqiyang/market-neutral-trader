@@ -524,6 +524,20 @@ in the report pack without executing checks, reading source contents, fetching
 remote data, scoring coverage, producing advice, or implying production
 readiness.
 
+## Stage 21 local coverage-matrix input
+
+Stage 21 added support for `local_coverage_matrix` manifest entries in the
+paper report pack. The implementation reads a local coverage-matrix descriptor
+as metadata, renders a separate Markdown section, reports missing optional
+coverage-matrix descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not execute checks or read source files referenced
+by the descriptor. It renders reviewer-supplied section labels, source paths,
+input labels, validation labels, coverage notes, and limitation notes as
+descriptive context without scoring coverage or turning coverage metadata into
+ranking, advice, or production-readiness claims.
+
 ## Interview narrative
 
 A concise way to explain the current project:
