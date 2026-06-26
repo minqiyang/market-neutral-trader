@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 19 readiness for a local/offline `local_term_glossary`
+  report-input kind that records terms, definitions, source paths, usage scope,
+  and limitations without reading source contents, fetching remote data,
+  ranking terms, or producing advice.
 - Added Stage 18 local/offline `local_citation_index` report-input support to
   the paper report pack, with descriptor Markdown output, missing-input
   disclosure, and rejection of secret-like fields, source-content/excerpt

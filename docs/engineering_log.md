@@ -466,6 +466,16 @@ rights notes, and limitation notes as descriptive context without embedding
 private/proprietary excerpts or turning source metadata into ranking, advice,
 or production-readiness claims.
 
+After Stage 18, the next safe report-input kind is a term glossary. The
+clarified Stage 19 boundary allows a local term-glossary descriptor to record
+reviewer-supplied terms, definitions, local source paths, usage scope, and
+limitation notes.
+
+The boundary stays descriptive. Stage 19 should make terminology visible in
+the report pack without reading source contents, embedding private or
+proprietary excerpts, fetching remote data, ranking terms, producing advice, or
+implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:
