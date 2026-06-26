@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 20 local/offline `local_assumption_register` report-input
+  support to the paper report pack, with descriptor Markdown output,
+  missing-input disclosure, and rejection of secret-like fields,
+  source-content/excerpt fields, and remote URLs.
 - Clarified Stage 20 readiness for a local/offline
   `local_assumption_register` report-input kind that records assumption labels,
   rationale, source paths, scope, and limitations without reading source

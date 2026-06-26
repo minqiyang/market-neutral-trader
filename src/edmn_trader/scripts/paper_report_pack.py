@@ -45,6 +45,7 @@ class PaperReportPack:
     data_dictionary_field_count: int
     citation_index_entry_count: int
     term_glossary_entry_count: int
+    assumption_register_entry_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,6 +202,26 @@ class MissingTermGlossaryInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalAssumptionRegisterEntry:
+    """One descriptive local assumption-register entry."""
+
+    source_label: str
+    assumption_label: str
+    source_path: str
+    rationale: str
+    scope: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingAssumptionRegisterInput:
+    """Optional local assumption-register descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
 SOURCE_CONTENT_FIELDS = frozenset(
     (
@@ -261,6 +282,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    assumption_register_entries, missing_assumption_register = _read_assumption_register(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -283,6 +308,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_citation_index=missing_citation_index,
             term_glossary_entries=term_glossary_entries,
             missing_term_glossary=missing_term_glossary,
+            assumption_register_entries=assumption_register_entries,
+            missing_assumption_register=missing_assumption_register,
         ),
         encoding="utf-8",
         newline="\n",
@@ -300,6 +327,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         data_dictionary_field_count=len(data_dictionary_fields),
         citation_index_entry_count=len(citation_index_entries),
         term_glossary_entry_count=len(term_glossary_entries),
+        assumption_register_entry_count=len(assumption_register_entries),
     )
 
 
@@ -320,6 +348,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"data_dictionary_fields={pack.data_dictionary_field_count}",
             f"citation_index_entries={pack.citation_index_entry_count}",
             f"term_glossary_entries={pack.term_glossary_entry_count}",
+            f"assumption_register_entries={pack.assumption_register_entry_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -1195,6 +1224,113 @@ def _parse_term_glossary_entry(
     )
 
 
+def _read_assumption_register(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalAssumptionRegisterEntry, ...],
+    tuple[MissingAssumptionRegisterInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    assumptions: list[LocalAssumptionRegisterEntry] = []
+    missing: list[MissingAssumptionRegisterInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_assumption_register":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local assumption-register input is missing: "
+                    f"{entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingAssumptionRegisterInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        assumptions.extend(
+            _read_assumption_register_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(assumptions), tuple(missing)
+
+
+def _read_assumption_register_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalAssumptionRegisterEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local assumption-register descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="assumption-register")
+
+    assumptions = payload.get("assumptions")
+    if not isinstance(assumptions, list):
+        msg = f"{path}: local assumption-register descriptor must contain an assumptions list"
+        raise ValueError(msg)
+
+    parsed_assumptions: list[LocalAssumptionRegisterEntry] = []
+    for index, item in enumerate(assumptions, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local assumption-register entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="assumption-register")
+        parsed_assumptions.append(
+            _parse_assumption_register_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_assumptions)
+
+
+def _parse_assumption_register_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalAssumptionRegisterEntry:
+    required_fields = (
+        "assumption_label",
+        "source_path",
+        "rationale",
+        "scope",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local assumption-register entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    source_path = str(item["source_path"])
+    parsed = urlparse(source_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local assumption-register entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalAssumptionRegisterEntry(
+        source_label=source_label,
+        assumption_label=str(item["assumption_label"]),
+        source_path=source_path,
+        rationale=str(item["rationale"]),
+        scope=str(item["scope"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -1216,6 +1352,8 @@ def _render_markdown(
     missing_citation_index: tuple[MissingCitationIndexInput, ...],
     term_glossary_entries: tuple[LocalTermGlossaryEntry, ...],
     missing_term_glossary: tuple[MissingTermGlossaryInput, ...],
+    assumption_register_entries: tuple[LocalAssumptionRegisterEntry, ...],
+    missing_assumption_register: tuple[MissingAssumptionRegisterInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -1285,6 +1423,13 @@ def _render_markdown(
             "## Local Term Glossary",
             "",
             _render_term_glossary(term_glossary_entries, missing_term_glossary),
+            "",
+            "## Local Assumption Register",
+            "",
+            _render_assumption_register(
+                assumption_register_entries,
+                missing_assumption_register,
+            ),
             "",
             "## SEC Fundamentals",
             "",
@@ -1510,6 +1655,31 @@ def _render_term_glossary(
         f"| {term.source_label} | {term.term_label} | {term.source_path} | "
         f"{term.definition} | {term.usage_scope} | {term.limitation_note} |"
         for term in terms
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | {missing_input.local_path} | "
+        "not supplied | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_assumption_register(
+    assumptions: tuple[LocalAssumptionRegisterEntry, ...],
+    missing_inputs: tuple[MissingAssumptionRegisterInput, ...],
+) -> str:
+    if not assumptions and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local assumption register | not supplied |"
+
+    rows = [
+        "| source | assumption | source path | rationale | scope | limitation |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {assumption.source_label} | {assumption.assumption_label} | "
+        f"{assumption.source_path} | {assumption.rationale} | "
+        f"{assumption.scope} | {assumption.limitation_note} |"
+        for assumption in assumptions
     )
     rows.extend(
         f"| {missing_input.display_label} | not supplied | {missing_input.local_path} | "

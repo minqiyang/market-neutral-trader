@@ -500,6 +500,20 @@ visible in the report pack without reading source contents, embedding private
 or proprietary excerpts, fetching remote data, ranking assumptions, producing
 advice, or implying production readiness.
 
+## Stage 20 local assumption-register input
+
+Stage 20 added support for `local_assumption_register` manifest entries in the
+paper report pack. The implementation reads a local assumption-register
+descriptor as metadata, renders a separate Markdown section, reports missing
+optional assumption-register descriptors as not supplied, and rejects
+secret-like fields, source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read source files referenced by the descriptor.
+It renders reviewer-supplied assumption labels, source paths, rationale, scope,
+and limitation notes as descriptive context without embedding
+private/proprietary excerpts or turning assumption metadata into ranking,
+advice, or production-readiness claims.
+
 ## Interview narrative
 
 A concise way to explain the current project:
