@@ -6,6 +6,11 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 29 readiness for a local/offline `local_decision_log`
+  report-input kind that records decision labels, decision context labels,
+  local reference paths, owner/status labels, rationale notes, and limitations
+  without reading referenced contents, approving decisions, scoring decisions,
+  or producing advice.
 - Added Stage 28 local/offline `local_open_questions` report-input support to
   the paper report pack, with descriptor Markdown output, missing-input
   disclosure, and rejection of secret-like fields, source-content/excerpt

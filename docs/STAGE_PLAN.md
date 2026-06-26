@@ -665,7 +665,7 @@ tests, changelog, engineering log, and handoff archive.
 ### Stage 28: Local open-questions report input, local/offline only
 
 - Status: complete.
-- Commit: pending on the Stage 28 implementation branch.
+- Commit: `c9934f4` (merged via PR #64 at `5cf9281`).
 - Purpose: add local reviewer-supplied open question labels, affected report
   section labels, local reference paths, owner labels, status labels, and
   limitation metadata.
@@ -2582,3 +2582,87 @@ reads, source-content reads, output verification, local environment
 verification, raw local data reads, remote fetches, new adapters, production
 endpoints, ranking, allocation, optimization, executable advice, or
 production-readiness claims.
+
+## Stage 29: Local decision-log report input, local/offline only
+
+Purpose: clarify the next concrete report-input kind after Stage 28: a local
+decision-log input that records reviewer-supplied decision labels, decision
+context labels, local reference paths, owner labels, status labels, rationale
+notes, and limitation notes without reading referenced contents, approving
+decisions, fetching remote data, scoring decisions, or producing executable
+advice.
+
+Deliverables: Stage 29 implementation may add a `local_decision_log` input
+kind to the report-input manifest, parse a local decision-log descriptor,
+render a descriptive report section, add offline tests, and update limitation
+notes.
+
+Allowed scope:
+
+- Use a local descriptor file only.
+- Treat the descriptor as reviewer-supplied decision metadata, not as artifact
+  content, evidence content, source content, output verification, environment
+  verification, validation execution, ranking, scoring, decision approval, or
+  production-readiness evidence.
+- Describe only decision labels, decision context labels, local reference
+  paths, owner labels, status labels, rationale notes, and limitation notes.
+- Reject remote URLs, secret-like fields, and source-content/excerpt fields.
+- Preserve separation between observed report metrics, supplied assumptions,
+  fundamentals, manifest metadata, comparison metadata, validation metadata,
+  review notes, methodology notes, data-dictionary metadata, citation-index
+  metadata, term-glossary metadata, assumption-register metadata,
+  coverage-matrix metadata, reproducibility metadata, risk-review metadata,
+  data-rights-review metadata, artifact-inventory metadata,
+  appendix-index metadata, limitation-register metadata, open-question
+  metadata, decision-log metadata, and limitations.
+- Label missing optional decision-log inputs as not supplied.
+
+Acceptance checks:
+
+- The implementation remains local/offline and deterministic.
+- The report pack does not execute commands, run tests from report inputs,
+  verify local environments, verify outputs, place orders, read secrets, read
+  artifact contents, read evidence contents, read source contents, read raw
+  private data contents, read account data, read portfolio data, fetch remote
+  data, use live feeds, inspect paid-vendor or proprietary datasets, approve
+  decisions, or infer private values from referenced files.
+- The output does not include private/proprietary excerpts, score or rank
+  decisions, open questions, limitations, appendix entries, artifacts, rights
+  status, risk controls, reproducibility steps, coverage, sources, or
+  securities, recommend allocations, optimize strategies, emit executable
+  advice, imply production readiness, or claim profitability.
+- Missing optional decision-log inputs produce explicit not-supplied text
+  instead of inferred values.
+- Tests use local descriptors and generated project artifact references only.
+
+Validation commands:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+ruff check .
+python scripts/01_replay_orderbook_fixture.py
+```
+
+Explicit non-goals: no command execution from report inputs, no validation
+execution from report inputs, no artifact-content reads, no evidence-content
+reads, no source-content reads, no output verification, no local environment
+verification, no raw private data reads, no private/proprietary excerpts, no
+decision approval, no distribution approval, no risk-check execution, no order
+placement, no new market-data adapters, no remote fetching, no broker
+integration, no credentials, no account or portfolio data, no live quote
+feeds, no paid-vendor market data, no WebSockets, no production endpoints, no
+strategy optimization, no decision scoring, no question scoring, no limitation
+scoring, no appendix scoring, no artifact scoring, no rights scoring, no risk
+scoring, no reproducibility scoring, no coverage scoring, no security ranking,
+no source ranking, no allocation advice, no executable advice, no production
+readiness claim, no unsupported data redistribution, and no profitability
+claims.
+
+Next-stage boundary: implementation may add the local decision-log input kind
+only within the local/offline report-pack path and must not add command
+execution, validation execution, artifact-content reads, evidence-content
+reads, source-content reads, output verification, local environment
+verification, decision approval, raw local data reads, remote fetches, new
+adapters, production endpoints, ranking, allocation, optimization, executable
+advice, or production-readiness claims.

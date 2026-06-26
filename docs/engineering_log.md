@@ -715,6 +715,16 @@ section labels, local reference paths, owner labels, status labels, and
 limitation notes as descriptive context without scoring questions, producing
 advice, or implying production readiness.
 
+After Stage 28, the next safe report-input kind is a decision log. The
+clarified Stage 29 boundary allows a local decision-log descriptor to record
+reviewer-supplied decision labels, decision context labels, local reference
+paths, owner labels, status labels, rationale notes, and limitation notes.
+
+The boundary stays descriptive. Stage 29 should make decision-log metadata
+visible in the report pack without reading referenced contents, approving
+decisions, scoring decisions, producing advice, or implying production
+readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:
