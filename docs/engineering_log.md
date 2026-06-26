@@ -514,6 +514,16 @@ and limitation notes as descriptive context without embedding
 private/proprietary excerpts or turning assumption metadata into ranking,
 advice, or production-readiness claims.
 
+After Stage 20, the next safe report-input kind is a coverage matrix. The
+clarified Stage 21 boundary allows a local coverage-matrix descriptor to record
+reviewer-supplied mappings between report sections, local input descriptors,
+validation labels, source paths, coverage notes, and limitation notes.
+
+The boundary stays descriptive. Stage 21 should make coverage metadata visible
+in the report pack without executing checks, reading source contents, fetching
+remote data, scoring coverage, producing advice, or implying production
+readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:

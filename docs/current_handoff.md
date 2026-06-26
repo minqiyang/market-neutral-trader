@@ -362,9 +362,20 @@ data, rank assumptions, terms, sources, or securities, recommend allocations,
 optimize strategies, emit executable advice, imply production readiness, or
 claim profitability.
 
-Next checkpoint: next concrete report-input-kind readiness clarification only.
+`docs/STAGE_PLAN.md` now contains the full Stage 21 readiness specification for
+a local/offline `local_coverage_matrix` report-input kind. Stage 21 may
+describe only reviewer-supplied report section labels, local source paths,
+input labels, validation labels, coverage notes, and limitation notes, and it
+must not execute commands, run checks from report inputs, read source contents,
+read raw private data contents, fetch remote data, add adapters, use account
+or portfolio data, use live feeds, score or rank coverage, sources, or
+securities, recommend allocations, optimize strategies, emit executable
+advice, imply production readiness, or claim profitability.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Clarify only the next concrete local/offline report-input kind in docs/STAGE_PLAN.md; do not implement it yet, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, strategy optimization, assumption/term/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
+Next checkpoint: Stage 21 local coverage-matrix report-input implementation
+only.
+
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only the Stage 21 local/offline local_coverage_matrix report-input kind for the paper report pack, with offline tests and docs updates; do not execute commands from report inputs, run checks from report inputs, read source contents, read raw private data contents, embed private or proprietary excerpts, add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, strategy optimization, coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
 
 ## Important files
 
@@ -560,23 +571,25 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Next concrete report-input-kind readiness clarification only. Start only after
-reconfirming clean synced `main`, CI, branch protection, required `Validate`
-status, local validation, and whether the owner-direct fast path or PR path
-applies.
+Stage 21 local coverage-matrix report-input implementation only. Start only
+after reconfirming clean synced `main`, CI, branch protection, required
+`Validate` status, local validation, and whether the owner-direct fast path or
+PR path applies.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Clarify only the next concrete local/offline
-report-input kind in `docs/STAGE_PLAN.md`; do not implement it yet, and do not
-add new market-data adapters, broker integration, credentials, account data,
-portfolio data, live quote feeds, paid-vendor data, WebSockets, remote
-fetching, production endpoints, strategy optimization,
-assumption/term/source/security ranking, allocation advice, executable advice,
-production-readiness claims, unsupported data redistribution, or profitability
-claims.
+the verified current handoff. Implement only the Stage 21 local/offline
+`local_coverage_matrix` report-input kind for the paper report pack, with
+offline tests and docs updates; do not execute commands from report inputs, run
+checks from report inputs, read source contents, read raw private data
+contents, embed private or proprietary excerpts, add new market-data adapters,
+broker integration, credentials, account data, portfolio data, live quote
+feeds, paid-vendor data, WebSockets, remote fetching, production endpoints,
+strategy optimization, coverage/source/security ranking, allocation advice,
+executable advice, production-readiness claims, unsupported data
+redistribution, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-25 23:00:17 -07:00
+2026-06-25 23:05:22 -07:00
