@@ -782,6 +782,16 @@ latest `main` `Validate` run passed, branch protection still required strict
 `Validate`, there were no open pull requests, and the handoff reset to the
 next report-input-kind readiness clarification.
 
+After Stage 30, the next safe report-input kind is version notes. The
+clarified Stage 31 boundary allows a local version-notes descriptor to record
+reviewer-supplied report version labels, local artifact paths,
+change-summary labels, owner labels, status labels, and limitation notes.
+
+The boundary stays descriptive. Stage 31 should make version-note metadata
+visible in the report pack without reading artifact contents, approving
+distribution, scoring versions, producing advice, or implying production
+readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:

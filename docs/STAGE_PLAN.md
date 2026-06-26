@@ -2806,3 +2806,90 @@ evidence-content reads, source-content reads, output verification, local
 environment verification, decision approval, raw local data reads, remote
 fetches, new adapters, production endpoints, ranking, allocation,
 optimization, executable advice, or production-readiness claims.
+
+## Stage 31: Local version-notes report input, local/offline only
+
+Purpose: clarify the next concrete report-input kind after Stage 30: local
+version notes that record reviewer-supplied report version labels, local
+artifact paths, change-summary labels, owner labels, status labels, and
+limitation notes without reading artifact contents, approving distribution,
+fetching remote data, scoring versions, or producing executable advice.
+
+Deliverables: Stage 31 implementation may add a `local_version_notes` input
+kind to the report-input manifest, parse a local version-notes descriptor,
+render a descriptive report section, add offline tests, and update limitation
+notes.
+
+Allowed scope:
+
+- Use a local descriptor file only.
+- Treat the descriptor as reviewer-supplied version metadata, not as artifact
+  content, evidence content, source content, output verification, environment
+  verification, validation execution, distribution approval, ranking, scoring,
+  decision approval, or production-readiness evidence.
+- Describe only report version labels, local artifact paths, change-summary
+  labels, owner labels, status labels, and limitation notes.
+- Reject remote URLs, secret-like fields, and source-content/excerpt fields.
+- Preserve separation between observed report metrics, supplied assumptions,
+  fundamentals, manifest metadata, comparison metadata, validation metadata,
+  review notes, methodology notes, data-dictionary metadata, citation-index
+  metadata, term-glossary metadata, assumption-register metadata,
+  coverage-matrix metadata, reproducibility metadata, risk-review metadata,
+  data-rights-review metadata, artifact-inventory metadata,
+  appendix-index metadata, limitation-register metadata, open-question
+  metadata, decision-log metadata, follow-up metadata, version-note metadata,
+  and limitations.
+- Label missing optional version-notes inputs as not supplied.
+
+Acceptance checks:
+
+- The implementation remains local/offline and deterministic.
+- The report pack does not execute commands, run tests from report inputs,
+  execute follow-ups, verify local environments, verify outputs, place orders,
+  approve distribution, read secrets, read artifact contents, read evidence
+  contents, read source contents, read raw private data contents, read account
+  data, read portfolio data, fetch remote data, use live feeds, inspect
+  paid-vendor or proprietary datasets, approve decisions, or infer private
+  values from referenced files.
+- The output does not include private/proprietary excerpts, score or rank
+  versions, follow-ups, decisions, open questions, limitations, appendix
+  entries, artifacts, rights status, risk controls, reproducibility steps,
+  coverage, sources, or securities, recommend allocations, optimize
+  strategies, emit executable advice, imply production readiness, or claim
+  profitability.
+- Missing optional version-notes inputs produce explicit not-supplied text
+  instead of inferred values.
+- Tests use local descriptors and generated project artifact references only.
+
+Validation commands:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+ruff check .
+python scripts/01_replay_orderbook_fixture.py
+```
+
+Explicit non-goals: no command execution from report inputs, no validation
+execution from report inputs, no follow-up execution, no artifact-content
+reads, no evidence-content reads, no source-content reads, no output
+verification, no local environment verification, no raw private data reads, no
+private/proprietary excerpts, no distribution approval, no decision approval,
+no risk-check execution, no order placement, no new market-data adapters, no
+remote fetching, no broker integration, no credentials, no account or
+portfolio data, no live quote feeds, no paid-vendor market data, no
+WebSockets, no production endpoints, no strategy optimization, no version
+scoring, no follow-up scoring, no decision scoring, no question scoring, no
+limitation scoring, no appendix scoring, no artifact scoring, no rights
+scoring, no risk scoring, no reproducibility scoring, no coverage scoring, no
+security ranking, no source ranking, no allocation advice, no executable
+advice, no production readiness claim, no unsupported data redistribution, and
+no profitability claims.
+
+Next-stage boundary: implementation may add the local version-notes input kind
+only within the local/offline report-pack path and must not add command
+execution, validation execution, follow-up execution, artifact-content reads,
+evidence-content reads, source-content reads, output verification, local
+environment verification, distribution approval, decision approval, raw local
+data reads, remote fetches, new adapters, production endpoints, ranking,
+allocation, optimization, executable advice, or production-readiness claims.

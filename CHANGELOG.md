@@ -6,6 +6,11 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 31 readiness for a local/offline `local_version_notes`
+  report-input kind that records report version labels, local artifact paths,
+  change-summary labels, owner/status labels, and limitations without reading
+  artifact contents, approving distribution, scoring versions, or producing
+  advice.
 - Completed the compact governance audit after Stage 30 implementation,
   confirming synced `main`, passing `Validate`, branch protection, no open PRs,
   and no drift before continuing to the next readiness checkpoint.

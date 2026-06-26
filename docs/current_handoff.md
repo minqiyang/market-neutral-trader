@@ -27,11 +27,13 @@ artifact-inventory report-input metadata, plus Stage 26 local appendix-index
 report-input metadata, plus Stage 27 local limitation-register report-input
 metadata, plus Stage 28 local open-questions report-input metadata, plus Stage
 29 local decision-log report-input metadata, plus Stage 30 local follow-up
-register report-input metadata.
+register report-input metadata. Stage 31 readiness is clarified for a future
+local/offline version-notes report-input kind.
 
 ## Last completed stage
 
-Stage 30: Local follow-up register report input, local/offline only.
+Stage 31 readiness clarification: Local version-notes report input,
+local/offline only.
 
 ## Stage plan status
 
@@ -689,9 +691,23 @@ status, risk, reproducibility, coverage, sources, or securities, recommend
 allocations, optimize strategies, emit executable advice, imply production
 readiness, or claim profitability.
 
-Next checkpoint: next concrete report-input-kind readiness clarification only.
+`docs/STAGE_PLAN.md` now contains the full Stage 31 readiness specification for
+a local/offline `local_version_notes` report-input kind. Stage 31 may describe
+only reviewer-supplied report version labels, local artifact paths,
+change-summary labels, owner labels, status labels, and limitation notes, and
+it must not execute commands, run checks from report inputs, execute
+follow-ups, approve distribution, read artifact/evidence/source contents,
+verify outputs, verify local environments, approve decisions, read raw private
+data contents, fetch remote data, add adapters, use account or portfolio data,
+use live feeds, score or rank versions, follow-ups, decisions, open questions,
+limitations, appendix entries, artifacts, rights status, risk,
+reproducibility, coverage, sources, or securities, recommend allocations,
+optimize strategies, emit executable advice, imply production readiness, or
+claim profitability.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Clarify only the next concrete local/offline report-input kind in docs/STAGE_PLAN.md; do not implement it yet, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, strategy optimization, rights/risk/reproducibility/coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
+Next checkpoint: Stage 31 implementation only.
+
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only the Stage 31 local/offline local_version_notes report-input kind in the paper report pack, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, command execution from report inputs, validation execution from report inputs, follow-up execution, artifact/evidence/source-content reads, output verification, local environment verification, distribution approval, decision approval, rights/risk/reproducibility/coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
 
 ## Important files
 
@@ -897,23 +913,25 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Next concrete report-input-kind readiness clarification only. Start only after
-reconfirming clean synced `main`, CI, branch protection, required `Validate`
-status, local validation, and whether the owner-direct fast path or PR path
-applies.
+Stage 31 implementation only. Start only after reconfirming clean synced
+`main`, CI, branch protection, required `Validate` status, local validation,
+and whether the owner-direct fast path or PR path applies.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Clarify only the next concrete local/offline
-report-input kind in docs/STAGE_PLAN.md; do not implement it yet, and do not
+the verified current handoff. Implement only the Stage 31 local/offline
+`local_version_notes` report-input kind in the paper report pack, and do not
 add new market-data adapters, broker integration, credentials, account data,
 portfolio data, live quote feeds, paid-vendor data, WebSockets, remote
-fetching, production endpoints, strategy optimization, rights/risk/
+fetching, production endpoints, command execution from report inputs,
+validation execution from report inputs, follow-up execution, artifact/
+evidence/source-content reads, output verification, local environment
+verification, distribution approval, decision approval, rights/risk/
 reproducibility/coverage/source/security ranking, allocation advice,
 executable advice, production-readiness claims, unsupported data
 redistribution, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-26 15:07:44 -07:00
+2026-06-26 15:13:11 -07:00
