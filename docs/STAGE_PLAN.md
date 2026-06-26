@@ -2,7 +2,7 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages through Stage 33. They are
+These records summarize the locally completed stages through Stage 34. They are
 intended as a durable audit map; implementation details remain in the source,
 tests, changelog, engineering log, and handoff archive.
 
@@ -829,6 +829,36 @@ tests, changelog, engineering log, and handoff archive.
   coverage/source/security ranking, no allocation advice, no executable
   advice, no strategy optimization, no production-readiness claim, no
   unsupported redistribution, and no profitability claim.
+
+### Stage 34: Local archive-notes report input, local/offline only
+
+- Status: complete.
+- Commit: pending on the Stage 34 implementation branch.
+- Purpose: add local reviewer-supplied archive labels, related artifact paths,
+  archive status labels, owner labels, archive notes, and limitation metadata.
+- Files/modules changed: `src/edmn_trader/scripts/paper_report_pack.py`,
+  `tests/test_paper_report_pack.py`, and documentation updates.
+- Validation commands: `pytest tests/test_paper_report_pack.py`, `pytest`,
+  `ruff check .`, `python scripts/01_replay_orderbook_fixture.py`, and
+  `git diff --check`.
+- Next-stage boundary: later stages may add another concrete report-input kind
+  only after its offline behavior, non-executable report boundaries, file
+  operation boundaries, retention-policy boundaries, and
+  artifact/evidence/source-content handling are clarified first.
+- Safety status: local/offline archive-note metadata only, no command
+  execution from report inputs, no validation execution from report inputs, no
+  follow-up execution, no file movement or deletion, no retention-policy
+  decision, no artifact-content reads, no evidence-content reads, no
+  source-content reads, no output verification, no local environment
+  verification, no distribution approval, no rights or license verification,
+  no decision approval, no raw private data reads, no private/proprietary
+  excerpts, no new data adapters, no broker integration, no credentials, no
+  account or portfolio data, no live quote feed, no paid-vendor market data,
+  no WebSocket, no remote fetch, no archive/handoff/distribution/version/
+  follow-up/decision/question/limitation/appendix/artifact/rights/risk/
+  reproducibility/coverage/source/security ranking, no allocation advice, no
+  executable advice, no strategy optimization, no production-readiness claim,
+  no unsupported redistribution, and no profitability claim.
 
 ## Stage 0: Repository foundation
 

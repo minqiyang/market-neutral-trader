@@ -888,6 +888,22 @@ visible in the report pack without reading artifact contents, moving or
 deleting files, deciding retention policy, scoring archive readiness, producing
 advice, or implying production readiness.
 
+## Stage 34 local archive-notes input
+
+Stage 34 added support for `local_archive_notes` manifest entries in the paper
+report pack. The implementation reads a local archive-notes descriptor as
+metadata, renders a separate Markdown section, reports missing optional
+descriptors as not supplied, and rejects secret-like fields, source-content or
+excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, move or delete
+files, decide retention policy, approve distribution, verify rights, or approve
+decisions. It renders reviewer-supplied archive labels, related artifact paths,
+archive status labels, owner labels, archive notes, and limitation notes as
+descriptive context without scoring archive readiness, producing advice, or
+implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:

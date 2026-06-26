@@ -59,6 +59,7 @@ class PaperReportPack:
     version_notes_entry_count: int
     distribution_checklist_entry_count: int
     handoff_notes_entry_count: int
+    archive_notes_entry_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -509,6 +510,27 @@ class MissingHandoffNotesInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalArchiveNoteEntry:
+    """One descriptive local archive-note entry."""
+
+    source_label: str
+    archive_label: str
+    artifact_path: str
+    archive_status_label: str
+    owner_label: str
+    archive_note: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingArchiveNotesInput:
+    """Optional local archive-notes descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
 SOURCE_CONTENT_FIELDS = frozenset(
     (
@@ -625,6 +647,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    archive_note_entries, missing_archive_notes = _read_archive_notes(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -675,6 +701,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_distribution_checklist=missing_distribution_checklist,
             handoff_note_entries=handoff_note_entries,
             missing_handoff_notes=missing_handoff_notes,
+            archive_note_entries=archive_note_entries,
+            missing_archive_notes=missing_archive_notes,
         ),
         encoding="utf-8",
         newline="\n",
@@ -706,6 +734,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         version_notes_entry_count=len(version_note_entries),
         distribution_checklist_entry_count=len(distribution_entries),
         handoff_notes_entry_count=len(handoff_note_entries),
+        archive_notes_entry_count=len(archive_note_entries),
     )
 
 
@@ -740,6 +769,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"version_notes_entries={pack.version_notes_entry_count}",
             f"distribution_checklist_entries={pack.distribution_checklist_entry_count}",
             f"handoff_notes_entries={pack.handoff_notes_entry_count}",
+            f"archive_notes_entries={pack.archive_notes_entry_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -3171,6 +3201,115 @@ def _parse_handoff_note_entry(
     )
 
 
+def _read_archive_notes(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalArchiveNoteEntry, ...],
+    tuple[MissingArchiveNotesInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    archive_entries: list[LocalArchiveNoteEntry] = []
+    missing: list[MissingArchiveNotesInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_archive_notes":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local archive-notes input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingArchiveNotesInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        archive_entries.extend(
+            _read_archive_notes_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(archive_entries), tuple(missing)
+
+
+def _read_archive_notes_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalArchiveNoteEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local archive-notes descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="archive-notes")
+
+    notes = payload.get("notes")
+    if not isinstance(notes, list):
+        msg = f"{path}: local archive-notes descriptor must contain a notes list"
+        raise ValueError(msg)
+
+    parsed_notes: list[LocalArchiveNoteEntry] = []
+    for index, item in enumerate(notes, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local archive-notes entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="archive-notes")
+        parsed_notes.append(
+            _parse_archive_note_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_notes)
+
+
+def _parse_archive_note_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalArchiveNoteEntry:
+    required_fields = (
+        "archive_label",
+        "artifact_path",
+        "archive_status_label",
+        "owner_label",
+        "archive_note",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local archive-notes entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    artifact_path = str(item["artifact_path"])
+    parsed = urlparse(artifact_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local archive-notes entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalArchiveNoteEntry(
+        source_label=source_label,
+        archive_label=str(item["archive_label"]),
+        artifact_path=artifact_path,
+        archive_status_label=str(item["archive_status_label"]),
+        owner_label=str(item["owner_label"]),
+        archive_note=str(item["archive_note"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -3220,6 +3359,8 @@ def _render_markdown(
     missing_distribution_checklist: tuple[MissingDistributionChecklistInput, ...],
     handoff_note_entries: tuple[LocalHandoffNoteEntry, ...],
     missing_handoff_notes: tuple[MissingHandoffNotesInput, ...],
+    archive_note_entries: tuple[LocalArchiveNoteEntry, ...],
+    missing_archive_notes: tuple[MissingArchiveNotesInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -3364,6 +3505,10 @@ def _render_markdown(
             "",
             _render_handoff_notes(handoff_note_entries, missing_handoff_notes),
             "",
+            "## Local Archive Notes",
+            "",
+            _render_archive_notes(archive_note_entries, missing_archive_notes),
+            "",
             "## SEC Fundamentals",
             "",
             _render_sec_facts(sec_facts),
@@ -3379,6 +3524,8 @@ def _render_markdown(
             "pack does not approve distribution or verify rights.",
             "- Handoff-note inputs are reviewer-supplied metadata only; this pack does "
             "not approve distribution or verify rights.",
+            "- Archive-note inputs are reviewer-supplied metadata only; this pack does "
+            "not move files, decide retention policy, approve distribution, or verify rights.",
             "- This pack does not claim profitability or production readiness.",
             "",
         )
@@ -3960,6 +4107,32 @@ def _render_handoff_notes(
         f"{entry.artifact_path} | {entry.recipient_label} | "
         f"{entry.status_label} | {entry.handoff_note} | {entry.limitation_note} |"
         for entry in handoff_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | "
+        "not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_archive_notes(
+    archive_entries: tuple[LocalArchiveNoteEntry, ...],
+    missing_inputs: tuple[MissingArchiveNotesInput, ...],
+) -> str:
+    if not archive_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local archive notes | not supplied |"
+
+    rows = [
+        "| source | archive | artifact path | archive status | owner | archive note | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.archive_label} | "
+        f"{entry.artifact_path} | {entry.archive_status_label} | "
+        f"{entry.owner_label} | {entry.archive_note} | {entry.limitation_note} |"
+        for entry in archive_entries
     )
     rows.extend(
         f"| {missing_input.display_label} | not supplied | "

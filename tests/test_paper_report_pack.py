@@ -2330,6 +2330,117 @@ def test_paper_report_pack_rejects_unsafe_handoff_notes_descriptor(
         )
 
 
+def test_paper_report_pack_renders_local_archive_notes_input(tmp_path: Path) -> None:
+    archive_notes_path = _write_archive_notes_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=archive_notes_path.name,
+        input_kind="local_archive_notes",
+        display_label="Local archive notes",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.archive_notes_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Archive Notes" in text
+    assert "Report pack archive" in text
+    assert "outputs/report_pack.md" in text
+    assert "archive candidate" in text
+    assert "maintainer" in text
+    assert "metadata only; does not move files" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_archive_notes_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-archive-notes.json",
+        input_kind="local_archive_notes",
+        display_label="Missing archive notes",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Archive Notes" in text
+    assert "Missing archive notes | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_archive_notes_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_archive_notes_descriptor(
+        tmp_path,
+        extra_note_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_archive_notes",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-archive-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_archive_notes_descriptor(
+        tmp_path,
+        artifact_path="https://example.com/report_pack.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_archive_notes",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-archive-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_archive_notes_descriptor(
+        tmp_path,
+        extra_note_field={"text": "private archive contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_archive_notes",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-archive-pack",
+            )
+        )
+
+
 def test_paper_report_pack_cli_writes_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
     output_dir = tmp_path / "pack"
     manifest_path = _write_report_input_manifest(tmp_path)
@@ -3165,6 +3276,44 @@ def _write_handoff_notes_descriptor(
                         "recipient_label": "maintainer",
                         "status_label": "needs local review",
                         "handoff_note": "handoff metadata only",
+                        "limitation_note": "does not read referenced artifact",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_archive_notes_descriptor(
+    tmp_path: Path,
+    *,
+    artifact_path: str = "outputs/report_pack.md",
+    extra_note_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "archive_notes.json"
+    first_note = {
+        "archive_label": "Report pack archive",
+        "artifact_path": artifact_path,
+        "archive_status_label": "archive candidate",
+        "owner_label": "maintainer",
+        "archive_note": "metadata only; does not move files",
+        "limitation_note": "descriptive only; does not decide retention",
+    }
+    if extra_note_field:
+        first_note.update(extra_note_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "notes": [
+                    first_note,
+                    {
+                        "archive_label": "Limitations archive",
+                        "artifact_path": "outputs/limitations.md",
+                        "archive_status_label": "needs local review",
+                        "owner_label": "reviewer",
+                        "archive_note": "archive metadata only",
                         "limitation_note": "does not read referenced artifact",
                     },
                 ]
