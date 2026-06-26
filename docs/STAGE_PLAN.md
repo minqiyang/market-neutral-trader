@@ -584,7 +584,7 @@ tests, changelog, engineering log, and handoff archive.
 ### Stage 25: Local artifact-inventory report input, local/offline only
 
 - Status: complete.
-- Commit: pending on the Stage 25 implementation branch.
+- Commit: `dabd479` (merged via PR #56 at `4378902`).
 - Purpose: add local reviewer-supplied generated artifact labels, artifact type
   labels, local paths, generation-source labels, intended report-use notes, and
   limitation metadata.
