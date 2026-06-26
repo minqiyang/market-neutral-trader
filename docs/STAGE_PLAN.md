@@ -611,7 +611,7 @@ tests, changelog, engineering log, and handoff archive.
 ### Stage 26: Local appendix-index report input, local/offline only
 
 - Status: complete.
-- Commit: pending on the Stage 26 implementation branch.
+- Commit: `2e13507` (merged via PR #59 at `f532486`).
 - Purpose: add local reviewer-supplied appendix entry labels, report section
   labels, local artifact paths, appendix purpose notes, and limitation
   metadata.
@@ -638,7 +638,7 @@ tests, changelog, engineering log, and handoff archive.
 ### Stage 27: Local limitation-register report input, local/offline only
 
 - Status: complete.
-- Commit: pending on the Stage 27 implementation branch.
+- Commit: `efdfe86` (merged via PR #61 at `3188bd0`).
 - Purpose: add local reviewer-supplied limitation labels, affected report
   section labels, local evidence or artifact paths, scope notes, mitigation
   notes, and limitation metadata.
