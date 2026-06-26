@@ -598,6 +598,21 @@ visible in the report pack without reading evidence contents, determining legal
 rights, verifying licenses, deciding redistribution permissions, scoring
 rights status, producing advice, or implying production readiness.
 
+## Stage 24 local data-rights-review input
+
+Stage 24 added support for `local_data_rights_review` manifest entries in the
+paper report pack. The implementation reads a local data-rights descriptor as
+metadata, renders a separate Markdown section, reports missing optional
+data-rights-review descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read evidence/source files referenced by the
+descriptor, determine legal rights, verify licenses, decide redistribution
+permissions, or evaluate policies. It renders reviewer-supplied data labels,
+rights status labels, permitted-use notes, restriction notes, evidence paths,
+and limitation notes as descriptive context without scoring rights status,
+producing advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:
