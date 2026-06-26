@@ -6,6 +6,11 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 33 readiness for a local/offline `local_handoff_notes`
+  report-input kind that records handoff labels, related artifact paths,
+  recipient or owner labels, status labels, handoff notes, and limitations
+  without reading artifact contents, approving distribution, verifying rights,
+  scoring handoffs, or producing advice.
 - Added Stage 32 local/offline `local_distribution_checklist` report-input
   support to the paper report pack, with descriptor Markdown output,
   missing-input disclosure, and rejection of secret-like fields,

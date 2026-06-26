@@ -841,6 +841,18 @@ distribution item labels, related artifact paths, readiness status labels,
 owner labels, review notes, and limitation notes as descriptive context without
 scoring checklist items, producing advice, or implying production readiness.
 
+## Stage 33 readiness clarification
+
+After Stage 32, the next safe report-input kind is handoff notes. The clarified
+Stage 33 boundary allows a local handoff-notes descriptor to record
+reviewer-supplied handoff labels, related artifact paths, recipient or owner
+labels, status labels, handoff notes, and limitation notes.
+
+The boundary stays descriptive. Stage 33 should make handoff-note metadata
+visible in the report pack without reading artifact contents, approving
+distribution, verifying rights, scoring handoffs, producing advice, or implying
+production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:
