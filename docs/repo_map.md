@@ -105,7 +105,7 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
-  10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32
+  10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33
   offline report-pack generator combining Stage 7 attribution with local SEC
   companyfacts fixtures, local report-section metadata, optional manifest input
   metadata, local run-comparison metadata, and local validation-summary
@@ -117,7 +117,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   artifact-inventory metadata, local appendix-index metadata, and local
   limitation-register metadata, local open-questions metadata, and local
   decision-log metadata, local follow-up-register metadata, local
-  version-notes metadata, and local distribution-checklist metadata.
+  version-notes metadata, local distribution-checklist metadata, and local
+  handoff-notes metadata.
 - `src/edmn_trader/**/__init__.py`: package exports.
 
 ## Scripts
@@ -152,8 +153,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   appendix-index descriptors, and Stage 27 local limitation-register
   descriptors, Stage 28 local open-questions descriptors, and Stage 29 local
   decision-log descriptors, Stage 30 local follow-up-register descriptors, and
-  Stage 31 local version-notes descriptors, and Stage 32 local
-  distribution-checklist descriptors.
+  Stage 31 local version-notes descriptors, Stage 32 local
+  distribution-checklist descriptors, and Stage 33 local handoff-notes
+  descriptors.
 
 ## Tests and fixtures
 
@@ -180,7 +182,7 @@ context, then read only the files needed for the requested stage. Use `rg` and
   normalization, guarded public client, and malformed-book coverage.
 - `tests/test_sec_edgar_adapter.py`: Stage 9 SEC companyfacts normalization,
   guarded public client, explicit User-Agent, and malformed-value coverage.
-- `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32 offline report-pack coverage
+- `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33 offline report-pack coverage
   for observed metrics, source inventory, not-supplied optional inputs, local
   SEC facts, manifest input metadata, local run-comparison metadata, unsafe
   manifest/comparison rejection, local validation-summary metadata, unsafe
@@ -202,7 +204,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   rejection, local follow-up-register metadata, unsafe follow-up-register
   rejection, local version-notes metadata, unsafe version-notes rejection,
   local distribution-checklist metadata, unsafe distribution-checklist
-  rejection, and CLI output.
+  rejection, local handoff-notes metadata, unsafe handoff-notes rejection, and
+  CLI output.
 - `tests/fixtures/kalshi_orderbook_fp_basic.json`: basic local Kalshi-style
   fixture used by the replay script.
 - `tests/fixtures/sec_companyfacts_aapl.json`: local SEC companyfacts fixture

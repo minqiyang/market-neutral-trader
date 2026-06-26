@@ -2,7 +2,7 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages through Stage 32. They are
+These records summarize the locally completed stages through Stage 33. They are
 intended as a durable audit map; implementation details remain in the source,
 tests, changelog, engineering log, and handoff archive.
 
@@ -801,6 +801,34 @@ tests, changelog, engineering log, and handoff archive.
   risk/reproducibility/coverage/source/security ranking, no allocation advice,
   no executable advice, no strategy optimization, no production-readiness
   claim, no unsupported redistribution, and no profitability claim.
+
+### Stage 33: Local handoff-notes report input, local/offline only
+
+- Status: complete.
+- Commit: pending on the Stage 33 implementation branch.
+- Purpose: add local reviewer-supplied handoff labels, related artifact paths,
+  recipient or owner labels, status labels, handoff notes, and limitation
+  metadata.
+- Files/modules changed: `src/edmn_trader/scripts/paper_report_pack.py`,
+  `tests/test_paper_report_pack.py`, and documentation updates.
+- Validation commands: `pytest tests/test_paper_report_pack.py`, `pytest`,
+  `ruff check .`, `python scripts/01_replay_orderbook_fixture.py`, and
+  `git diff --check`.
+- Next-stage boundary: compact governance audit is due after this third
+  completed checkpoint since the last audit.
+- Safety status: local/offline handoff-note metadata only, no command execution
+  from report inputs, no validation execution from report inputs, no follow-up
+  execution, no artifact-content reads, no evidence-content reads, no
+  source-content reads, no output verification, no local environment
+  verification, no distribution approval, no rights or license verification,
+  no decision approval, no raw private data reads, no private/proprietary
+  excerpts, no new data adapters, no broker integration, no credentials, no
+  account or portfolio data, no live quote feed, no paid-vendor market data,
+  no WebSocket, no remote fetch, no handoff/distribution/version/follow-up/
+  decision/question/limitation/appendix/artifact/rights/risk/reproducibility/
+  coverage/source/security ranking, no allocation advice, no executable
+  advice, no strategy optimization, no production-readiness claim, no
+  unsupported redistribution, and no profitability claim.
 
 ## Stage 0: Repository foundation
 

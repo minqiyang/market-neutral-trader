@@ -58,6 +58,7 @@ class PaperReportPack:
     follow_up_register_entry_count: int
     version_notes_entry_count: int
     distribution_checklist_entry_count: int
+    handoff_notes_entry_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -487,6 +488,27 @@ class MissingDistributionChecklistInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalHandoffNoteEntry:
+    """One descriptive local handoff-note entry."""
+
+    source_label: str
+    handoff_label: str
+    artifact_path: str
+    recipient_label: str
+    status_label: str
+    handoff_note: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingHandoffNotesInput:
+    """Optional local handoff-notes descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
 SOURCE_CONTENT_FIELDS = frozenset(
     (
@@ -599,6 +621,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    handoff_note_entries, missing_handoff_notes = _read_handoff_notes(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -647,6 +673,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_version_notes=missing_version_notes,
             distribution_entries=distribution_entries,
             missing_distribution_checklist=missing_distribution_checklist,
+            handoff_note_entries=handoff_note_entries,
+            missing_handoff_notes=missing_handoff_notes,
         ),
         encoding="utf-8",
         newline="\n",
@@ -677,6 +705,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         follow_up_register_entry_count=len(follow_up_entries),
         version_notes_entry_count=len(version_note_entries),
         distribution_checklist_entry_count=len(distribution_entries),
+        handoff_notes_entry_count=len(handoff_note_entries),
     )
 
 
@@ -710,6 +739,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"follow_up_register_entries={pack.follow_up_register_entry_count}",
             f"version_notes_entries={pack.version_notes_entry_count}",
             f"distribution_checklist_entries={pack.distribution_checklist_entry_count}",
+            f"handoff_notes_entries={pack.handoff_notes_entry_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -3032,6 +3062,115 @@ def _parse_distribution_checklist_entry(
     )
 
 
+def _read_handoff_notes(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalHandoffNoteEntry, ...],
+    tuple[MissingHandoffNotesInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    handoff_entries: list[LocalHandoffNoteEntry] = []
+    missing: list[MissingHandoffNotesInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_handoff_notes":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local handoff-notes input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingHandoffNotesInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        handoff_entries.extend(
+            _read_handoff_notes_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(handoff_entries), tuple(missing)
+
+
+def _read_handoff_notes_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalHandoffNoteEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local handoff-notes descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="handoff-notes")
+
+    notes = payload.get("notes")
+    if not isinstance(notes, list):
+        msg = f"{path}: local handoff-notes descriptor must contain a notes list"
+        raise ValueError(msg)
+
+    parsed_notes: list[LocalHandoffNoteEntry] = []
+    for index, item in enumerate(notes, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local handoff-notes entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="handoff-notes")
+        parsed_notes.append(
+            _parse_handoff_note_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_notes)
+
+
+def _parse_handoff_note_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalHandoffNoteEntry:
+    required_fields = (
+        "handoff_label",
+        "artifact_path",
+        "recipient_label",
+        "status_label",
+        "handoff_note",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local handoff-notes entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    artifact_path = str(item["artifact_path"])
+    parsed = urlparse(artifact_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local handoff-notes entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalHandoffNoteEntry(
+        source_label=source_label,
+        handoff_label=str(item["handoff_label"]),
+        artifact_path=artifact_path,
+        recipient_label=str(item["recipient_label"]),
+        status_label=str(item["status_label"]),
+        handoff_note=str(item["handoff_note"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -3079,6 +3218,8 @@ def _render_markdown(
     missing_version_notes: tuple[MissingVersionNotesInput, ...],
     distribution_entries: tuple[LocalDistributionChecklistEntry, ...],
     missing_distribution_checklist: tuple[MissingDistributionChecklistInput, ...],
+    handoff_note_entries: tuple[LocalHandoffNoteEntry, ...],
+    missing_handoff_notes: tuple[MissingHandoffNotesInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -3219,6 +3360,10 @@ def _render_markdown(
                 missing_distribution_checklist,
             ),
             "",
+            "## Local Handoff Notes",
+            "",
+            _render_handoff_notes(handoff_note_entries, missing_handoff_notes),
+            "",
             "## SEC Fundamentals",
             "",
             _render_sec_facts(sec_facts),
@@ -3232,6 +3377,8 @@ def _render_markdown(
             "- This pack is descriptive, non-executable, and does not rank securities.",
             "- Distribution checklist inputs are reviewer-supplied metadata only; this "
             "pack does not approve distribution or verify rights.",
+            "- Handoff-note inputs are reviewer-supplied metadata only; this pack does "
+            "not approve distribution or verify rights.",
             "- This pack does not claim profitability or production readiness.",
             "",
         )
@@ -3787,6 +3934,32 @@ def _render_distribution_checklist(
         f"{entry.artifact_path} | {entry.readiness_status_label} | "
         f"{entry.owner_label} | {entry.review_note} | {entry.limitation_note} |"
         for entry in checklist_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | "
+        "not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_handoff_notes(
+    handoff_entries: tuple[LocalHandoffNoteEntry, ...],
+    missing_inputs: tuple[MissingHandoffNotesInput, ...],
+) -> str:
+    if not handoff_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local handoff notes | not supplied |"
+
+    rows = [
+        "| source | handoff | artifact path | recipient | status | handoff note | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.handoff_label} | "
+        f"{entry.artifact_path} | {entry.recipient_label} | "
+        f"{entry.status_label} | {entry.handoff_note} | {entry.limitation_note} |"
+        for entry in handoff_entries
     )
     rows.extend(
         f"| {missing_input.display_label} | not supplied | "

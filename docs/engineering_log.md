@@ -853,6 +853,21 @@ visible in the report pack without reading artifact contents, approving
 distribution, verifying rights, scoring handoffs, producing advice, or implying
 production readiness.
 
+## Stage 33 local handoff-notes input
+
+Stage 33 added support for `local_handoff_notes` manifest entries in the paper
+report pack. The implementation reads a local handoff-notes descriptor as
+metadata, renders a separate Markdown section, reports missing optional
+descriptors as not supplied, and rejects secret-like fields, source-content or
+excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, approve
+distribution, verify rights, or approve decisions. It renders reviewer-supplied
+handoff labels, related artifact paths, recipient labels, status labels,
+handoff notes, and limitation notes as descriptive context without scoring
+handoffs, producing advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:
