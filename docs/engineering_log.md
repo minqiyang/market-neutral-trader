@@ -639,6 +639,16 @@ generation-source labels, intended report-use notes, and limitation notes as
 descriptive context without ranking artifacts, producing advice, or implying
 production readiness.
 
+After Stage 25, the next safe report-input kind is an appendix index. The
+clarified Stage 26 boundary allows a local appendix-index descriptor to record
+reviewer-supplied appendix entry labels, report section labels, local artifact
+paths, appendix purpose notes, and limitation notes.
+
+The boundary stays descriptive. Stage 26 should make appendix-index metadata
+visible in the report pack without reading artifact contents, verifying
+outputs, approving distribution, ranking appendix entries, producing advice, or
+implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:
