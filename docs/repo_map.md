@@ -105,14 +105,20 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
-  10/12/13/14/15/16/17/18/19/20/21/22
+  10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33/34
   offline report-pack generator combining Stage 7 attribution with local SEC
   companyfacts fixtures, local report-section metadata, optional manifest input
   metadata, local run-comparison metadata, and local validation-summary
   metadata, local review-notes metadata, local methodology-notes metadata, and
   local data-dictionary metadata, local citation-index metadata, and local
   term-glossary metadata, local assumption-register metadata, and local
-  coverage-matrix metadata, and local reproducibility-checklist metadata.
+  coverage-matrix metadata, local reproducibility-checklist metadata, local
+  risk-review metadata, local data-rights-review metadata, local
+  artifact-inventory metadata, local appendix-index metadata, and local
+  limitation-register metadata, local open-questions metadata, and local
+  decision-log metadata, local follow-up-register metadata, local
+  version-notes metadata, local distribution-checklist metadata, local
+  handoff-notes metadata, and local archive-notes metadata.
 - `src/edmn_trader/**/__init__.py`: package exports.
 
 ## Scripts
@@ -141,7 +147,15 @@ context, then read only the files needed for the requested stage. Use `rg` and
   Stage 17 local data-dictionary descriptors, Stage 18 local citation-index
   descriptors, Stage 19 local term-glossary descriptors, and Stage 20 local
   assumption-register descriptors, and Stage 21 local coverage-matrix
-  descriptors, and Stage 22 local reproducibility-checklist descriptors.
+  descriptors, Stage 22 local reproducibility-checklist descriptors, and Stage
+  23 local risk-review descriptors, Stage 24 local data-rights-review
+  descriptors, Stage 25 local artifact-inventory descriptors, Stage 26 local
+  appendix-index descriptors, and Stage 27 local limitation-register
+  descriptors, Stage 28 local open-questions descriptors, and Stage 29 local
+  decision-log descriptors, Stage 30 local follow-up-register descriptors, and
+  Stage 31 local version-notes descriptors, Stage 32 local
+  distribution-checklist descriptors, Stage 33 local handoff-notes
+  descriptors, and Stage 34 local archive-notes descriptors.
 
 ## Tests and fixtures
 
@@ -168,7 +182,7 @@ context, then read only the files needed for the requested stage. Use `rg` and
   normalization, guarded public client, and malformed-book coverage.
 - `tests/test_sec_edgar_adapter.py`: Stage 9 SEC companyfacts normalization,
   guarded public client, explicit User-Agent, and malformed-value coverage.
-- `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22 offline report-pack coverage
+- `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33/34 offline report-pack coverage
   for observed metrics, source inventory, not-supplied optional inputs, local
   SEC facts, manifest input metadata, local run-comparison metadata, unsafe
   manifest/comparison rejection, local validation-summary metadata, unsafe
@@ -180,7 +194,18 @@ context, then read only the files needed for the requested stage. Use `rg` and
   term-glossary rejection, local assumption-register metadata, unsafe
   assumption-register rejection, local coverage-matrix metadata, unsafe
   coverage-matrix rejection, local reproducibility-checklist metadata, unsafe
-  reproducibility-checklist rejection, and CLI output.
+  reproducibility-checklist rejection, local risk-review metadata, unsafe
+  risk-review rejection, local data-rights-review metadata, unsafe
+  data-rights-review rejection, local artifact-inventory metadata, unsafe
+  artifact-inventory rejection, local appendix-index metadata, unsafe
+  appendix-index rejection, local limitation-register metadata, unsafe
+  limitation-register rejection, local open-questions metadata, unsafe
+  open-questions rejection, local decision-log metadata, unsafe decision-log
+  rejection, local follow-up-register metadata, unsafe follow-up-register
+  rejection, local version-notes metadata, unsafe version-notes rejection,
+  local distribution-checklist metadata, unsafe distribution-checklist
+  rejection, local handoff-notes metadata, unsafe handoff-notes rejection,
+  local archive-notes metadata, unsafe archive-notes rejection, and CLI output.
 - `tests/fixtures/kalshi_orderbook_fp_basic.json`: basic local Kalshi-style
   fixture used by the replay script.
 - `tests/fixtures/sec_companyfacts_aapl.json`: local SEC companyfacts fixture

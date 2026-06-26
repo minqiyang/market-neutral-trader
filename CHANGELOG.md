@@ -6,6 +6,129 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Completed the compact governance audit after Stage 35 readiness, confirming
+  synced `main`, passing `Validate`, branch protection, no open PRs, and no
+  drift before continuing to Stage 35 implementation.
+- Clarified Stage 35 readiness for a local/offline `local_delivery_notes`
+  report-input kind that records delivery labels, related artifact paths,
+  recipient labels, delivery status labels, delivery notes, and limitations
+  without transferring files, approving distribution, verifying rights, scoring
+  delivery readiness, or producing advice.
+- Added Stage 34 local/offline `local_archive_notes` report-input support to
+  the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields, source-content/excerpt
+  fields, and remote URLs.
+- Clarified Stage 34 readiness for a local/offline `local_archive_notes`
+  report-input kind that records archive labels, related artifact paths,
+  archive status labels, owners, archive notes, and limitations without
+  reading artifact contents, moving or deleting files, deciding retention
+  policy, scoring archive readiness, or producing advice.
+- Completed the compact governance audit after Stage 33 implementation,
+  confirming synced `main`, passing `Validate`, branch protection, no open PRs,
+  and no drift before continuing to the next readiness checkpoint.
+- Added Stage 33 local/offline `local_handoff_notes` report-input support to
+  the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields, source-content/excerpt
+  fields, and remote URLs.
+- Clarified Stage 33 readiness for a local/offline `local_handoff_notes`
+  report-input kind that records handoff labels, related artifact paths,
+  recipient or owner labels, status labels, handoff notes, and limitations
+  without reading artifact contents, approving distribution, verifying rights,
+  scoring handoffs, or producing advice.
+- Added Stage 32 local/offline `local_distribution_checklist` report-input
+  support to the paper report pack, with descriptor Markdown output,
+  missing-input disclosure, and rejection of secret-like fields,
+  source-content/excerpt fields, and remote URLs.
+- Completed the compact governance audit after Stage 32 readiness, confirming
+  synced `main`, passing `Validate`, branch protection, no open PRs, and no
+  drift before continuing to Stage 32 implementation.
+- Clarified Stage 32 readiness for a local/offline
+  `local_distribution_checklist` report-input kind that records distribution
+  item labels, related artifact paths, readiness status labels, owners, review
+  notes, and limitations without reading artifact contents, approving
+  distribution, verifying rights, scoring checklist items, or producing advice.
+- Added Stage 31 local/offline `local_version_notes` report-input support to
+  the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields, source-content/excerpt
+  fields, and remote URLs.
+- Clarified Stage 31 readiness for a local/offline `local_version_notes`
+  report-input kind that records report version labels, local artifact paths,
+  change-summary labels, owner/status labels, and limitations without reading
+  artifact contents, approving distribution, scoring versions, or producing
+  advice.
+- Completed the compact governance audit after Stage 30 implementation,
+  confirming synced `main`, passing `Validate`, branch protection, no open PRs,
+  and no drift before continuing to the next readiness checkpoint.
+- Added Stage 30 local/offline `local_follow_up_register` report-input support
+  to the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields, source-content/excerpt
+  fields, and remote URLs.
+- Clarified Stage 30 readiness for a local/offline
+  `local_follow_up_register` report-input kind that records follow-up labels,
+  related report section labels, local reference paths, owner/status labels,
+  tracking notes, and limitations without reading referenced contents,
+  executing follow-ups, scoring follow-ups, or producing advice.
+- Added Stage 29 local/offline `local_decision_log` report-input support to
+  the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields, source-content/excerpt
+  fields, and remote URLs.
+- Completed the compact governance audit after Stage 29 readiness, confirming
+  synced `main`, passing `Validate`, branch protection, no open PRs, and no
+  drift before continuing to Stage 29 implementation.
+- Clarified Stage 29 readiness for a local/offline `local_decision_log`
+  report-input kind that records decision labels, decision context labels,
+  local reference paths, owner/status labels, rationale notes, and limitations
+  without reading referenced contents, approving decisions, scoring decisions,
+  or producing advice.
+- Added Stage 28 local/offline `local_open_questions` report-input support to
+  the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields, source-content/excerpt
+  fields, and remote URLs.
+- Clarified Stage 28 readiness for a local/offline `local_open_questions`
+  report-input kind that records open question labels, affected report
+  sections, local reference paths, owner/status labels, and limitations without
+  reading referenced contents, scoring questions, or producing advice.
+- Added Stage 27 local/offline `local_limitation_register` report-input
+  support to the paper report pack, with descriptor Markdown output,
+  missing-input disclosure, and rejection of secret-like fields,
+  source-content/excerpt fields, and remote URLs.
+- Clarified Stage 27 readiness for a local/offline
+  `local_limitation_register` report-input kind that records limitation labels,
+  affected report sections, local evidence or artifact paths, scope notes,
+  mitigation notes, and limitations without reading referenced contents,
+  scoring limitations, or producing advice.
+- Added Stage 26 local/offline `local_appendix_index` report-input support to
+  the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields, source-content/excerpt
+  fields, and remote URLs.
+- Clarified Stage 26 readiness for a local/offline `local_appendix_index`
+  report-input kind that records appendix entry labels, report section labels,
+  local artifact paths, appendix purpose notes, and limitations without reading
+  artifact contents, verifying outputs, ranking appendix entries, or producing
+  advice.
+- Added Stage 25 local/offline `local_artifact_inventory` report-input support
+  to the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields, source-content/excerpt
+  fields, and remote URLs.
+- Clarified Stage 25 readiness for a local/offline
+  `local_artifact_inventory` report-input kind that records generated artifact
+  labels, artifact type labels, local paths, generation-source labels,
+  intended report-use notes, and limitations without reading artifact
+  contents, verifying outputs, ranking artifacts, or producing advice.
+- Added Stage 24 local/offline `local_data_rights_review` report-input support
+  to the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields, source-content/excerpt
+  fields, and remote URLs.
+- Clarified Stage 24 readiness for a local/offline
+  `local_data_rights_review` report-input kind that records data labels,
+  rights status labels, permitted-use notes, restriction notes, evidence paths,
+  and limitations without reading evidence contents, determining legal rights,
+  verifying licenses, deciding redistribution permissions, scoring rights
+  status, or producing advice.
+- Added Stage 23 local/offline `local_risk_review` report-input support to the
+  paper report pack, with descriptor Markdown output, missing-input disclosure,
+  and rejection of secret-like fields, source-content/excerpt fields, and
+  remote URLs.
 - Clarified Stage 23 readiness for a local/offline `local_risk_review`
   report-input kind that records risk-control labels, boundary labels,
   mitigation notes, review status labels, evidence paths, and limitations

@@ -1107,6 +1107,1340 @@ def test_paper_report_pack_rejects_unsafe_reproducibility_checklist_descriptor(
         )
 
 
+def test_paper_report_pack_renders_local_risk_review_input(tmp_path: Path) -> None:
+    risk_review_path = _write_risk_review_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=risk_review_path.name,
+        input_kind="local_risk_review",
+        display_label="Local risk review",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.risk_review_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Risk Review" in text
+    assert "No live order placement" in text
+    assert "LIVE_DISABLED boundary" in text
+    assert "keep execution disabled outside fake adapter demos" in text
+    assert "reviewed" in text
+    assert "docs/RISK_POLICY.md" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_risk_review_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-risk-review.json",
+        input_kind="local_risk_review",
+        display_label="Missing risk review",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Risk Review" in text
+    assert "Missing risk review | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_risk_review_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_risk_review_descriptor(
+        tmp_path,
+        extra_risk_field={"api_secret": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_risk_review",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-risk-review-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_risk_review_descriptor(
+        tmp_path,
+        evidence_path="https://example.com/risk.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_risk_review",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-risk-review-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_risk_review_descriptor(
+        tmp_path,
+        extra_risk_field={"text": "private evidence contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_risk_review",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-risk-review-pack",
+            )
+        )
+
+
+def test_paper_report_pack_renders_local_data_rights_review_input(tmp_path: Path) -> None:
+    data_rights_path = _write_data_rights_review_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=data_rights_path.name,
+        input_kind="local_data_rights_review",
+        display_label="Local data rights review",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.data_rights_review_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Data Rights Review" in text
+    assert "SEC companyfacts fixture" in text
+    assert "public fixture metadata" in text
+    assert "local report use only" in text
+    assert "redistribution not evaluated" in text
+    assert "docs/stage9_equities_readiness.md" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_data_rights_review_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-data-rights-review.json",
+        input_kind="local_data_rights_review",
+        display_label="Missing data rights review",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Data Rights Review" in text
+    assert "Missing data rights review | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_data_rights_review_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_data_rights_review_descriptor(
+        tmp_path,
+        extra_rights_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_data_rights_review",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-data-rights-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_data_rights_review_descriptor(
+        tmp_path,
+        evidence_path="https://example.com/rights.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_data_rights_review",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-data-rights-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_data_rights_review_descriptor(
+        tmp_path,
+        extra_rights_field={"text": "private evidence contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_data_rights_review",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-data-rights-pack",
+            )
+        )
+
+
+def test_paper_report_pack_renders_local_artifact_inventory_input(tmp_path: Path) -> None:
+    artifact_inventory_path = _write_artifact_inventory_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=artifact_inventory_path.name,
+        input_kind="local_artifact_inventory",
+        display_label="Local artifact inventory",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.artifact_inventory_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Artifact Inventory" in text
+    assert "Report pack Markdown" in text
+    assert "generated report artifact" in text
+    assert "outputs/report_pack.md" in text
+    assert "generated by paper report pack" in text
+    assert "local appendix reference" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_artifact_inventory_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-artifact-inventory.json",
+        input_kind="local_artifact_inventory",
+        display_label="Missing artifact inventory",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Artifact Inventory" in text
+    assert "Missing artifact inventory | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_artifact_inventory_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_artifact_inventory_descriptor(
+        tmp_path,
+        extra_artifact_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_artifact_inventory",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-artifact-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_artifact_inventory_descriptor(
+        tmp_path,
+        local_path="https://example.com/report.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_artifact_inventory",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-artifact-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_artifact_inventory_descriptor(
+        tmp_path,
+        extra_artifact_field={"text": "private artifact contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_artifact_inventory",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-artifact-pack",
+            )
+        )
+
+
+def test_paper_report_pack_renders_local_appendix_index_input(tmp_path: Path) -> None:
+    appendix_index_path = _write_appendix_index_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=appendix_index_path.name,
+        input_kind="local_appendix_index",
+        display_label="Local appendix index",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.appendix_index_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Appendix Index" in text
+    assert "Appendix A" in text
+    assert "Artifact inventory table" in text
+    assert "outputs/report_pack.md" in text
+    assert "local report navigation" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_appendix_index_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-appendix-index.json",
+        input_kind="local_appendix_index",
+        display_label="Missing appendix index",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Appendix Index" in text
+    assert "Missing appendix index | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_appendix_index_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_appendix_index_descriptor(
+        tmp_path,
+        extra_appendix_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_appendix_index",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-appendix-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_appendix_index_descriptor(
+        tmp_path,
+        artifact_path="https://example.com/appendix.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_appendix_index",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-appendix-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_appendix_index_descriptor(
+        tmp_path,
+        extra_appendix_field={"text": "private appendix contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_appendix_index",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-appendix-pack",
+            )
+        )
+
+
+def test_paper_report_pack_renders_local_limitation_register_input(tmp_path: Path) -> None:
+    limitation_register_path = _write_limitation_register_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=limitation_register_path.name,
+        input_kind="local_limitation_register",
+        display_label="Local limitation register",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.limitation_register_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Limitation Register" in text
+    assert "No output verification" in text
+    assert "Limitations" in text
+    assert "outputs/report_pack.md" in text
+    assert "local/offline report scope" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_limitation_register_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-limitation-register.json",
+        input_kind="local_limitation_register",
+        display_label="Missing limitation register",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Limitation Register" in text
+    assert "Missing limitation register | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_limitation_register_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_limitation_register_descriptor(
+        tmp_path,
+        extra_limitation_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_limitation_register",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-limitation-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_limitation_register_descriptor(
+        tmp_path,
+        reference_path="https://example.com/limitations.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_limitation_register",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-limitation-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_limitation_register_descriptor(
+        tmp_path,
+        extra_limitation_field={"text": "private limitation contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_limitation_register",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-limitation-pack",
+            )
+        )
+
+
+def test_paper_report_pack_renders_local_open_questions_input(tmp_path: Path) -> None:
+    open_questions_path = _write_open_questions_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=open_questions_path.name,
+        input_kind="local_open_questions",
+        display_label="Local open questions",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.open_questions_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Open Questions" in text
+    assert "Review output assumptions" in text
+    assert "Limitations" in text
+    assert "docs/current_handoff.md" in text
+    assert "reviewer" in text
+    assert "open" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_open_questions_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-open-questions.json",
+        input_kind="local_open_questions",
+        display_label="Missing open questions",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Open Questions" in text
+    assert "Missing open questions | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_open_questions_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_open_questions_descriptor(
+        tmp_path,
+        extra_question_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_open_questions",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-open-questions-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_open_questions_descriptor(
+        tmp_path,
+        reference_path="https://example.com/questions.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_open_questions",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-open-questions-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_open_questions_descriptor(
+        tmp_path,
+        extra_question_field={"text": "private open question contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_open_questions",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-open-questions-pack",
+            )
+        )
+
+
+def test_paper_report_pack_renders_local_decision_log_input(tmp_path: Path) -> None:
+    decision_log_path = _write_decision_log_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=decision_log_path.name,
+        input_kind="local_decision_log",
+        display_label="Local decision log",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.decision_log_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Decision Log" in text
+    assert "Keep report descriptive" in text
+    assert "Report boundaries" in text
+    assert "docs/STAGE_PLAN.md" in text
+    assert "reviewer" in text
+    assert "accepted" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_decision_log_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-decision-log.json",
+        input_kind="local_decision_log",
+        display_label="Missing decision log",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Decision Log" in text
+    assert "Missing decision log | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_decision_log_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_decision_log_descriptor(
+        tmp_path,
+        extra_decision_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_decision_log",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-decision-log-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_decision_log_descriptor(
+        tmp_path,
+        reference_path="https://example.com/decisions.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_decision_log",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-decision-log-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_decision_log_descriptor(
+        tmp_path,
+        extra_decision_field={"text": "private decision contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_decision_log",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-decision-log-pack",
+            )
+        )
+
+
+def test_paper_report_pack_renders_local_follow_up_register_input(
+    tmp_path: Path,
+) -> None:
+    follow_up_path = _write_follow_up_register_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=follow_up_path.name,
+        input_kind="local_follow_up_register",
+        display_label="Local follow-up register",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.follow_up_register_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Follow-Up Register" in text
+    assert "Confirm descriptor examples" in text
+    assert "Report inputs" in text
+    assert "docs/STAGE_PLAN.md" in text
+    assert "reviewer" in text
+    assert "open" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_follow_up_register_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-follow-up-register.json",
+        input_kind="local_follow_up_register",
+        display_label="Missing follow-up register",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Follow-Up Register" in text
+    assert "Missing follow-up register | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_follow_up_register_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_follow_up_register_descriptor(
+        tmp_path,
+        extra_follow_up_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_follow_up_register",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-follow-up-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_follow_up_register_descriptor(
+        tmp_path,
+        reference_path="https://example.com/follow-up.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_follow_up_register",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-follow-up-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_follow_up_register_descriptor(
+        tmp_path,
+        extra_follow_up_field={"text": "private follow-up contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_follow_up_register",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-follow-up-pack",
+            )
+        )
+
+
+def test_paper_report_pack_renders_local_version_notes_input(tmp_path: Path) -> None:
+    version_notes_path = _write_version_notes_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=version_notes_path.name,
+        input_kind="local_version_notes",
+        display_label="Local version notes",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.version_notes_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Version Notes" in text
+    assert "Report pack v1" in text
+    assert "outputs/report_pack.md" in text
+    assert "Stage 30 follow-up section" in text
+    assert "maintainer" in text
+    assert "draft" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_version_notes_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-version-notes.json",
+        input_kind="local_version_notes",
+        display_label="Missing version notes",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Version Notes" in text
+    assert "Missing version notes | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_version_notes_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_version_notes_descriptor(
+        tmp_path,
+        extra_version_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_version_notes",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-version-notes-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_version_notes_descriptor(
+        tmp_path,
+        artifact_path="https://example.com/report_pack.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_version_notes",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-version-notes-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_version_notes_descriptor(
+        tmp_path,
+        extra_version_field={"text": "private version contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_version_notes",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-version-notes-pack",
+            )
+        )
+
+
+def test_paper_report_pack_renders_local_distribution_checklist_input(
+    tmp_path: Path,
+) -> None:
+    checklist_path = _write_distribution_checklist_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=checklist_path.name,
+        input_kind="local_distribution_checklist",
+        display_label="Local distribution checklist",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.distribution_checklist_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Distribution Checklist" in text
+    assert "Confirm local report package" in text
+    assert "outputs/report_pack.md" in text
+    assert "not approved" in text
+    assert "reviewer" in text
+    assert "metadata only; does not approve distribution" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_distribution_checklist_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-distribution-checklist.json",
+        input_kind="local_distribution_checklist",
+        display_label="Missing distribution checklist",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Distribution Checklist" in text
+    assert "Missing distribution checklist | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_distribution_checklist_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_distribution_checklist_descriptor(
+        tmp_path,
+        extra_item_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_distribution_checklist",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-distribution-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_distribution_checklist_descriptor(
+        tmp_path,
+        artifact_path="https://example.com/report_pack.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_distribution_checklist",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-distribution-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_distribution_checklist_descriptor(
+        tmp_path,
+        extra_item_field={"text": "private distribution contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_distribution_checklist",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-distribution-pack",
+            )
+        )
+
+
+def test_paper_report_pack_renders_local_handoff_notes_input(tmp_path: Path) -> None:
+    handoff_notes_path = _write_handoff_notes_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=handoff_notes_path.name,
+        input_kind="local_handoff_notes",
+        display_label="Local handoff notes",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.handoff_notes_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Handoff Notes" in text
+    assert "Report pack handoff" in text
+    assert "outputs/report_pack.md" in text
+    assert "reviewer" in text
+    assert "ready for local review" in text
+    assert "metadata only; does not approve distribution" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_handoff_notes_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-handoff-notes.json",
+        input_kind="local_handoff_notes",
+        display_label="Missing handoff notes",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Handoff Notes" in text
+    assert "Missing handoff notes | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_handoff_notes_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_handoff_notes_descriptor(
+        tmp_path,
+        extra_note_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_handoff_notes",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-handoff-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_handoff_notes_descriptor(
+        tmp_path,
+        artifact_path="https://example.com/report_pack.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_handoff_notes",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-handoff-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_handoff_notes_descriptor(
+        tmp_path,
+        extra_note_field={"text": "private handoff contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_handoff_notes",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-handoff-pack",
+            )
+        )
+
+
+def test_paper_report_pack_renders_local_archive_notes_input(tmp_path: Path) -> None:
+    archive_notes_path = _write_archive_notes_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=archive_notes_path.name,
+        input_kind="local_archive_notes",
+        display_label="Local archive notes",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.archive_notes_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Archive Notes" in text
+    assert "Report pack archive" in text
+    assert "outputs/report_pack.md" in text
+    assert "archive candidate" in text
+    assert "maintainer" in text
+    assert "metadata only; does not move files" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_archive_notes_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-archive-notes.json",
+        input_kind="local_archive_notes",
+        display_label="Missing archive notes",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Archive Notes" in text
+    assert "Missing archive notes | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_archive_notes_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_archive_notes_descriptor(
+        tmp_path,
+        extra_note_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_archive_notes",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-archive-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_archive_notes_descriptor(
+        tmp_path,
+        artifact_path="https://example.com/report_pack.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_archive_notes",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-archive-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_archive_notes_descriptor(
+        tmp_path,
+        extra_note_field={"text": "private archive contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_archive_notes",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-archive-pack",
+            )
+        )
+
+
 def test_paper_report_pack_cli_writes_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
     output_dir = tmp_path / "pack"
     manifest_path = _write_report_input_manifest(tmp_path)
@@ -1523,6 +2857,464 @@ def _write_reproducibility_checklist_descriptor(
                         "environment_label": "local editable install",
                         "expected_output_label": "test output already supplied",
                         "limitation_note": "descriptive only; does not verify output",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_risk_review_descriptor(
+    tmp_path: Path,
+    *,
+    evidence_path: str = "docs/RISK_POLICY.md",
+    extra_risk_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "risk_review.json"
+    first_risk = {
+        "risk_control_label": "No live order placement",
+        "boundary_label": "LIVE_DISABLED boundary",
+        "mitigation_note": "keep execution disabled outside fake adapter demos",
+        "review_status_label": "reviewed",
+        "evidence_path": evidence_path,
+        "limitation_note": "metadata only; does not evaluate policies",
+    }
+    if extra_risk_field:
+        first_risk.update(extra_risk_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "risks": [
+                    first_risk,
+                    {
+                        "risk_control_label": "No external credentials",
+                        "boundary_label": "local/offline report input",
+                        "mitigation_note": "descriptor contains labels only",
+                        "review_status_label": "not supplied by automation",
+                        "evidence_path": "docs/current_handoff.md",
+                        "limitation_note": "descriptive only; does not score risk",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_data_rights_review_descriptor(
+    tmp_path: Path,
+    *,
+    evidence_path: str = "docs/stage9_equities_readiness.md",
+    extra_rights_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "data_rights_review.json"
+    first_rights = {
+        "data_label": "SEC companyfacts fixture",
+        "rights_status_label": "public fixture metadata",
+        "permitted_use_note": "local report use only",
+        "restriction_note": "redistribution not evaluated",
+        "evidence_path": evidence_path,
+        "limitation_note": "metadata only; does not determine legal rights",
+    }
+    if extra_rights_field:
+        first_rights.update(extra_rights_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "rights": [
+                    first_rights,
+                    {
+                        "data_label": "Stage 6 generated log",
+                        "rights_status_label": "local generated artifact",
+                        "permitted_use_note": "local/offline report context",
+                        "restriction_note": "no external redistribution decision",
+                        "evidence_path": "docs/current_handoff.md",
+                        "limitation_note": "descriptive only; does not verify licenses",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_artifact_inventory_descriptor(
+    tmp_path: Path,
+    *,
+    local_path: str = "outputs/report_pack.md",
+    extra_artifact_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "artifact_inventory.json"
+    first_artifact = {
+        "artifact_label": "Report pack Markdown",
+        "artifact_type_label": "generated report artifact",
+        "local_path": local_path,
+        "generation_source_label": "generated by paper report pack",
+        "intended_report_use": "local appendix reference",
+        "limitation_note": "metadata only; does not verify output contents",
+    }
+    if extra_artifact_field:
+        first_artifact.update(extra_artifact_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "artifacts": [
+                    first_artifact,
+                    {
+                        "artifact_label": "Stage 6 replay log",
+                        "artifact_type_label": "generated JSONL artifact",
+                        "local_path": "outputs/market_maker.jsonl",
+                        "generation_source_label": "generated by Stage 6 replay",
+                        "intended_report_use": "local audit reference",
+                        "limitation_note": "descriptive only; does not verify output",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_appendix_index_descriptor(
+    tmp_path: Path,
+    *,
+    artifact_path: str = "outputs/report_pack.md",
+    extra_appendix_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "appendix_index.json"
+    first_appendix = {
+        "appendix_label": "Appendix A",
+        "report_section_label": "Artifact inventory table",
+        "artifact_path": artifact_path,
+        "appendix_purpose_note": "local report navigation",
+        "limitation_note": "metadata only; does not verify output contents",
+    }
+    if extra_appendix_field:
+        first_appendix.update(extra_appendix_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "appendices": [
+                    first_appendix,
+                    {
+                        "appendix_label": "Appendix B",
+                        "report_section_label": "Stage 6 replay log reference",
+                        "artifact_path": "outputs/market_maker.jsonl",
+                        "appendix_purpose_note": "local audit navigation",
+                        "limitation_note": "descriptive only; does not approve distribution",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_limitation_register_descriptor(
+    tmp_path: Path,
+    *,
+    reference_path: str = "outputs/report_pack.md",
+    extra_limitation_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "limitation_register.json"
+    first_limitation = {
+        "limitation_label": "No output verification",
+        "affected_section_label": "Limitations",
+        "reference_path": reference_path,
+        "scope_note": "local/offline report scope",
+        "mitigation_note": "mark generated artifacts as descriptive",
+        "limitation_note": "metadata only; does not verify output contents",
+    }
+    if extra_limitation_field:
+        first_limitation.update(extra_limitation_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "limitations": [
+                    first_limitation,
+                    {
+                        "limitation_label": "No distribution approval",
+                        "affected_section_label": "Local Appendix Index",
+                        "reference_path": "docs/current_handoff.md",
+                        "scope_note": "local report navigation only",
+                        "mitigation_note": "avoid redistribution claims",
+                        "limitation_note": "descriptive only; does not approve distribution",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_open_questions_descriptor(
+    tmp_path: Path,
+    *,
+    reference_path: str = "docs/current_handoff.md",
+    extra_question_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "open_questions.json"
+    first_question = {
+        "question_label": "Review output assumptions",
+        "affected_section_label": "Limitations",
+        "reference_path": reference_path,
+        "owner_label": "reviewer",
+        "status_label": "open",
+        "limitation_note": "metadata only; does not resolve the question",
+    }
+    if extra_question_field:
+        first_question.update(extra_question_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "questions": [
+                    first_question,
+                    {
+                        "question_label": "Confirm appendix navigation",
+                        "affected_section_label": "Local Appendix Index",
+                        "reference_path": "outputs/report_pack.md",
+                        "owner_label": "maintainer",
+                        "status_label": "not reviewed",
+                        "limitation_note": "descriptive only; does not approve decisions",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_decision_log_descriptor(
+    tmp_path: Path,
+    *,
+    reference_path: str = "docs/STAGE_PLAN.md",
+    extra_decision_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "decision_log.json"
+    first_decision = {
+        "decision_label": "Keep report descriptive",
+        "decision_context_label": "Report boundaries",
+        "reference_path": reference_path,
+        "owner_label": "reviewer",
+        "status_label": "accepted",
+        "rationale_note": "metadata only; records reviewer context",
+        "limitation_note": "descriptive only; does not approve decisions",
+    }
+    if extra_decision_field:
+        first_decision.update(extra_decision_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "decisions": [
+                    first_decision,
+                    {
+                        "decision_label": "Keep appendix local",
+                        "decision_context_label": "Appendix inputs",
+                        "reference_path": "outputs/report_pack.md",
+                        "owner_label": "maintainer",
+                        "status_label": "pending review",
+                        "rationale_note": "tracks local report scope",
+                        "limitation_note": "does not verify outputs",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_follow_up_register_descriptor(
+    tmp_path: Path,
+    *,
+    reference_path: str = "docs/STAGE_PLAN.md",
+    extra_follow_up_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "follow_up_register.json"
+    first_follow_up = {
+        "follow_up_label": "Confirm descriptor examples",
+        "related_section_label": "Report inputs",
+        "reference_path": reference_path,
+        "owner_label": "reviewer",
+        "status_label": "open",
+        "tracking_note": "metadata only; no follow-up execution",
+        "limitation_note": "descriptive only; does not verify outputs",
+    }
+    if extra_follow_up_field:
+        first_follow_up.update(extra_follow_up_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "follow_ups": [
+                    first_follow_up,
+                    {
+                        "follow_up_label": "Review limitation wording",
+                        "related_section_label": "Limitations",
+                        "reference_path": "outputs/report_pack.md",
+                        "owner_label": "maintainer",
+                        "status_label": "not reviewed",
+                        "tracking_note": "tracks local report context only",
+                        "limitation_note": "does not rank follow-ups",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_version_notes_descriptor(
+    tmp_path: Path,
+    *,
+    artifact_path: str = "outputs/report_pack.md",
+    extra_version_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "version_notes.json"
+    first_version = {
+        "version_label": "Report pack v1",
+        "artifact_path": artifact_path,
+        "change_summary_label": "Stage 30 follow-up section",
+        "owner_label": "maintainer",
+        "status_label": "draft",
+        "limitation_note": "metadata only; does not approve distribution",
+    }
+    if extra_version_field:
+        first_version.update(extra_version_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "versions": [
+                    first_version,
+                    {
+                        "version_label": "Report pack v1 review copy",
+                        "artifact_path": "outputs/report_pack_review.md",
+                        "change_summary_label": "Review copy metadata",
+                        "owner_label": "reviewer",
+                        "status_label": "not approved",
+                        "limitation_note": "does not verify artifact contents",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_distribution_checklist_descriptor(
+    tmp_path: Path,
+    *,
+    artifact_path: str = "outputs/report_pack.md",
+    extra_item_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "distribution_checklist.json"
+    first_item = {
+        "distribution_item_label": "Confirm local report package",
+        "artifact_path": artifact_path,
+        "readiness_status_label": "not approved",
+        "owner_label": "reviewer",
+        "review_note": "metadata only; does not approve distribution",
+        "limitation_note": "descriptive only; does not verify rights",
+    }
+    if extra_item_field:
+        first_item.update(extra_item_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "items": [
+                    first_item,
+                    {
+                        "distribution_item_label": "Confirm limitation notes",
+                        "artifact_path": "outputs/limitations.md",
+                        "readiness_status_label": "needs review",
+                        "owner_label": "maintainer",
+                        "review_note": "checklist metadata only",
+                        "limitation_note": "does not read referenced artifact",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_handoff_notes_descriptor(
+    tmp_path: Path,
+    *,
+    artifact_path: str = "outputs/report_pack.md",
+    extra_note_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "handoff_notes.json"
+    first_note = {
+        "handoff_label": "Report pack handoff",
+        "artifact_path": artifact_path,
+        "recipient_label": "reviewer",
+        "status_label": "ready for local review",
+        "handoff_note": "metadata only; does not approve distribution",
+        "limitation_note": "descriptive only; does not verify rights",
+    }
+    if extra_note_field:
+        first_note.update(extra_note_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "notes": [
+                    first_note,
+                    {
+                        "handoff_label": "Limitation notes handoff",
+                        "artifact_path": "outputs/limitations.md",
+                        "recipient_label": "maintainer",
+                        "status_label": "needs local review",
+                        "handoff_note": "handoff metadata only",
+                        "limitation_note": "does not read referenced artifact",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_archive_notes_descriptor(
+    tmp_path: Path,
+    *,
+    artifact_path: str = "outputs/report_pack.md",
+    extra_note_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "archive_notes.json"
+    first_note = {
+        "archive_label": "Report pack archive",
+        "artifact_path": artifact_path,
+        "archive_status_label": "archive candidate",
+        "owner_label": "maintainer",
+        "archive_note": "metadata only; does not move files",
+        "limitation_note": "descriptive only; does not decide retention",
+    }
+    if extra_note_field:
+        first_note.update(extra_note_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "notes": [
+                    first_note,
+                    {
+                        "archive_label": "Limitations archive",
+                        "artifact_path": "outputs/limitations.md",
+                        "archive_status_label": "needs local review",
+                        "owner_label": "reviewer",
+                        "archive_note": "archive metadata only",
+                        "limitation_note": "does not read referenced artifact",
                     },
                 ]
             }

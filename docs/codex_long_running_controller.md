@@ -22,25 +22,28 @@ demo-first, risk-controlled stage plan.
 
 - Apply this controller's stage boundary, stop gates, context-budget and
   token-budget rules, and final-report rules on every checkpoint.
-- Use the project Skill for repository-specific staged work before optional
-  skills.
-- Keep optional skills token-efficient: project Skill and token-budget rules
-  always apply, TDD applies to behavior changes, Ponytail review applies before
-  publish for implementation diffs, and Matt Pocock `grill-me` applies only for
-  ambiguous or high-risk design.
+- Always use the project long-session governance and token-budget rules.
+- Use the project Skill first when it exists and is relevant.
+- Keep optional skills token-economical: use them only when they save tokens,
+  reduce risk, or provide a reusable checklist that is shorter than manual
+  exploration.
+- Use TDD workflow for behavior-changing implementation.
+- Use Ponytail review only before final publish for implementation diffs,
+  mainly to remove over-engineering.
+- Use Matt Pocock `grill-with-docs` only when the active stage has ambiguous or
+  high-risk design, or when domain terminology has drifted enough that durable
+  docs need to be sharpened.
+- Use Matt Pocock EDD/eval-before-ship style only if the installed skill exists
+  and is easy to invoke; otherwise use the equivalent checklist: define
+  expected outputs, add offline fixtures or tests first, then implement.
+- Use Skill Maker / skill-creator only when a repeated workflow has appeared
+  at least twice and should become reusable project memory.
 - Treat optional skills and preset commands as accelerators, not dependencies.
   If a skill is unavailable, uninstalled, renamed, or noisy to invoke, use the
   equivalent checklist and keep moving.
 - Limit optional skill use to at most one planning skill before implementation
   and one review skill before final merge or PR unless a stop gate triggers
   deeper review.
-- Use Ponytail review only for implementation diffs, mainly before final
-  merge/push or PR to catch over-engineering; skip it for readiness checks and
-  documentation-only changes.
-- Use Matt Pocock `grill-me` only for ambiguous or high-risk design stages;
-  skip it for simple readiness/docs work and when `docs/STAGE_PLAN.md` already
-  gives complete acceptance criteria.
-- Use TDD-style workflow for implementation stages that add behavior.
 - Use handoff or compaction only when context is large, before switching
   sessions, or when a stop gate requires preserving state.
 
@@ -54,17 +57,41 @@ demo-first, risk-controlled stage plan.
   run unless explicitly requested.
 - Update handoff and logs before reporting completion.
 
+## Delivery-unit batching policy
+
+- An internal checkpoint is not the same as a publish checkpoint.
+- Work on one `codex/` branch per coherent delivery unit.
+- A delivery unit may include readiness/spec clarification, implementation,
+  tests, docs/log/changelog updates, handoff updates, and a compact audit note
+  when due.
+- Do not create a PR for every small docs, log, handoff, or audit edit.
+- Do not create separate handoff-only PRs unless a stale handoff blocks all
+  safe continuation.
+- If a spec is incomplete but can be safely clarified and implemented within
+  the same stage/run, clarify it on the same branch and continue. Publish once
+  after the full delivery unit is complete.
+- If the spec gap involves high or unclear risk, compliance ambiguity,
+  compliance-sensitive scope, external credentials, production endpoints,
+  broker integration, live data, strategy advice, or user judgment, create a
+  docs-only clarification PR or stop for review.
+- Publish once after the coherent delivery unit is complete and validated.
+- If a delivery unit grows too large or mixes unrelated risk domains, split it
+  before publish.
+
 ## Governance audit cadence
 
 - After every three completed checkpoints, run a compact governance audit.
 - The audit must check clean/synced `main`, latest `main` CI, open PRs, branch
   protection, required `Validate`, handoff accuracy, stage-plan continuity,
   risk drift, and token/context drift.
-- Publish the audit under this controller's publish policy.
-- After the audit PR/merge or owner-direct publish completes, wait for `main`
-  `Validate`, sync local `main`, verify a clean worktree, reset the checkpoint
-  counter, read the updated `docs/current_handoff.md`, and continue to the next
-  checkpoint.
+- A passing audit does not automatically require its own PR. Fold the audit
+  note into the active delivery branch when possible.
+- Create an audit-only PR only if the audit changes durable policy/handoff
+  state and no active delivery branch exists.
+- After the delivery-unit publish containing the audit completes, wait for
+  `main` `Validate`, sync local `main`, verify a clean worktree, reset the
+  checkpoint counter, read the updated `docs/current_handoff.md`, and continue
+  to the next checkpoint.
 - A passing audit is mandatory but non-terminal. Do not emit the final report
   after a passing audit.
 - Stop only when the audit finds a real stop gate: high or unclear risk,
@@ -81,12 +108,30 @@ demo-first, risk-controlled stage plan.
 - For code changes, include tests in the same stage-sized change.
 - For documentation-only stages, do not touch behavior unless required by a
   failing check.
+- Prefer small internal commits/checkpoints on the active delivery branch over
+  separate PRs for every small edit.
 
 ## Publish policy
 
+Apply this publish policy at the delivery-unit boundary, not after every small
+edit.
+
+Keep the existing owner-direct fast path and PR fallback rules, but evaluate
+them only at the delivery-unit boundary. Never force push, never use admin
+override, and never bypass failed checks. High or unclear risk stops for human
+review.
+
+Publish only after:
+
+- The active delivery unit is complete.
+- Required validation passes.
+- Docs/logs/handoff are updated.
+- Risk is classified.
+- Ponytail/checklist review is complete for implementation diffs.
+
 Default to branch + PR for staged work. Codex may enable GitHub auto-merge only
-for low-risk small PRs that are narrow, locally validated, protected by clear
-required checks, and free of credentials, production endpoints, order
+for low-risk delivery units that are narrow, locally validated, protected by
+clear required checks, and free of credentials, production endpoints, order
 placement, WebSocket work, live market-making loops, strategy optimization,
 large generated files, dependency surprises, and compliance ambiguity.
 

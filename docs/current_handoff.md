@@ -20,16 +20,26 @@ report-input metadata, Stage 17 local data-dictionary report-input metadata,
 Stage 18 local citation-index report-input metadata, and Stage 19 local
 term-glossary report-input metadata, plus Stage 20 local assumption-register
 report-input metadata and Stage 21 local coverage-matrix report-input
-metadata, plus Stage 22 local reproducibility-checklist report-input metadata.
+metadata, plus Stage 22 local reproducibility-checklist report-input metadata
+and Stage 23 local risk-review report-input metadata, plus Stage 24 local
+data-rights-review report-input metadata, plus Stage 25 local
+artifact-inventory report-input metadata, plus Stage 26 local appendix-index
+report-input metadata, plus Stage 27 local limitation-register report-input
+metadata, plus Stage 28 local open-questions report-input metadata, plus Stage
+29 local decision-log report-input metadata, plus Stage 30 local follow-up
+register report-input metadata, plus Stage 31 local version-notes report-input
+metadata and Stage 32 local distribution-checklist report-input metadata.
+Stage 33 local handoff-notes report-input metadata is implemented.
+Stage 34 local archive-notes report-input metadata is implemented.
 
 ## Last completed stage
 
-Stage 22: Local reproducibility-checklist report input, local/offline only.
+Compact governance audit after Stage 35 readiness.
 
 ## Stage plan status
 
 `docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
-1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, and 22. The ledger records
+1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, and 34. The ledger records
 purpose, known commit hashes, files/modules added, validation commands, status,
 next-stage boundary, and safety status for each completed stage.
 
@@ -187,6 +197,86 @@ observed `main` CI run `28221429772` passed `Validate`. The handoff and stage
 plan agree on the next checkpoint, and no risk drift, compliance drift,
 token/context drift, or user-judgment stop gate was found. The next checkpoint
 is Stage 23 implementation only.
+
+Audit after three more completed checkpoints: Stage 23 implementation, Stage
+24 readiness clarification, and Stage 24 implementation. Local `main` is
+synced with `origin/main` at `4e836ad`, the worktree is clean, there are no
+open pull requests, branch protection still requires strict `Validate`, force
+pushes and branch deletion are disabled, and the latest observed `main` CI run
+`28264580562` passed `Validate`. The handoff and stage plan agree on the next
+checkpoint, and no risk drift, compliance drift, token/context drift, or
+user-judgment stop gate was found. The next checkpoint is report-input-kind
+readiness clarification only.
+
+Audit after three more completed checkpoints: Stage 25 readiness
+clarification, Stage 25 implementation, and Stage 26 readiness clarification.
+Local `main` is synced with `origin/main` at `6ff33f2`, the worktree is clean,
+there are no open pull requests, branch protection still requires strict
+`Validate`, force pushes and branch deletion are disabled, and the latest
+observed `main` CI run `28265376072` passed `Validate`. The handoff and stage
+plan agree on the next checkpoint, and no risk drift, compliance drift,
+token/context drift, or user-judgment stop gate was found. The next checkpoint
+is Stage 26 implementation only.
+
+Audit after three more completed checkpoints: Stage 26 implementation, Stage
+27 readiness clarification, and Stage 27 implementation. Local `main` is
+synced with `origin/main` at `3188bd0`, the worktree is clean, there are no
+open pull requests, branch protection still requires strict `Validate`, force
+pushes and branch deletion are disabled, and the latest observed `main` CI run
+`28266218418` passed `Validate`. The handoff and stage plan agree on the next
+checkpoint, and no risk drift, compliance drift, token/context drift, or
+user-judgment stop gate was found. The next checkpoint is report-input-kind
+readiness clarification only.
+
+Audit after three more completed checkpoints: Stage 28 readiness
+clarification, Stage 28 implementation, and Stage 29 readiness clarification.
+Local `main` is synced with `origin/main` at `5240f62`, the worktree is clean,
+there are no open pull requests, branch protection still requires strict
+`Validate`, force pushes and branch deletion are disabled, and the latest
+observed `main` CI run `28267200873` passed `Validate`. The handoff and stage
+plan agree on the next checkpoint, and no risk drift, compliance drift,
+token/context drift, or user-judgment stop gate was found. The next checkpoint
+is Stage 29 implementation only.
+
+Audit after three more completed checkpoints: Stage 29 implementation, Stage
+30 readiness clarification, and Stage 30 implementation. Local `main` is
+synced with `origin/main` at `6cb9a79`, the worktree is clean, there are no
+open pull requests, branch protection still requires strict `Validate`, force
+pushes and branch deletion are disabled, and the latest observed `main` CI run
+`28267987734` passed `Validate`. The handoff and stage plan agree on the next
+checkpoint, and no risk drift, compliance drift, token/context drift, or
+user-judgment stop gate was found. The next checkpoint is report-input-kind
+readiness clarification only.
+
+Audit after three more completed checkpoints: Stage 31 readiness
+clarification, Stage 31 implementation, and Stage 32 readiness clarification.
+Local `main` is synced with `origin/main` at `676b4bd`, the worktree is clean,
+there are no open pull requests, branch protection still requires strict
+`Validate`, force pushes and branch deletion are disabled, and the latest
+observed `main` CI run `28268711448` passed `Validate`. The handoff and stage
+plan agree on the next checkpoint, and no risk drift, compliance drift,
+token/context drift, or user-judgment stop gate was found. The next checkpoint
+is Stage 32 implementation only.
+
+Audit after three more completed checkpoints: Stage 32 implementation, Stage
+33 readiness clarification, and Stage 33 implementation. Local `main` is
+synced with `origin/main` at `1395484`, the worktree is clean, there are no
+open pull requests, branch protection still requires strict `Validate`, force
+pushes and branch deletion are disabled, and the latest observed `main` CI run
+`28269488815` passed `Validate`. The handoff and stage plan agree on the next
+checkpoint, and no risk drift, compliance drift, token/context drift, or
+user-judgment stop gate was found. The next checkpoint is
+report-input-kind readiness clarification only.
+
+Audit after three more completed checkpoints: Stage 34 readiness
+clarification, Stage 34 implementation, and Stage 35 readiness clarification.
+Local `main` is synced with `origin/main` at `f59fda1`, the worktree is clean,
+there are no open pull requests, branch protection still requires strict
+`Validate`, force pushes and branch deletion are disabled, and the latest
+observed `main` CI run `28270211447` passed `Validate`. The handoff and stage
+plan agree on the next checkpoint, and no risk drift, compliance drift,
+token/context drift, or user-judgment stop gate was found. The next checkpoint
+is Stage 35 implementation only.
 
 `docs/STAGE_PLAN.md` now contains the clarified Stage 9 specification and
 `docs/stage9_equities_readiness.md` records the readiness review. Stage 9 is
@@ -439,9 +529,334 @@ reproducibility, coverage, sources, or securities, recommend allocations,
 optimize strategies, emit executable advice, imply production readiness, or
 claim profitability.
 
-Next checkpoint: Stage 23 local risk-review report-input implementation only.
+Stage 23 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local risk-review descriptor referenced by the
+manifest, renders a separate descriptive risk-review section, reports missing
+optional risk-review descriptors as not supplied, rejects secret-like fields,
+source-content/excerpt fields, and remote URLs, and does not execute commands,
+run checks from report inputs, evaluate policies, run risk checks, place
+orders, read evidence contents, read source contents, read raw private data
+contents, embed private or proprietary excerpts, verify local environments or
+outputs, add adapters, fetch remote data, score or rank risk, reproducibility,
+coverage, sources, or securities, recommend allocations, optimize strategies,
+emit executable advice, imply production readiness, or claim profitability.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only the Stage 23 local/offline local_risk_review report-input kind for the paper report pack, with offline tests and docs updates; do not execute commands from report inputs, run checks from report inputs, evaluate policies, run risk checks, place orders, read evidence contents, read source contents, read raw private data contents, embed private or proprietary excerpts, verify local environments or outputs, add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, strategy optimization, risk/reproducibility/coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
+`docs/STAGE_PLAN.md` now contains the full Stage 24 readiness specification for
+a local/offline `local_data_rights_review` report-input kind. Stage 24 may
+describe only reviewer-supplied data labels, rights status labels,
+permitted-use notes, restriction notes, local evidence paths, and limitation
+notes, and it must not execute commands, run checks from report inputs,
+determine legal rights, verify licenses, decide redistribution permissions,
+evaluate policies, read evidence or source contents, read raw private data
+contents, fetch remote data, add adapters, verify local environments or
+outputs, use account or portfolio data, use live feeds, score or rank rights
+status, risk, reproducibility, coverage, sources, or securities, recommend
+allocations, optimize strategies, emit executable advice, imply production
+readiness, or claim profitability.
+
+Stage 24 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local data-rights-review descriptor referenced by
+the manifest, renders a separate descriptive data-rights section, reports
+missing optional data-rights-review descriptors as not supplied, rejects
+secret-like fields, source-content/excerpt fields, and remote URLs, and does
+not execute commands, run checks from report inputs, determine legal rights,
+verify licenses, decide redistribution permissions, evaluate policies, read
+evidence contents, read source contents, read raw private data contents, embed
+private or proprietary excerpts, verify local environments or outputs, add
+adapters, fetch remote data, score or rank rights status, risk,
+reproducibility, coverage, sources, or securities, recommend allocations,
+optimize strategies, emit executable advice, imply production readiness, or
+claim profitability.
+
+`docs/STAGE_PLAN.md` now contains the full Stage 25 readiness specification for
+a local/offline `local_artifact_inventory` report-input kind. Stage 25 may
+describe only reviewer-supplied generated artifact labels, artifact type
+labels, local paths, generation-source labels, intended report-use notes, and
+limitation notes, and it must not execute commands, run checks from report
+inputs, read artifact contents, verify outputs, verify local environments, read
+evidence or source contents, read raw private data contents, fetch remote data,
+add adapters, use account or portfolio data, use live feeds, score or rank
+artifacts, rights status, risk, reproducibility, coverage, sources, or
+securities, recommend allocations, optimize strategies, emit executable
+advice, imply production readiness, or claim profitability.
+
+Stage 25 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local artifact-inventory descriptor referenced by
+the manifest, renders a separate descriptive artifact-inventory section,
+reports missing optional artifact-inventory descriptors as not supplied,
+rejects secret-like fields, source-content/excerpt fields, and remote URLs,
+and does not execute commands, run checks from report inputs, read artifact
+contents, verify outputs, verify local environments, read evidence contents,
+read source contents, read raw private data contents, embed private or
+proprietary excerpts, add adapters, fetch remote data, score or rank artifacts,
+rights status, risk, reproducibility, coverage, sources, or securities,
+recommend allocations, optimize strategies, emit executable advice, imply
+production readiness, or claim profitability.
+
+`docs/STAGE_PLAN.md` now contains the full Stage 26 readiness specification for
+a local/offline `local_appendix_index` report-input kind. Stage 26 may
+describe only reviewer-supplied appendix entry labels, report section labels,
+local artifact paths, appendix purpose notes, and limitation notes, and it must
+not execute commands, run checks from report inputs, read artifact contents,
+verify outputs, verify local environments, approve distribution, read evidence
+or source contents, read raw private data contents, fetch remote data, add
+adapters, use account or portfolio data, use live feeds, score or rank appendix
+entries, artifacts, rights status, risk, reproducibility, coverage, sources, or
+securities, recommend allocations, optimize strategies, emit executable
+advice, imply production readiness, or claim profitability.
+
+Stage 26 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local appendix-index descriptor referenced by the
+manifest, renders a separate descriptive appendix-index section, reports
+missing optional appendix-index descriptors as not supplied, rejects
+secret-like fields, source-content/excerpt fields, and remote URLs, and does
+not execute commands, run checks from report inputs, read artifact contents,
+verify outputs, verify local environments, approve distribution, read evidence
+contents, read source contents, read raw private data contents, embed private
+or proprietary excerpts, add adapters, fetch remote data, score or rank
+appendix entries, artifacts, rights status, risk, reproducibility, coverage,
+sources, or securities, recommend allocations, optimize strategies, emit
+executable advice, imply production readiness, or claim profitability.
+
+`docs/STAGE_PLAN.md` now contains the full Stage 27 readiness specification for
+a local/offline `local_limitation_register` report-input kind. Stage 27 may
+describe only reviewer-supplied limitation labels, affected report section
+labels, local evidence or artifact paths, scope notes, mitigation notes, and
+limitation notes, and it must not execute commands, run checks from report
+inputs, read artifact/evidence/source contents, verify outputs, verify local
+environments, approve distribution, read raw private data contents, fetch
+remote data, add adapters, use account or portfolio data, use live feeds, score
+or rank limitations, appendix entries, artifacts, rights status, risk,
+reproducibility, coverage, sources, or securities, recommend allocations,
+optimize strategies, emit executable advice, imply production readiness, or
+claim profitability.
+
+Stage 27 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local limitation-register descriptor referenced by
+the manifest, renders a separate descriptive limitation-register section,
+reports missing optional limitation-register descriptors as not supplied,
+rejects secret-like fields, source-content/excerpt fields, and remote URLs,
+and does not execute commands, run checks from report inputs, read
+artifact/evidence/source contents, verify outputs, verify local environments,
+approve distribution, read raw private data contents, embed private or
+proprietary excerpts, add adapters, fetch remote data, score or rank
+limitations, appendix entries, artifacts, rights status, risk, reproducibility,
+coverage, sources, or securities, recommend allocations, optimize strategies,
+emit executable advice, imply production readiness, or claim profitability.
+
+`docs/STAGE_PLAN.md` now contains the full Stage 28 readiness specification for
+a local/offline `local_open_questions` report-input kind. Stage 28 may describe
+only reviewer-supplied open question labels, affected report section labels,
+local reference paths, owner labels, status labels, and limitation notes, and
+it must not execute commands, run checks from report inputs, read artifact/
+evidence/source contents, verify outputs, verify local environments, approve
+decisions, read raw private data contents, fetch remote data, add adapters, use
+account or portfolio data, use live feeds, score or rank open questions,
+limitations, appendix entries, artifacts, rights status, risk, reproducibility,
+coverage, sources, or securities, recommend allocations, optimize strategies,
+emit executable advice, imply production readiness, or claim profitability.
+
+Stage 28 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local open-questions descriptor referenced by the
+manifest, renders a separate descriptive open-questions section, reports
+missing optional open-questions descriptors as not supplied, rejects
+secret-like fields, source-content/excerpt fields, and remote URLs, and does
+not execute commands, run checks from report inputs, read artifact/evidence/
+source contents, verify outputs, verify local environments, approve decisions,
+read raw private data contents, embed private or proprietary excerpts, add
+adapters, fetch remote data, score or rank open questions, limitations,
+appendix entries, artifacts, rights status, risk, reproducibility, coverage,
+sources, or securities, recommend allocations, optimize strategies, emit
+executable advice, imply production readiness, or claim profitability.
+
+`docs/STAGE_PLAN.md` now contains the full Stage 29 readiness specification for
+a local/offline `local_decision_log` report-input kind. Stage 29 may describe
+only reviewer-supplied decision labels, decision context labels, local
+reference paths, owner labels, status labels, rationale notes, and limitation
+notes, and it must not execute commands, run checks from report inputs, read
+artifact/evidence/source contents, verify outputs, verify local environments,
+approve decisions, read raw private data contents, fetch remote data, add
+adapters, use account or portfolio data, use live feeds, score or rank
+decisions, open questions, limitations, appendix entries, artifacts, rights
+status, risk, reproducibility, coverage, sources, or securities, recommend
+allocations, optimize strategies, emit executable advice, imply production
+readiness, or claim profitability.
+
+Stage 29 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local decision-log descriptor referenced by the
+manifest, renders a separate descriptive decision-log section, reports missing
+optional decision-log descriptors as not supplied, rejects secret-like fields,
+source-content/excerpt fields, and remote URLs, and does not execute commands,
+run checks from report inputs, read artifact/evidence/source contents, verify
+outputs, verify local environments, approve decisions, read raw private data
+contents, embed private or proprietary excerpts, add adapters, fetch remote
+data, score or rank decisions, open questions, limitations, appendix entries,
+artifacts, rights status, risk, reproducibility, coverage, sources, or
+securities, recommend allocations, optimize strategies, emit executable
+advice, imply production readiness, or claim profitability.
+
+`docs/STAGE_PLAN.md` now contains the full Stage 30 readiness specification for
+a local/offline `local_follow_up_register` report-input kind. Stage 30 may
+describe only reviewer-supplied follow-up labels, related report section
+labels, local reference paths, owner labels, status labels, tracking notes, and
+limitation notes, and it must not execute commands, run checks from report
+inputs, execute follow-ups, read artifact/evidence/source contents, verify
+outputs, verify local environments, approve decisions, read raw private data
+contents, fetch remote data, add adapters, use account or portfolio data, use
+live feeds, score or rank follow-ups, decisions, open questions, limitations,
+appendix entries, artifacts, rights status, risk, reproducibility, coverage,
+sources, or securities, recommend allocations, optimize strategies, emit
+executable advice, imply production readiness, or claim profitability.
+
+Stage 30 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local follow-up-register descriptor referenced by
+the manifest, renders a separate descriptive follow-up section, reports
+missing optional follow-up-register descriptors as not supplied, rejects
+secret-like fields, source-content/excerpt fields, and remote URLs, and does
+not execute commands, run checks from report inputs, execute follow-ups, read
+artifact/evidence/source contents, verify outputs, verify local environments,
+approve decisions, read raw private data contents, embed private or proprietary
+excerpts, add adapters, fetch remote data, score or rank follow-ups,
+decisions, open questions, limitations, appendix entries, artifacts, rights
+status, risk, reproducibility, coverage, sources, or securities, recommend
+allocations, optimize strategies, emit executable advice, imply production
+readiness, or claim profitability.
+
+`docs/STAGE_PLAN.md` now contains the full Stage 31 readiness specification for
+a local/offline `local_version_notes` report-input kind. Stage 31 may describe
+only reviewer-supplied report version labels, local artifact paths,
+change-summary labels, owner labels, status labels, and limitation notes, and
+it must not execute commands, run checks from report inputs, execute
+follow-ups, approve distribution, read artifact/evidence/source contents,
+verify outputs, verify local environments, approve decisions, read raw private
+data contents, fetch remote data, add adapters, use account or portfolio data,
+use live feeds, score or rank versions, follow-ups, decisions, open questions,
+limitations, appendix entries, artifacts, rights status, risk,
+reproducibility, coverage, sources, or securities, recommend allocations,
+optimize strategies, emit executable advice, imply production readiness, or
+claim profitability.
+
+Stage 31 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local version-notes descriptor referenced by the
+manifest, renders a separate descriptive version-notes section, reports
+missing optional version-notes descriptors as not supplied, rejects secret-like
+fields, source-content/excerpt fields, and remote URLs, and does not execute
+commands, run checks from report inputs, execute follow-ups, approve
+distribution, read artifact/evidence/source contents, verify outputs, verify
+local environments, approve decisions, read raw private data contents, embed
+private or proprietary excerpts, add adapters, fetch remote data, score or rank
+versions, follow-ups, decisions, open questions, limitations, appendix entries,
+artifacts, rights status, risk, reproducibility, coverage, sources, or
+securities, recommend allocations, optimize strategies, emit executable
+advice, imply production readiness, or claim profitability.
+
+`docs/STAGE_PLAN.md` now contains the full Stage 32 readiness specification for
+a local/offline `local_distribution_checklist` report-input kind. Stage 32 may
+describe only reviewer-supplied distribution item labels, related artifact
+paths, readiness status labels, owner labels, review notes, and limitation
+notes, and it must not execute commands, run checks from report inputs, execute
+follow-ups, approve distribution, verify rights or licenses, read artifact/
+evidence/source contents, verify outputs, verify local environments, approve
+decisions, read raw private data contents, fetch remote data, add adapters, use
+account or portfolio data, use live feeds, score or rank distribution items,
+versions, follow-ups, decisions, open questions, limitations, appendix entries,
+artifacts, rights status, risk, reproducibility, coverage, sources, or
+securities, recommend allocations, optimize strategies, emit executable
+advice, imply production readiness, or claim profitability.
+
+Stage 32 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local distribution-checklist descriptor referenced
+by the manifest, renders a separate descriptive distribution-checklist section,
+reports missing optional descriptors as not supplied, rejects secret-like
+fields, source-content/excerpt fields, and remote URLs, and does not execute
+commands, run checks from report inputs, execute follow-ups, approve
+distribution, verify rights or licenses, read artifact/evidence/source
+contents, verify outputs, verify local environments, approve decisions, read
+raw private data contents, embed private or proprietary excerpts, add adapters,
+fetch remote data, score or rank distribution items, versions, follow-ups,
+decisions, open questions, limitations, appendix entries, artifacts, rights
+status, risk, reproducibility, coverage, sources, or securities, recommend
+allocations, optimize strategies, emit executable advice, imply production
+readiness, or claim profitability.
+
+`docs/STAGE_PLAN.md` now contains the full Stage 33 readiness specification for
+a local/offline `local_handoff_notes` report-input kind. Stage 33 may describe
+only reviewer-supplied handoff labels, related artifact paths, recipient or
+owner labels, status labels, handoff notes, and limitation notes, and it must
+not execute commands, run checks from report inputs, execute follow-ups,
+approve distribution, verify rights or licenses, read artifact/evidence/source
+contents, verify outputs, verify local environments, approve decisions, read
+raw private data contents, fetch remote data, add adapters, use account or
+portfolio data, use live feeds, score or rank handoffs, distribution items,
+versions, follow-ups, decisions, open questions, limitations, appendix entries,
+artifacts, rights status, risk, reproducibility, coverage, sources, or
+securities, recommend allocations, optimize strategies, emit executable
+advice, imply production readiness, or claim profitability.
+
+Stage 33 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local handoff-notes descriptor referenced by the
+manifest, renders a separate descriptive handoff-notes section, reports missing
+optional descriptors as not supplied, rejects secret-like fields,
+source-content/excerpt fields, and remote URLs, and does not execute commands,
+run checks from report inputs, execute follow-ups, approve distribution, verify
+rights or licenses, read artifact/evidence/source contents, verify outputs,
+verify local environments, approve decisions, read raw private data contents,
+embed private or proprietary excerpts, add adapters, fetch remote data, score
+or rank handoffs, distribution items, versions, follow-ups, decisions, open
+questions, limitations, appendix entries, artifacts, rights status, risk,
+reproducibility, coverage, sources, or securities, recommend allocations,
+optimize strategies, emit executable advice, imply production readiness, or
+claim profitability.
+
+`docs/STAGE_PLAN.md` now contains the full Stage 34 readiness specification for
+a local/offline `local_archive_notes` report-input kind. Stage 34 may describe
+only reviewer-supplied archive labels, related artifact paths, archive status
+labels, owner labels, archive notes, and limitation notes, and it must not
+execute commands, run checks from report inputs, move or delete files, decide
+retention policy, approve distribution, verify rights or licenses, read
+artifact/evidence/source contents, verify outputs, verify local environments,
+approve decisions, read raw private data contents, fetch remote data, add
+adapters, use account or portfolio data, use live feeds, score or rank archive
+readiness, handoffs, distribution items, versions, follow-ups, decisions, open
+questions, limitations, appendix entries, artifacts, rights status, risk,
+reproducibility, coverage, sources, or securities, recommend allocations,
+optimize strategies, emit executable advice, imply production readiness, or
+claim profitability.
+
+Stage 34 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local archive-notes descriptor referenced by the
+manifest, renders a separate descriptive archive-notes section, reports missing
+optional descriptors as not supplied, rejects secret-like fields,
+source-content/excerpt fields, and remote URLs, and does not execute commands,
+run checks from report inputs, execute follow-ups, move or delete files, decide
+retention policy, approve distribution, verify rights or licenses, read
+artifact/evidence/source contents, verify outputs, verify local environments,
+approve decisions, read raw private data contents, embed private or
+proprietary excerpts, add adapters, fetch remote data, score or rank archive
+readiness, handoffs, distribution items, versions, follow-ups, decisions, open
+questions, limitations, appendix entries, artifacts, rights status, risk,
+reproducibility, coverage, sources, or securities, recommend allocations,
+optimize strategies, emit executable advice, imply production readiness, or
+claim profitability.
+
+`docs/STAGE_PLAN.md` now contains the full Stage 35 readiness specification for
+a local/offline `local_delivery_notes` report-input kind. Stage 35 may describe
+only reviewer-supplied delivery labels, related artifact paths, recipient
+labels, delivery status labels, delivery notes, and limitation notes, and it
+must not execute commands, run checks from report inputs, transfer files,
+approve distribution, verify rights or licenses, read artifact/evidence/source
+contents, verify outputs, verify local environments, approve decisions, read
+raw private data contents, fetch remote data, add adapters, use account or
+portfolio data, use live feeds, score or rank delivery readiness, archive
+readiness, handoffs, distribution items, versions, follow-ups, decisions, open
+questions, limitations, appendix entries, artifacts, rights status, risk,
+reproducibility, coverage, sources, or securities, recommend allocations,
+optimize strategies, emit executable advice, imply production readiness, or
+claim profitability.
+
+Next checkpoint: Stage 35 implementation only.
+
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 35 local/offline local_delivery_notes report-input support, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, command execution from report inputs, validation execution from report inputs, follow-up execution, file movement, deletion, or transfer, retention-policy decisions, artifact/evidence/source-content reads, output verification, local environment verification, distribution approval, rights/license verification, decision approval, rights/risk/reproducibility/coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
 
 ## Important files
 
@@ -499,8 +914,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   Markdown report generator for Stage 6 logs and explicit fill assumptions.
 - `scripts/07_research_report.py`: root wrapper for Stage 7 reporting.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
-  10/12/13/14/15/16/17/18/19/20/21/22 offline paper research report-pack generator.
-- `scripts/10_paper_report_pack.py`: root wrapper for Stage 10/12/13/14/15/16/17/18/19/20/21/22
+  10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33/34 offline paper research report-pack generator.
+- `scripts/10_paper_report_pack.py`: root wrapper for Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33/34
   report packs.
 - `tests/test_kalshi_client.py`: mocked HTTP coverage for the Stage 2 client.
 - `tests/test_kalshi_orderbook.py`: normalizer coverage.
@@ -519,7 +934,7 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   normalization, guarded public client, and malformed-book coverage.
 - `tests/test_sec_edgar_adapter.py`: Stage 9 SEC companyfacts normalization,
   guarded public client, explicit User-Agent, and malformed-value coverage.
-- `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22 report-pack coverage
+- `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33/34 report-pack coverage
   for observed metrics, source inventory, missing optional inputs, local SEC
   facts, manifest metadata, local run-comparison metadata, unsafe
   manifest/comparison rejection, local validation-summary metadata, unsafe
@@ -531,7 +946,18 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   term-glossary rejection, local assumption-register metadata, unsafe
   assumption-register rejection, local coverage-matrix metadata, unsafe
   coverage-matrix rejection, local reproducibility-checklist metadata, unsafe
-  reproducibility-checklist rejection, and CLI output.
+  reproducibility-checklist rejection, local risk-review metadata, unsafe
+  risk-review rejection, local data-rights-review metadata, unsafe
+  data-rights-review rejection, local artifact-inventory metadata, unsafe
+  artifact-inventory rejection, local appendix-index metadata, unsafe
+  appendix-index rejection, local limitation-register metadata, unsafe
+  limitation-register rejection, local open-questions metadata, unsafe
+  open-questions rejection, local decision-log metadata, unsafe decision-log
+  rejection, local follow-up-register metadata, unsafe follow-up-register
+  rejection, local version-notes metadata, unsafe version-notes rejection,
+  local distribution-checklist metadata, unsafe distribution-checklist
+  rejection, local handoff-notes metadata, unsafe handoff-notes rejection,
+  local archive-notes metadata, unsafe archive-notes rejection, and CLI output.
 
 ## Commands that currently pass
 
@@ -627,6 +1053,26 @@ skills as accelerators rather than blockers, reserve Ponytail, TDD, grill-me,
 and handoff for the narrow cases named there, and keep skill use bounded unless
 a stop gate is triggered.
 
+`docs/codex_long_running_controller.md` now uses delivery-unit batching for
+staged publishes. Internal checkpoints are not publish checkpoints. Codex
+should work on one `codex/` branch per coherent delivery unit and publish only
+after the unit is complete, validated, risk-classified, reviewed when needed,
+and the docs/logs/handoff are updated. Readiness clarification, implementation,
+tests, docs/log/changelog updates, handoff updates, and due passing audit notes
+may be folded into the same delivery branch when they are one coherent unit.
+Do not create PRs for every small docs, handoff, or audit edit, and do not create
+standalone handoff-only or audit-only PRs unless the controller risk/stop rules
+or lack of an active delivery branch require them.
+
+The controller now also has a token-economical optional-skill policy. The
+project Skill and token-budget rules stay default; TDD is for behavior changes;
+Ponytail review is for final publish of implementation diffs; Matt Pocock
+`grill-with-docs` is only for ambiguous/high-risk design or domain terminology
+drift; EDD/eval-before-ship style is used only if installed and useful, or by
+the equivalent checklist; and Skill Maker / skill-creator is reserved for
+workflows that have repeated at least twice. If an optional skill is missing,
+renamed, or noisy, use the equivalent checklist instead of debugging the skill.
+
 ## Safety boundaries
 
 - Do not add credentials or secrets.
@@ -639,27 +1085,26 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Stage 23 local risk-review report-input implementation only. Start only after
-reconfirming clean synced `main`, CI, branch protection, required `Validate`
-status, local validation, and whether the owner-direct fast path or PR path
-applies.
+Stage 35 implementation only. Start only after reconfirming clean synced
+`main`, CI, branch protection, required `Validate` status, local validation,
+and whether the owner-direct fast path or PR path applies.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Implement only the Stage 23 local/offline
-`local_risk_review` report-input kind for the paper report pack, with offline
-tests and docs updates; do not execute commands from report inputs, run checks
-from report inputs, evaluate policies, run risk checks, place orders, read
-evidence contents, read source contents, read raw private data contents, embed
-private or proprietary excerpts, verify local environments or outputs, add new
-market-data adapters, broker integration, credentials, account data, portfolio
-data, live quote feeds, paid-vendor data, WebSockets, remote fetching,
-production endpoints, strategy optimization, risk/reproducibility/coverage/
-source/security ranking, allocation advice, executable advice,
-production-readiness claims, unsupported data redistribution, or profitability
-claims.
+the verified current handoff. Implement only Stage 35 local/offline
+`local_delivery_notes` report-input support, and do not add new market-data
+adapters, broker integration, credentials, account data, portfolio data, live
+quote feeds, paid-vendor data, WebSockets, remote fetching, production
+endpoints, command execution from report inputs, validation execution from
+report inputs, follow-up execution, file movement, deletion, or transfer,
+retention-policy decisions, artifact/evidence/source-content reads, output
+verification, local environment verification, distribution approval,
+rights/license verification, decision approval,
+rights/risk/reproducibility/coverage/source/security ranking, allocation
+advice, executable advice, production-readiness claims, unsupported data
+redistribution, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-25 23:31:08 -07:00
+2026-06-26 16:07:37 -07:00

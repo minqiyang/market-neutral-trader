@@ -573,6 +573,362 @@ visible in the report pack without executing checks, reading evidence contents,
 evaluating policies, placing orders, scoring risk, producing advice, or
 implying production readiness.
 
+## Stage 23 local risk-review input
+
+Stage 23 added support for `local_risk_review` manifest entries in the paper
+report pack. The implementation reads a local risk-review descriptor as
+metadata, renders a separate Markdown section, reports missing optional
+risk-review descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not execute checks, evaluate policies, run risk
+checks, place orders, or read evidence/source files referenced by the
+descriptor. It renders reviewer-supplied risk-control labels, boundary labels,
+mitigation notes, review status labels, evidence paths, and limitation notes as
+descriptive context without scoring risk, producing advice, or implying
+production readiness.
+
+After Stage 23, the next safe report-input kind is a data-rights review. The
+clarified Stage 24 boundary allows a local data-rights descriptor to record
+reviewer-supplied data labels, rights status labels, permitted-use notes,
+restriction notes, local evidence paths, and limitation notes.
+
+The boundary stays descriptive. Stage 24 should make data-rights metadata
+visible in the report pack without reading evidence contents, determining legal
+rights, verifying licenses, deciding redistribution permissions, scoring
+rights status, producing advice, or implying production readiness.
+
+## Stage 24 local data-rights-review input
+
+Stage 24 added support for `local_data_rights_review` manifest entries in the
+paper report pack. The implementation reads a local data-rights descriptor as
+metadata, renders a separate Markdown section, reports missing optional
+data-rights-review descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read evidence/source files referenced by the
+descriptor, determine legal rights, verify licenses, decide redistribution
+permissions, or evaluate policies. It renders reviewer-supplied data labels,
+rights status labels, permitted-use notes, restriction notes, evidence paths,
+and limitation notes as descriptive context without scoring rights status,
+producing advice, or implying production readiness.
+
+After Stage 24, the next safe report-input kind is an artifact inventory. The
+clarified Stage 25 boundary allows a local artifact-inventory descriptor to
+record reviewer-supplied generated artifact labels, artifact type labels,
+local paths, generation-source labels, intended report-use notes, and
+limitation notes.
+
+The boundary stays descriptive. Stage 25 should make artifact-inventory
+metadata visible in the report pack without reading artifact contents,
+verifying outputs, verifying local environments, ranking artifacts, producing
+advice, or implying production readiness.
+
+## Stage 25 local artifact-inventory input
+
+Stage 25 added support for `local_artifact_inventory` manifest entries in the
+paper report pack. The implementation reads a local artifact-inventory
+descriptor as metadata, renders a separate Markdown section, reports missing
+optional artifact-inventory descriptors as not supplied, and rejects
+secret-like fields, source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/source files referenced by the
+descriptor, verify outputs, or verify local environments. It renders
+reviewer-supplied generated artifact labels, artifact type labels, local paths,
+generation-source labels, intended report-use notes, and limitation notes as
+descriptive context without ranking artifacts, producing advice, or implying
+production readiness.
+
+After Stage 25, the next safe report-input kind is an appendix index. The
+clarified Stage 26 boundary allows a local appendix-index descriptor to record
+reviewer-supplied appendix entry labels, report section labels, local artifact
+paths, appendix purpose notes, and limitation notes.
+
+The boundary stays descriptive. Stage 26 should make appendix-index metadata
+visible in the report pack without reading artifact contents, verifying
+outputs, approving distribution, ranking appendix entries, producing advice, or
+implying production readiness.
+
+## Stage 26 local appendix-index input
+
+Stage 26 added support for `local_appendix_index` manifest entries in the
+paper report pack. The implementation reads a local appendix-index descriptor
+as metadata, renders a separate Markdown section, reports missing optional
+appendix-index descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/source files referenced by the
+descriptor, verify outputs, verify local environments, or approve
+distribution. It renders reviewer-supplied appendix entry labels, report
+section labels, local artifact paths, appendix purpose notes, and limitation
+notes as descriptive context without ranking appendix entries, producing
+advice, or implying production readiness.
+
+After Stage 26, the next safe report-input kind is a limitation register. The
+clarified Stage 27 boundary allows a local limitation-register descriptor to
+record reviewer-supplied limitation labels, affected report section labels,
+local evidence or artifact paths, scope notes, mitigation notes, and limitation
+notes.
+
+The boundary stays descriptive. Stage 27 should make limitation-register
+metadata visible in the report pack without reading referenced contents,
+verifying outputs, scoring limitations, producing advice, or implying
+production readiness.
+
+## Stage 27 local limitation-register input
+
+Stage 27 added support for `local_limitation_register` manifest entries in the
+paper report pack. The implementation reads a local limitation-register
+descriptor as metadata, renders a separate Markdown section, reports missing
+optional limitation-register descriptors as not supplied, and rejects
+secret-like fields, source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, or approve
+distribution. It renders reviewer-supplied limitation labels, affected report
+section labels, local evidence or artifact paths, scope notes, mitigation
+notes, and limitation notes as descriptive context without scoring limitations,
+producing advice, or implying production readiness.
+
+After Stage 27, the next safe report-input kind is an open-questions register.
+The clarified Stage 28 boundary allows a local open-questions descriptor to
+record reviewer-supplied open question labels, affected report section labels,
+local reference paths, owner labels, status labels, and limitation notes.
+
+The boundary stays descriptive. Stage 28 should make open-question metadata
+visible in the report pack without reading referenced contents, verifying
+outputs, scoring questions, approving decisions, producing advice, or implying
+production readiness.
+
+## Stage 28 local open-questions input
+
+Stage 28 added support for `local_open_questions` manifest entries in the
+paper report pack. The implementation reads a local open-questions descriptor
+as metadata, renders a separate Markdown section, reports missing optional
+open-questions descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, or approve
+decisions. It renders reviewer-supplied open question labels, affected report
+section labels, local reference paths, owner labels, status labels, and
+limitation notes as descriptive context without scoring questions, producing
+advice, or implying production readiness.
+
+After Stage 28, the next safe report-input kind is a decision log. The
+clarified Stage 29 boundary allows a local decision-log descriptor to record
+reviewer-supplied decision labels, decision context labels, local reference
+paths, owner labels, status labels, rationale notes, and limitation notes.
+
+The boundary stays descriptive. Stage 29 should make decision-log metadata
+visible in the report pack without reading referenced contents, approving
+decisions, scoring decisions, producing advice, or implying production
+readiness.
+
+## Compact governance audit after Stage 29 readiness
+
+The mandatory audit after Stage 28 readiness, Stage 28 implementation, and
+Stage 29 readiness passed. Local `main` was synced with `origin/main`, the
+latest `main` `Validate` run passed, branch protection still required strict
+`Validate`, there were no open pull requests, and the handoff continued to
+point at Stage 29 implementation only.
+
+## Stage 29 local decision-log input
+
+Stage 29 added support for `local_decision_log` manifest entries in the paper
+report pack. The implementation reads a local decision-log descriptor as
+metadata, renders a separate Markdown section, reports missing optional
+decision-log descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, or approve
+decisions. It renders reviewer-supplied decision labels, decision context
+labels, local reference paths, owner labels, status labels, rationale notes,
+and limitation notes as descriptive context without scoring decisions,
+producing advice, or implying production readiness.
+
+After Stage 29, the next safe report-input kind is a follow-up register. The
+clarified Stage 30 boundary allows a local follow-up descriptor to record
+reviewer-supplied follow-up labels, related report section labels, local
+reference paths, owner labels, status labels, tracking notes, and limitation
+notes.
+
+The boundary stays descriptive. Stage 30 should make follow-up metadata visible
+in the report pack without reading referenced contents, executing follow-ups,
+scoring follow-ups, producing advice, or implying production readiness.
+
+## Stage 30 local follow-up register input
+
+Stage 30 added support for `local_follow_up_register` manifest entries in the
+paper report pack. The implementation reads a local follow-up-register
+descriptor as metadata, renders a separate Markdown section, reports missing
+optional follow-up descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, execute
+follow-ups, or approve decisions. It renders reviewer-supplied follow-up
+labels, related report section labels, local reference paths, owner labels,
+status labels, tracking notes, and limitation notes as descriptive context
+without scoring follow-ups, producing advice, or implying production
+readiness.
+
+## Compact governance audit after Stage 30 implementation
+
+The mandatory audit after Stage 29 implementation, Stage 30 readiness, and
+Stage 30 implementation passed. Local `main` was synced with `origin/main`, the
+latest `main` `Validate` run passed, branch protection still required strict
+`Validate`, there were no open pull requests, and the handoff reset to the
+next report-input-kind readiness clarification.
+
+After Stage 30, the next safe report-input kind is version notes. The
+clarified Stage 31 boundary allows a local version-notes descriptor to record
+reviewer-supplied report version labels, local artifact paths,
+change-summary labels, owner labels, status labels, and limitation notes.
+
+The boundary stays descriptive. Stage 31 should make version-note metadata
+visible in the report pack without reading artifact contents, approving
+distribution, scoring versions, producing advice, or implying production
+readiness.
+
+## Stage 31 local version-notes input
+
+Stage 31 added support for `local_version_notes` manifest entries in the paper
+report pack. The implementation reads a local version-notes descriptor as
+metadata, renders a separate Markdown section, reports missing optional
+version-notes descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, approve
+distribution, or approve decisions. It renders reviewer-supplied report
+version labels, local artifact paths, change-summary labels, owner labels,
+status labels, and limitation notes as descriptive context without scoring
+versions, producing advice, or implying production readiness.
+
+After Stage 31, the next safe report-input kind is a distribution checklist.
+The clarified Stage 32 boundary allows a local distribution-checklist
+descriptor to record reviewer-supplied distribution item labels, related
+artifact paths, readiness status labels, owner labels, review notes, and
+limitation notes.
+
+The boundary stays descriptive. Stage 32 should make distribution-checklist
+metadata visible in the report pack without reading artifact contents,
+approving distribution, verifying rights, scoring checklist items, producing
+advice, or implying production readiness.
+
+## Compact governance audit after Stage 32 readiness
+
+The mandatory audit after Stage 31 readiness, Stage 31 implementation, and
+Stage 32 readiness passed. Local `main` was synced with `origin/main`, the
+latest `main` `Validate` run passed, branch protection still required strict
+`Validate`, there were no open pull requests, and the handoff continued to
+point at Stage 32 implementation only.
+
+## Stage 32 local distribution-checklist input
+
+Stage 32 added support for `local_distribution_checklist` manifest entries in
+the paper report pack. The implementation reads a local distribution-checklist
+descriptor as metadata, renders a separate Markdown section, reports missing
+optional descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, approve
+distribution, verify rights, or approve decisions. It renders reviewer-supplied
+distribution item labels, related artifact paths, readiness status labels,
+owner labels, review notes, and limitation notes as descriptive context without
+scoring checklist items, producing advice, or implying production readiness.
+
+## Stage 33 readiness clarification
+
+After Stage 32, the next safe report-input kind is handoff notes. The clarified
+Stage 33 boundary allows a local handoff-notes descriptor to record
+reviewer-supplied handoff labels, related artifact paths, recipient or owner
+labels, status labels, handoff notes, and limitation notes.
+
+The boundary stays descriptive. Stage 33 should make handoff-note metadata
+visible in the report pack without reading artifact contents, approving
+distribution, verifying rights, scoring handoffs, producing advice, or implying
+production readiness.
+
+## Stage 33 local handoff-notes input
+
+Stage 33 added support for `local_handoff_notes` manifest entries in the paper
+report pack. The implementation reads a local handoff-notes descriptor as
+metadata, renders a separate Markdown section, reports missing optional
+descriptors as not supplied, and rejects secret-like fields, source-content or
+excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, approve
+distribution, verify rights, or approve decisions. It renders reviewer-supplied
+handoff labels, related artifact paths, recipient labels, status labels,
+handoff notes, and limitation notes as descriptive context without scoring
+handoffs, producing advice, or implying production readiness.
+
+## Compact governance audit after Stage 33 implementation
+
+The mandatory audit after Stage 32 implementation, Stage 33 readiness, and
+Stage 33 implementation passed. Local `main` was synced with `origin/main`, the
+latest `main` `Validate` run passed, branch protection still required strict
+`Validate`, there were no open pull requests, and the handoff reset to the
+next report-input-kind readiness clarification.
+
+## Stage 34 readiness clarification
+
+After Stage 33, the next safe report-input kind is archive notes. The clarified
+Stage 34 boundary allows a local archive-notes descriptor to record
+reviewer-supplied archive labels, related artifact paths, archive status
+labels, owner labels, archive notes, and limitation notes.
+
+The boundary stays descriptive. Stage 34 should make archive-note metadata
+visible in the report pack without reading artifact contents, moving or
+deleting files, deciding retention policy, scoring archive readiness, producing
+advice, or implying production readiness.
+
+## Stage 34 local archive-notes input
+
+Stage 34 added support for `local_archive_notes` manifest entries in the paper
+report pack. The implementation reads a local archive-notes descriptor as
+metadata, renders a separate Markdown section, reports missing optional
+descriptors as not supplied, and rejects secret-like fields, source-content or
+excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, move or delete
+files, decide retention policy, approve distribution, verify rights, or approve
+decisions. It renders reviewer-supplied archive labels, related artifact paths,
+archive status labels, owner labels, archive notes, and limitation notes as
+descriptive context without scoring archive readiness, producing advice, or
+implying production readiness.
+
+## Stage 35 readiness clarification
+
+After Stage 34, the next safe report-input kind is delivery notes. The
+clarified Stage 35 boundary allows a local delivery-notes descriptor to record
+reviewer-supplied delivery labels, related artifact paths, recipient labels,
+delivery status labels, delivery notes, and limitation notes.
+
+The boundary stays descriptive. Stage 35 should make delivery-note metadata
+visible in the report pack without transferring files, approving distribution,
+verifying rights, reading artifact contents, scoring delivery readiness,
+producing advice, or implying production readiness.
+
+## Compact governance audit after Stage 35 readiness
+
+The mandatory audit after Stage 34 readiness, Stage 34 implementation, and
+Stage 35 readiness passed. Local `main` was synced with `origin/main`, the
+latest `main` `Validate` run passed, branch protection still required strict
+`Validate`, force pushes and branch deletion were disabled, and there were no
+open pull requests.
+
+The handoff and stage plan agree on the next checkpoint. No risk drift,
+compliance drift, token/context drift, or user-judgment stop gate was found, so
+the checkpoint counter resets and the next checkpoint is Stage 35
+implementation only.
+
 ## Interview narrative
 
 A concise way to explain the current project:

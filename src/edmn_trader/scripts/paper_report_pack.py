@@ -48,6 +48,18 @@ class PaperReportPack:
     assumption_register_entry_count: int
     coverage_matrix_entry_count: int
     reproducibility_checklist_step_count: int
+    risk_review_entry_count: int
+    data_rights_review_entry_count: int
+    artifact_inventory_entry_count: int
+    appendix_index_entry_count: int
+    limitation_register_entry_count: int
+    open_questions_entry_count: int
+    decision_log_entry_count: int
+    follow_up_register_entry_count: int
+    version_notes_entry_count: int
+    distribution_checklist_entry_count: int
+    handoff_notes_entry_count: int
+    archive_notes_entry_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,6 +278,259 @@ class MissingReproducibilityChecklistInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalRiskReviewEntry:
+    """One descriptive local risk-review entry."""
+
+    source_label: str
+    risk_control_label: str
+    boundary_label: str
+    mitigation_note: str
+    review_status_label: str
+    evidence_path: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingRiskReviewInput:
+    """Optional local risk-review descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class LocalDataRightsReviewEntry:
+    """One descriptive local data-rights-review entry."""
+
+    source_label: str
+    data_label: str
+    rights_status_label: str
+    permitted_use_note: str
+    restriction_note: str
+    evidence_path: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingDataRightsReviewInput:
+    """Optional local data-rights-review descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class LocalArtifactInventoryEntry:
+    """One descriptive local artifact-inventory entry."""
+
+    source_label: str
+    artifact_label: str
+    artifact_type_label: str
+    local_path: str
+    generation_source_label: str
+    intended_report_use: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingArtifactInventoryInput:
+    """Optional local artifact-inventory descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class LocalAppendixIndexEntry:
+    """One descriptive local appendix-index entry."""
+
+    source_label: str
+    appendix_label: str
+    report_section_label: str
+    artifact_path: str
+    appendix_purpose_note: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingAppendixIndexInput:
+    """Optional local appendix-index descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class LocalLimitationRegisterEntry:
+    """One descriptive local limitation-register entry."""
+
+    source_label: str
+    limitation_label: str
+    affected_section_label: str
+    reference_path: str
+    scope_note: str
+    mitigation_note: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingLimitationRegisterInput:
+    """Optional local limitation-register descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class LocalOpenQuestionEntry:
+    """One descriptive local open-question entry."""
+
+    source_label: str
+    question_label: str
+    affected_section_label: str
+    reference_path: str
+    owner_label: str
+    status_label: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingOpenQuestionsInput:
+    """Optional local open-questions descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class LocalDecisionLogEntry:
+    """One descriptive local decision-log entry."""
+
+    source_label: str
+    decision_label: str
+    decision_context_label: str
+    reference_path: str
+    owner_label: str
+    status_label: str
+    rationale_note: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingDecisionLogInput:
+    """Optional local decision-log descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class LocalFollowUpRegisterEntry:
+    """One descriptive local follow-up register entry."""
+
+    source_label: str
+    follow_up_label: str
+    related_section_label: str
+    reference_path: str
+    owner_label: str
+    status_label: str
+    tracking_note: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingFollowUpRegisterInput:
+    """Optional local follow-up register descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class LocalVersionNoteEntry:
+    """One descriptive local version-note entry."""
+
+    source_label: str
+    version_label: str
+    artifact_path: str
+    change_summary_label: str
+    owner_label: str
+    status_label: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingVersionNotesInput:
+    """Optional local version-notes descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class LocalDistributionChecklistEntry:
+    """One descriptive local distribution-checklist entry."""
+
+    source_label: str
+    distribution_item_label: str
+    artifact_path: str
+    readiness_status_label: str
+    owner_label: str
+    review_note: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingDistributionChecklistInput:
+    """Optional local distribution-checklist descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class LocalHandoffNoteEntry:
+    """One descriptive local handoff-note entry."""
+
+    source_label: str
+    handoff_label: str
+    artifact_path: str
+    recipient_label: str
+    status_label: str
+    handoff_note: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingHandoffNotesInput:
+    """Optional local handoff-notes descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class LocalArchiveNoteEntry:
+    """One descriptive local archive-note entry."""
+
+    source_label: str
+    archive_label: str
+    artifact_path: str
+    archive_status_label: str
+    owner_label: str
+    archive_note: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingArchiveNotesInput:
+    """Optional local archive-notes descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
 SOURCE_CONTENT_FIELDS = frozenset(
     (
@@ -338,6 +603,54 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    risk_review_entries, missing_risk_review = _read_risk_review(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
+    data_rights_entries, missing_data_rights = _read_data_rights_review(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
+    artifact_inventory_entries, missing_artifact_inventory = _read_artifact_inventory(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
+    appendix_index_entries, missing_appendix_index = _read_appendix_index(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
+    limitation_register_entries, missing_limitation_register = _read_limitation_register(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
+    open_question_entries, missing_open_questions = _read_open_questions(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
+    decision_log_entries, missing_decision_log = _read_decision_log(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
+    follow_up_entries, missing_follow_up_register = _read_follow_up_register(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
+    version_note_entries, missing_version_notes = _read_version_notes(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
+    distribution_entries, missing_distribution_checklist = _read_distribution_checklist(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
+    handoff_note_entries, missing_handoff_notes = _read_handoff_notes(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
+    archive_note_entries, missing_archive_notes = _read_archive_notes(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -366,6 +679,30 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_coverage_matrix=missing_coverage_matrix,
             reproducibility_steps=reproducibility_steps,
             missing_reproducibility=missing_reproducibility,
+            risk_review_entries=risk_review_entries,
+            missing_risk_review=missing_risk_review,
+            data_rights_entries=data_rights_entries,
+            missing_data_rights=missing_data_rights,
+            artifact_inventory_entries=artifact_inventory_entries,
+            missing_artifact_inventory=missing_artifact_inventory,
+            appendix_index_entries=appendix_index_entries,
+            missing_appendix_index=missing_appendix_index,
+            limitation_register_entries=limitation_register_entries,
+            missing_limitation_register=missing_limitation_register,
+            open_question_entries=open_question_entries,
+            missing_open_questions=missing_open_questions,
+            decision_log_entries=decision_log_entries,
+            missing_decision_log=missing_decision_log,
+            follow_up_entries=follow_up_entries,
+            missing_follow_up_register=missing_follow_up_register,
+            version_note_entries=version_note_entries,
+            missing_version_notes=missing_version_notes,
+            distribution_entries=distribution_entries,
+            missing_distribution_checklist=missing_distribution_checklist,
+            handoff_note_entries=handoff_note_entries,
+            missing_handoff_notes=missing_handoff_notes,
+            archive_note_entries=archive_note_entries,
+            missing_archive_notes=missing_archive_notes,
         ),
         encoding="utf-8",
         newline="\n",
@@ -386,6 +723,18 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         assumption_register_entry_count=len(assumption_register_entries),
         coverage_matrix_entry_count=len(coverage_matrix_entries),
         reproducibility_checklist_step_count=len(reproducibility_steps),
+        risk_review_entry_count=len(risk_review_entries),
+        data_rights_review_entry_count=len(data_rights_entries),
+        artifact_inventory_entry_count=len(artifact_inventory_entries),
+        appendix_index_entry_count=len(appendix_index_entries),
+        limitation_register_entry_count=len(limitation_register_entries),
+        open_questions_entry_count=len(open_question_entries),
+        decision_log_entry_count=len(decision_log_entries),
+        follow_up_register_entry_count=len(follow_up_entries),
+        version_notes_entry_count=len(version_note_entries),
+        distribution_checklist_entry_count=len(distribution_entries),
+        handoff_notes_entry_count=len(handoff_note_entries),
+        archive_notes_entry_count=len(archive_note_entries),
     )
 
 
@@ -409,6 +758,18 @@ def render_summary(pack: PaperReportPack) -> str:
             f"assumption_register_entries={pack.assumption_register_entry_count}",
             f"coverage_matrix_entries={pack.coverage_matrix_entry_count}",
             f"reproducibility_checklist_steps={pack.reproducibility_checklist_step_count}",
+            f"risk_review_entries={pack.risk_review_entry_count}",
+            f"data_rights_review_entries={pack.data_rights_review_entry_count}",
+            f"artifact_inventory_entries={pack.artifact_inventory_entry_count}",
+            f"appendix_index_entries={pack.appendix_index_entry_count}",
+            f"limitation_register_entries={pack.limitation_register_entry_count}",
+            f"open_questions_entries={pack.open_questions_entry_count}",
+            f"decision_log_entries={pack.decision_log_entry_count}",
+            f"follow_up_register_entries={pack.follow_up_register_entry_count}",
+            f"version_notes_entries={pack.version_notes_entry_count}",
+            f"distribution_checklist_entries={pack.distribution_checklist_entry_count}",
+            f"handoff_notes_entries={pack.handoff_notes_entry_count}",
+            f"archive_notes_entries={pack.archive_notes_entry_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -1617,6 +1978,1338 @@ def _parse_reproducibility_checklist_step(
     )
 
 
+def _read_risk_review(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[tuple[LocalRiskReviewEntry, ...], tuple[MissingRiskReviewInput, ...]]:
+    if manifest_path is None:
+        return (), ()
+
+    risk_entries: list[LocalRiskReviewEntry] = []
+    missing: list[MissingRiskReviewInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_risk_review":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local risk-review input is missing: "
+                    f"{entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingRiskReviewInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        risk_entries.extend(
+            _read_risk_review_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(risk_entries), tuple(missing)
+
+
+def _read_risk_review_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalRiskReviewEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local risk-review descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="risk-review")
+
+    risks = payload.get("risks")
+    if not isinstance(risks, list):
+        msg = f"{path}: local risk-review descriptor must contain a risks list"
+        raise ValueError(msg)
+
+    parsed_risks: list[LocalRiskReviewEntry] = []
+    for index, item in enumerate(risks, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local risk-review entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="risk-review")
+        parsed_risks.append(
+            _parse_risk_review_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_risks)
+
+
+def _parse_risk_review_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalRiskReviewEntry:
+    required_fields = (
+        "risk_control_label",
+        "boundary_label",
+        "mitigation_note",
+        "review_status_label",
+        "evidence_path",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local risk-review entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    evidence_path = str(item["evidence_path"])
+    parsed = urlparse(evidence_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local risk-review entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalRiskReviewEntry(
+        source_label=source_label,
+        risk_control_label=str(item["risk_control_label"]),
+        boundary_label=str(item["boundary_label"]),
+        mitigation_note=str(item["mitigation_note"]),
+        review_status_label=str(item["review_status_label"]),
+        evidence_path=evidence_path,
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
+def _read_data_rights_review(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalDataRightsReviewEntry, ...],
+    tuple[MissingDataRightsReviewInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    rights_entries: list[LocalDataRightsReviewEntry] = []
+    missing: list[MissingDataRightsReviewInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_data_rights_review":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local data-rights-review input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingDataRightsReviewInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        rights_entries.extend(
+            _read_data_rights_review_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(rights_entries), tuple(missing)
+
+
+def _read_data_rights_review_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalDataRightsReviewEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local data-rights-review descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="data-rights-review")
+
+    rights = payload.get("rights")
+    if not isinstance(rights, list):
+        msg = f"{path}: local data-rights-review descriptor must contain a rights list"
+        raise ValueError(msg)
+
+    parsed_rights: list[LocalDataRightsReviewEntry] = []
+    for index, item in enumerate(rights, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local data-rights-review entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="data-rights-review")
+        parsed_rights.append(
+            _parse_data_rights_review_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_rights)
+
+
+def _parse_data_rights_review_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalDataRightsReviewEntry:
+    required_fields = (
+        "data_label",
+        "rights_status_label",
+        "permitted_use_note",
+        "restriction_note",
+        "evidence_path",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local data-rights-review entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    evidence_path = str(item["evidence_path"])
+    parsed = urlparse(evidence_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local data-rights-review entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalDataRightsReviewEntry(
+        source_label=source_label,
+        data_label=str(item["data_label"]),
+        rights_status_label=str(item["rights_status_label"]),
+        permitted_use_note=str(item["permitted_use_note"]),
+        restriction_note=str(item["restriction_note"]),
+        evidence_path=evidence_path,
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
+def _read_artifact_inventory(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalArtifactInventoryEntry, ...],
+    tuple[MissingArtifactInventoryInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    artifact_entries: list[LocalArtifactInventoryEntry] = []
+    missing: list[MissingArtifactInventoryInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_artifact_inventory":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local artifact-inventory input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingArtifactInventoryInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        artifact_entries.extend(
+            _read_artifact_inventory_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(artifact_entries), tuple(missing)
+
+
+def _read_artifact_inventory_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalArtifactInventoryEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local artifact-inventory descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="artifact-inventory")
+
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, list):
+        msg = f"{path}: local artifact-inventory descriptor must contain an artifacts list"
+        raise ValueError(msg)
+
+    parsed_artifacts: list[LocalArtifactInventoryEntry] = []
+    for index, item in enumerate(artifacts, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local artifact-inventory entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="artifact-inventory")
+        parsed_artifacts.append(
+            _parse_artifact_inventory_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_artifacts)
+
+
+def _parse_artifact_inventory_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalArtifactInventoryEntry:
+    required_fields = (
+        "artifact_label",
+        "artifact_type_label",
+        "local_path",
+        "generation_source_label",
+        "intended_report_use",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local artifact-inventory entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    local_path = str(item["local_path"])
+    parsed = urlparse(local_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local artifact-inventory entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalArtifactInventoryEntry(
+        source_label=source_label,
+        artifact_label=str(item["artifact_label"]),
+        artifact_type_label=str(item["artifact_type_label"]),
+        local_path=local_path,
+        generation_source_label=str(item["generation_source_label"]),
+        intended_report_use=str(item["intended_report_use"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
+def _read_appendix_index(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalAppendixIndexEntry, ...],
+    tuple[MissingAppendixIndexInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    appendix_entries: list[LocalAppendixIndexEntry] = []
+    missing: list[MissingAppendixIndexInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_appendix_index":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local appendix-index input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingAppendixIndexInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        appendix_entries.extend(
+            _read_appendix_index_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(appendix_entries), tuple(missing)
+
+
+def _read_appendix_index_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalAppendixIndexEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local appendix-index descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="appendix-index")
+
+    appendices = payload.get("appendices")
+    if not isinstance(appendices, list):
+        msg = f"{path}: local appendix-index descriptor must contain an appendices list"
+        raise ValueError(msg)
+
+    parsed_appendices: list[LocalAppendixIndexEntry] = []
+    for index, item in enumerate(appendices, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local appendix-index entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="appendix-index")
+        parsed_appendices.append(
+            _parse_appendix_index_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_appendices)
+
+
+def _parse_appendix_index_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalAppendixIndexEntry:
+    required_fields = (
+        "appendix_label",
+        "report_section_label",
+        "artifact_path",
+        "appendix_purpose_note",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local appendix-index entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    artifact_path = str(item["artifact_path"])
+    parsed = urlparse(artifact_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local appendix-index entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalAppendixIndexEntry(
+        source_label=source_label,
+        appendix_label=str(item["appendix_label"]),
+        report_section_label=str(item["report_section_label"]),
+        artifact_path=artifact_path,
+        appendix_purpose_note=str(item["appendix_purpose_note"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
+def _read_limitation_register(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalLimitationRegisterEntry, ...],
+    tuple[MissingLimitationRegisterInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    limitation_entries: list[LocalLimitationRegisterEntry] = []
+    missing: list[MissingLimitationRegisterInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_limitation_register":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local limitation-register input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingLimitationRegisterInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        limitation_entries.extend(
+            _read_limitation_register_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(limitation_entries), tuple(missing)
+
+
+def _read_limitation_register_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalLimitationRegisterEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local limitation-register descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="limitation-register")
+
+    limitations = payload.get("limitations")
+    if not isinstance(limitations, list):
+        msg = f"{path}: local limitation-register descriptor must contain a limitations list"
+        raise ValueError(msg)
+
+    parsed_limitations: list[LocalLimitationRegisterEntry] = []
+    for index, item in enumerate(limitations, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local limitation-register entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="limitation-register")
+        parsed_limitations.append(
+            _parse_limitation_register_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_limitations)
+
+
+def _parse_limitation_register_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalLimitationRegisterEntry:
+    required_fields = (
+        "limitation_label",
+        "affected_section_label",
+        "reference_path",
+        "scope_note",
+        "mitigation_note",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local limitation-register entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    reference_path = str(item["reference_path"])
+    parsed = urlparse(reference_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local limitation-register entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalLimitationRegisterEntry(
+        source_label=source_label,
+        limitation_label=str(item["limitation_label"]),
+        affected_section_label=str(item["affected_section_label"]),
+        reference_path=reference_path,
+        scope_note=str(item["scope_note"]),
+        mitigation_note=str(item["mitigation_note"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
+def _read_open_questions(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalOpenQuestionEntry, ...],
+    tuple[MissingOpenQuestionsInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    question_entries: list[LocalOpenQuestionEntry] = []
+    missing: list[MissingOpenQuestionsInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_open_questions":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local open-questions input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingOpenQuestionsInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        question_entries.extend(
+            _read_open_questions_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(question_entries), tuple(missing)
+
+
+def _read_open_questions_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalOpenQuestionEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local open-questions descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="open-questions")
+
+    questions = payload.get("questions")
+    if not isinstance(questions, list):
+        msg = f"{path}: local open-questions descriptor must contain a questions list"
+        raise ValueError(msg)
+
+    parsed_questions: list[LocalOpenQuestionEntry] = []
+    for index, item in enumerate(questions, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local open-questions entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="open-questions")
+        parsed_questions.append(
+            _parse_open_question_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_questions)
+
+
+def _parse_open_question_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalOpenQuestionEntry:
+    required_fields = (
+        "question_label",
+        "affected_section_label",
+        "reference_path",
+        "owner_label",
+        "status_label",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local open-questions entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    reference_path = str(item["reference_path"])
+    parsed = urlparse(reference_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local open-questions entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalOpenQuestionEntry(
+        source_label=source_label,
+        question_label=str(item["question_label"]),
+        affected_section_label=str(item["affected_section_label"]),
+        reference_path=reference_path,
+        owner_label=str(item["owner_label"]),
+        status_label=str(item["status_label"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
+def _read_decision_log(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalDecisionLogEntry, ...],
+    tuple[MissingDecisionLogInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    decision_entries: list[LocalDecisionLogEntry] = []
+    missing: list[MissingDecisionLogInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_decision_log":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local decision-log input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingDecisionLogInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        decision_entries.extend(
+            _read_decision_log_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(decision_entries), tuple(missing)
+
+
+def _read_decision_log_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalDecisionLogEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local decision-log descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="decision-log")
+
+    decisions = payload.get("decisions")
+    if not isinstance(decisions, list):
+        msg = f"{path}: local decision-log descriptor must contain a decisions list"
+        raise ValueError(msg)
+
+    parsed_decisions: list[LocalDecisionLogEntry] = []
+    for index, item in enumerate(decisions, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local decision-log entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="decision-log")
+        parsed_decisions.append(
+            _parse_decision_log_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_decisions)
+
+
+def _parse_decision_log_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalDecisionLogEntry:
+    required_fields = (
+        "decision_label",
+        "decision_context_label",
+        "reference_path",
+        "owner_label",
+        "status_label",
+        "rationale_note",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local decision-log entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    reference_path = str(item["reference_path"])
+    parsed = urlparse(reference_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local decision-log entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalDecisionLogEntry(
+        source_label=source_label,
+        decision_label=str(item["decision_label"]),
+        decision_context_label=str(item["decision_context_label"]),
+        reference_path=reference_path,
+        owner_label=str(item["owner_label"]),
+        status_label=str(item["status_label"]),
+        rationale_note=str(item["rationale_note"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
+def _read_follow_up_register(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalFollowUpRegisterEntry, ...],
+    tuple[MissingFollowUpRegisterInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    follow_up_entries: list[LocalFollowUpRegisterEntry] = []
+    missing: list[MissingFollowUpRegisterInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_follow_up_register":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local follow-up-register input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingFollowUpRegisterInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        follow_up_entries.extend(
+            _read_follow_up_register_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(follow_up_entries), tuple(missing)
+
+
+def _read_follow_up_register_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalFollowUpRegisterEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local follow-up-register descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(
+        payload,
+        path=path,
+        descriptor_label="follow-up-register",
+    )
+
+    follow_ups = payload.get("follow_ups")
+    if not isinstance(follow_ups, list):
+        msg = (
+            f"{path}: local follow-up-register descriptor must contain a "
+            "follow_ups list"
+        )
+        raise ValueError(msg)
+
+    parsed_follow_ups: list[LocalFollowUpRegisterEntry] = []
+    for index, item in enumerate(follow_ups, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local follow-up-register entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(
+            item,
+            path=path,
+            descriptor_label="follow-up-register",
+        )
+        parsed_follow_ups.append(
+            _parse_follow_up_register_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_follow_ups)
+
+
+def _parse_follow_up_register_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalFollowUpRegisterEntry:
+    required_fields = (
+        "follow_up_label",
+        "related_section_label",
+        "reference_path",
+        "owner_label",
+        "status_label",
+        "tracking_note",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local follow-up-register entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    reference_path = str(item["reference_path"])
+    parsed = urlparse(reference_path)
+    if parsed.scheme or parsed.netloc:
+        msg = (
+            f"{path}: local follow-up-register entry {index} "
+            "remote URL is not supported"
+        )
+        raise ValueError(msg)
+
+    return LocalFollowUpRegisterEntry(
+        source_label=source_label,
+        follow_up_label=str(item["follow_up_label"]),
+        related_section_label=str(item["related_section_label"]),
+        reference_path=reference_path,
+        owner_label=str(item["owner_label"]),
+        status_label=str(item["status_label"]),
+        tracking_note=str(item["tracking_note"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
+def _read_version_notes(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalVersionNoteEntry, ...],
+    tuple[MissingVersionNotesInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    version_entries: list[LocalVersionNoteEntry] = []
+    missing: list[MissingVersionNotesInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_version_notes":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local version-notes input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingVersionNotesInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        version_entries.extend(
+            _read_version_notes_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(version_entries), tuple(missing)
+
+
+def _read_version_notes_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalVersionNoteEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local version-notes descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="version-notes")
+
+    versions = payload.get("versions")
+    if not isinstance(versions, list):
+        msg = f"{path}: local version-notes descriptor must contain a versions list"
+        raise ValueError(msg)
+
+    parsed_versions: list[LocalVersionNoteEntry] = []
+    for index, item in enumerate(versions, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local version-notes entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="version-notes")
+        parsed_versions.append(
+            _parse_version_note_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_versions)
+
+
+def _parse_version_note_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalVersionNoteEntry:
+    required_fields = (
+        "version_label",
+        "artifact_path",
+        "change_summary_label",
+        "owner_label",
+        "status_label",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local version-notes entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    artifact_path = str(item["artifact_path"])
+    parsed = urlparse(artifact_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local version-notes entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalVersionNoteEntry(
+        source_label=source_label,
+        version_label=str(item["version_label"]),
+        artifact_path=artifact_path,
+        change_summary_label=str(item["change_summary_label"]),
+        owner_label=str(item["owner_label"]),
+        status_label=str(item["status_label"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
+def _read_distribution_checklist(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalDistributionChecklistEntry, ...],
+    tuple[MissingDistributionChecklistInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    checklist_entries: list[LocalDistributionChecklistEntry] = []
+    missing: list[MissingDistributionChecklistInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_distribution_checklist":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local distribution-checklist input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingDistributionChecklistInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        checklist_entries.extend(
+            _read_distribution_checklist_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(checklist_entries), tuple(missing)
+
+
+def _read_distribution_checklist_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalDistributionChecklistEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local distribution-checklist descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(
+        payload,
+        path=path,
+        descriptor_label="distribution-checklist",
+    )
+
+    items = payload.get("items")
+    if not isinstance(items, list):
+        msg = f"{path}: local distribution-checklist descriptor must contain an items list"
+        raise ValueError(msg)
+
+    parsed_items: list[LocalDistributionChecklistEntry] = []
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local distribution-checklist entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(
+            item,
+            path=path,
+            descriptor_label="distribution-checklist",
+        )
+        parsed_items.append(
+            _parse_distribution_checklist_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_items)
+
+
+def _parse_distribution_checklist_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalDistributionChecklistEntry:
+    required_fields = (
+        "distribution_item_label",
+        "artifact_path",
+        "readiness_status_label",
+        "owner_label",
+        "review_note",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local distribution-checklist entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    artifact_path = str(item["artifact_path"])
+    parsed = urlparse(artifact_path)
+    if parsed.scheme or parsed.netloc:
+        msg = (
+            f"{path}: local distribution-checklist entry {index} "
+            "remote URL is not supported"
+        )
+        raise ValueError(msg)
+
+    return LocalDistributionChecklistEntry(
+        source_label=source_label,
+        distribution_item_label=str(item["distribution_item_label"]),
+        artifact_path=artifact_path,
+        readiness_status_label=str(item["readiness_status_label"]),
+        owner_label=str(item["owner_label"]),
+        review_note=str(item["review_note"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
+def _read_handoff_notes(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalHandoffNoteEntry, ...],
+    tuple[MissingHandoffNotesInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    handoff_entries: list[LocalHandoffNoteEntry] = []
+    missing: list[MissingHandoffNotesInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_handoff_notes":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local handoff-notes input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingHandoffNotesInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        handoff_entries.extend(
+            _read_handoff_notes_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(handoff_entries), tuple(missing)
+
+
+def _read_handoff_notes_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalHandoffNoteEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local handoff-notes descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="handoff-notes")
+
+    notes = payload.get("notes")
+    if not isinstance(notes, list):
+        msg = f"{path}: local handoff-notes descriptor must contain a notes list"
+        raise ValueError(msg)
+
+    parsed_notes: list[LocalHandoffNoteEntry] = []
+    for index, item in enumerate(notes, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local handoff-notes entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="handoff-notes")
+        parsed_notes.append(
+            _parse_handoff_note_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_notes)
+
+
+def _parse_handoff_note_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalHandoffNoteEntry:
+    required_fields = (
+        "handoff_label",
+        "artifact_path",
+        "recipient_label",
+        "status_label",
+        "handoff_note",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local handoff-notes entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    artifact_path = str(item["artifact_path"])
+    parsed = urlparse(artifact_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local handoff-notes entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalHandoffNoteEntry(
+        source_label=source_label,
+        handoff_label=str(item["handoff_label"]),
+        artifact_path=artifact_path,
+        recipient_label=str(item["recipient_label"]),
+        status_label=str(item["status_label"]),
+        handoff_note=str(item["handoff_note"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
+def _read_archive_notes(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalArchiveNoteEntry, ...],
+    tuple[MissingArchiveNotesInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    archive_entries: list[LocalArchiveNoteEntry] = []
+    missing: list[MissingArchiveNotesInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_archive_notes":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local archive-notes input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingArchiveNotesInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        archive_entries.extend(
+            _read_archive_notes_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(archive_entries), tuple(missing)
+
+
+def _read_archive_notes_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalArchiveNoteEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local archive-notes descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="archive-notes")
+
+    notes = payload.get("notes")
+    if not isinstance(notes, list):
+        msg = f"{path}: local archive-notes descriptor must contain a notes list"
+        raise ValueError(msg)
+
+    parsed_notes: list[LocalArchiveNoteEntry] = []
+    for index, item in enumerate(notes, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local archive-notes entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="archive-notes")
+        parsed_notes.append(
+            _parse_archive_note_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_notes)
+
+
+def _parse_archive_note_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalArchiveNoteEntry:
+    required_fields = (
+        "archive_label",
+        "artifact_path",
+        "archive_status_label",
+        "owner_label",
+        "archive_note",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local archive-notes entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    artifact_path = str(item["artifact_path"])
+    parsed = urlparse(artifact_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local archive-notes entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalArchiveNoteEntry(
+        source_label=source_label,
+        archive_label=str(item["archive_label"]),
+        artifact_path=artifact_path,
+        archive_status_label=str(item["archive_status_label"]),
+        owner_label=str(item["owner_label"]),
+        archive_note=str(item["archive_note"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -1644,6 +3337,30 @@ def _render_markdown(
     missing_coverage_matrix: tuple[MissingCoverageMatrixInput, ...],
     reproducibility_steps: tuple[LocalReproducibilityChecklistStep, ...],
     missing_reproducibility: tuple[MissingReproducibilityChecklistInput, ...],
+    risk_review_entries: tuple[LocalRiskReviewEntry, ...],
+    missing_risk_review: tuple[MissingRiskReviewInput, ...],
+    data_rights_entries: tuple[LocalDataRightsReviewEntry, ...],
+    missing_data_rights: tuple[MissingDataRightsReviewInput, ...],
+    artifact_inventory_entries: tuple[LocalArtifactInventoryEntry, ...],
+    missing_artifact_inventory: tuple[MissingArtifactInventoryInput, ...],
+    appendix_index_entries: tuple[LocalAppendixIndexEntry, ...],
+    missing_appendix_index: tuple[MissingAppendixIndexInput, ...],
+    limitation_register_entries: tuple[LocalLimitationRegisterEntry, ...],
+    missing_limitation_register: tuple[MissingLimitationRegisterInput, ...],
+    open_question_entries: tuple[LocalOpenQuestionEntry, ...],
+    missing_open_questions: tuple[MissingOpenQuestionsInput, ...],
+    decision_log_entries: tuple[LocalDecisionLogEntry, ...],
+    missing_decision_log: tuple[MissingDecisionLogInput, ...],
+    follow_up_entries: tuple[LocalFollowUpRegisterEntry, ...],
+    missing_follow_up_register: tuple[MissingFollowUpRegisterInput, ...],
+    version_note_entries: tuple[LocalVersionNoteEntry, ...],
+    missing_version_notes: tuple[MissingVersionNotesInput, ...],
+    distribution_entries: tuple[LocalDistributionChecklistEntry, ...],
+    missing_distribution_checklist: tuple[MissingDistributionChecklistInput, ...],
+    handoff_note_entries: tuple[LocalHandoffNoteEntry, ...],
+    missing_handoff_notes: tuple[MissingHandoffNotesInput, ...],
+    archive_note_entries: tuple[LocalArchiveNoteEntry, ...],
+    missing_archive_notes: tuple[MissingArchiveNotesInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -1732,6 +3449,66 @@ def _render_markdown(
                 missing_reproducibility,
             ),
             "",
+            "## Local Risk Review",
+            "",
+            _render_risk_review(risk_review_entries, missing_risk_review),
+            "",
+            "## Local Data Rights Review",
+            "",
+            _render_data_rights_review(data_rights_entries, missing_data_rights),
+            "",
+            "## Local Artifact Inventory",
+            "",
+            _render_artifact_inventory(
+                artifact_inventory_entries,
+                missing_artifact_inventory,
+            ),
+            "",
+            "## Local Appendix Index",
+            "",
+            _render_appendix_index(appendix_index_entries, missing_appendix_index),
+            "",
+            "## Local Limitation Register",
+            "",
+            _render_limitation_register(
+                limitation_register_entries,
+                missing_limitation_register,
+            ),
+            "",
+            "## Local Open Questions",
+            "",
+            _render_open_questions(open_question_entries, missing_open_questions),
+            "",
+            "## Local Decision Log",
+            "",
+            _render_decision_log(decision_log_entries, missing_decision_log),
+            "",
+            "## Local Follow-Up Register",
+            "",
+            _render_follow_up_register(
+                follow_up_entries,
+                missing_follow_up_register,
+            ),
+            "",
+            "## Local Version Notes",
+            "",
+            _render_version_notes(version_note_entries, missing_version_notes),
+            "",
+            "## Local Distribution Checklist",
+            "",
+            _render_distribution_checklist(
+                distribution_entries,
+                missing_distribution_checklist,
+            ),
+            "",
+            "## Local Handoff Notes",
+            "",
+            _render_handoff_notes(handoff_note_entries, missing_handoff_notes),
+            "",
+            "## Local Archive Notes",
+            "",
+            _render_archive_notes(archive_note_entries, missing_archive_notes),
+            "",
             "## SEC Fundamentals",
             "",
             _render_sec_facts(sec_facts),
@@ -1743,6 +3520,12 @@ def _render_markdown(
             "- Fill assumptions are supplied explicitly or left as not supplied; they are "
             "not inferred.",
             "- This pack is descriptive, non-executable, and does not rank securities.",
+            "- Distribution checklist inputs are reviewer-supplied metadata only; this "
+            "pack does not approve distribution or verify rights.",
+            "- Handoff-note inputs are reviewer-supplied metadata only; this pack does "
+            "not approve distribution or verify rights.",
+            "- Archive-note inputs are reviewer-supplied metadata only; this pack does "
+            "not move files, decide retention policy, approve distribution, or verify rights.",
             "- This pack does not claim profitability or production readiness.",
             "",
         )
@@ -2039,6 +3822,322 @@ def _render_reproducibility_checklist(
     rows.extend(
         f"| {missing_input.display_label} | not supplied | {missing_input.local_path} | "
         "not supplied | not supplied | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_risk_review(
+    risk_entries: tuple[LocalRiskReviewEntry, ...],
+    missing_inputs: tuple[MissingRiskReviewInput, ...],
+) -> str:
+    if not risk_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local risk review | not supplied |"
+
+    rows = [
+        "| source | risk control | boundary | mitigation | review status | "
+        "evidence path | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.risk_control_label} | {entry.boundary_label} | "
+        f"{entry.mitigation_note} | {entry.review_status_label} | {entry.evidence_path} | "
+        f"{entry.limitation_note} |"
+        for entry in risk_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"not supplied | not supplied | {missing_input.local_path} | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_data_rights_review(
+    rights_entries: tuple[LocalDataRightsReviewEntry, ...],
+    missing_inputs: tuple[MissingDataRightsReviewInput, ...],
+) -> str:
+    if not rights_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local data rights review | not supplied |"
+
+    rows = [
+        "| source | data | rights status | permitted use | restriction | "
+        "evidence path | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.data_label} | {entry.rights_status_label} | "
+        f"{entry.permitted_use_note} | {entry.restriction_note} | {entry.evidence_path} | "
+        f"{entry.limitation_note} |"
+        for entry in rights_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"not supplied | not supplied | {missing_input.local_path} | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_artifact_inventory(
+    artifact_entries: tuple[LocalArtifactInventoryEntry, ...],
+    missing_inputs: tuple[MissingArtifactInventoryInput, ...],
+) -> str:
+    if not artifact_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local artifact inventory | not supplied |"
+
+    rows = [
+        "| source | artifact | artifact type | local path | generation source | "
+        "report use | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.artifact_label} | "
+        f"{entry.artifact_type_label} | {entry.local_path} | "
+        f"{entry.generation_source_label} | {entry.intended_report_use} | "
+        f"{entry.limitation_note} |"
+        for entry in artifact_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_appendix_index(
+    appendix_entries: tuple[LocalAppendixIndexEntry, ...],
+    missing_inputs: tuple[MissingAppendixIndexInput, ...],
+) -> str:
+    if not appendix_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local appendix index | not supplied |"
+
+    rows = [
+        "| source | appendix | report section | artifact path | purpose | limitation |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.appendix_label} | "
+        f"{entry.report_section_label} | {entry.artifact_path} | "
+        f"{entry.appendix_purpose_note} | {entry.limitation_note} |"
+        for entry in appendix_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_limitation_register(
+    limitation_entries: tuple[LocalLimitationRegisterEntry, ...],
+    missing_inputs: tuple[MissingLimitationRegisterInput, ...],
+) -> str:
+    if not limitation_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local limitation register | not supplied |"
+
+    rows = [
+        "| source | limitation | affected section | reference path | scope | "
+        "mitigation | limitation note |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.limitation_label} | "
+        f"{entry.affected_section_label} | {entry.reference_path} | "
+        f"{entry.scope_note} | {entry.mitigation_note} | {entry.limitation_note} |"
+        for entry in limitation_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_open_questions(
+    question_entries: tuple[LocalOpenQuestionEntry, ...],
+    missing_inputs: tuple[MissingOpenQuestionsInput, ...],
+) -> str:
+    if not question_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local open questions | not supplied |"
+
+    rows = [
+        "| source | question | affected section | reference path | owner | "
+        "status | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.question_label} | "
+        f"{entry.affected_section_label} | {entry.reference_path} | "
+        f"{entry.owner_label} | {entry.status_label} | {entry.limitation_note} |"
+        for entry in question_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_decision_log(
+    decision_entries: tuple[LocalDecisionLogEntry, ...],
+    missing_inputs: tuple[MissingDecisionLogInput, ...],
+) -> str:
+    if not decision_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local decision log | not supplied |"
+
+    rows = [
+        "| source | decision | context | reference path | owner | status | "
+        "rationale | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.decision_label} | "
+        f"{entry.decision_context_label} | {entry.reference_path} | "
+        f"{entry.owner_label} | {entry.status_label} | "
+        f"{entry.rationale_note} | {entry.limitation_note} |"
+        for entry in decision_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | "
+        "not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_follow_up_register(
+    follow_up_entries: tuple[LocalFollowUpRegisterEntry, ...],
+    missing_inputs: tuple[MissingFollowUpRegisterInput, ...],
+) -> str:
+    if not follow_up_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local follow-up register | not supplied |"
+
+    rows = [
+        "| source | follow-up | related section | reference path | owner | "
+        "status | tracking note | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.follow_up_label} | "
+        f"{entry.related_section_label} | {entry.reference_path} | "
+        f"{entry.owner_label} | {entry.status_label} | "
+        f"{entry.tracking_note} | {entry.limitation_note} |"
+        for entry in follow_up_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | "
+        "not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_version_notes(
+    version_entries: tuple[LocalVersionNoteEntry, ...],
+    missing_inputs: tuple[MissingVersionNotesInput, ...],
+) -> str:
+    if not version_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local version notes | not supplied |"
+
+    rows = [
+        "| source | version | artifact path | change summary | owner | status | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.version_label} | "
+        f"{entry.artifact_path} | {entry.change_summary_label} | "
+        f"{entry.owner_label} | {entry.status_label} | {entry.limitation_note} |"
+        for entry in version_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | "
+        "not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_distribution_checklist(
+    checklist_entries: tuple[LocalDistributionChecklistEntry, ...],
+    missing_inputs: tuple[MissingDistributionChecklistInput, ...],
+) -> str:
+    if not checklist_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local distribution checklist | not supplied |"
+
+    rows = [
+        "| source | item | artifact path | readiness status | owner | review note | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.distribution_item_label} | "
+        f"{entry.artifact_path} | {entry.readiness_status_label} | "
+        f"{entry.owner_label} | {entry.review_note} | {entry.limitation_note} |"
+        for entry in checklist_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | "
+        "not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_handoff_notes(
+    handoff_entries: tuple[LocalHandoffNoteEntry, ...],
+    missing_inputs: tuple[MissingHandoffNotesInput, ...],
+) -> str:
+    if not handoff_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local handoff notes | not supplied |"
+
+    rows = [
+        "| source | handoff | artifact path | recipient | status | handoff note | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.handoff_label} | "
+        f"{entry.artifact_path} | {entry.recipient_label} | "
+        f"{entry.status_label} | {entry.handoff_note} | {entry.limitation_note} |"
+        for entry in handoff_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | "
+        "not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_archive_notes(
+    archive_entries: tuple[LocalArchiveNoteEntry, ...],
+    missing_inputs: tuple[MissingArchiveNotesInput, ...],
+) -> str:
+    if not archive_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local archive notes | not supplied |"
+
+    rows = [
+        "| source | archive | artifact path | archive status | owner | archive note | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.archive_label} | "
+        f"{entry.artifact_path} | {entry.archive_status_label} | "
+        f"{entry.owner_label} | {entry.archive_note} | {entry.limitation_note} |"
+        for entry in archive_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | "
+        "not supplied | not supplied |"
         for missing_input in missing_inputs
     )
     return "\n".join(rows)
