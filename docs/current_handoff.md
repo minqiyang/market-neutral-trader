@@ -33,8 +33,7 @@ distribution-checklist report-input kind.
 
 ## Last completed stage
 
-Stage 32 readiness clarification: Local distribution-checklist report input,
-local/offline only.
+Compact governance audit after Stage 32 readiness clarification.
 
 ## Stage plan status
 
@@ -247,6 +246,16 @@ pushes and branch deletion are disabled, and the latest observed `main` CI run
 checkpoint, and no risk drift, compliance drift, token/context drift, or
 user-judgment stop gate was found. The next checkpoint is report-input-kind
 readiness clarification only.
+
+Audit after three more completed checkpoints: Stage 31 readiness
+clarification, Stage 31 implementation, and Stage 32 readiness clarification.
+Local `main` is synced with `origin/main` at `676b4bd`, the worktree is clean,
+there are no open pull requests, branch protection still requires strict
+`Validate`, force pushes and branch deletion are disabled, and the latest
+observed `main` CI run `28268711448` passed `Validate`. The handoff and stage
+plan agree on the next checkpoint, and no risk drift, compliance drift,
+token/context drift, or user-judgment stop gate was found. The next checkpoint
+is Stage 32 implementation only.
 
 `docs/STAGE_PLAN.md` now contains the clarified Stage 9 specification and
 `docs/stage9_equities_readiness.md` records the readiness review. Stage 9 is
