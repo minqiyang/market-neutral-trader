@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Completed the compact governance audit after Stage 29 readiness, confirming
+  synced `main`, passing `Validate`, branch protection, no open PRs, and no
+  drift before continuing to Stage 29 implementation.
 - Clarified Stage 29 readiness for a local/offline `local_decision_log`
   report-input kind that records decision labels, decision context labels,
   local reference paths, owner/status labels, rationale notes, and limitations
