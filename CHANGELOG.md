@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 31 local/offline `local_version_notes` report-input support to
+  the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields, source-content/excerpt
+  fields, and remote URLs.
 - Clarified Stage 31 readiness for a local/offline `local_version_notes`
   report-input kind that records report version labels, local artifact paths,
   change-summary labels, owner/status labels, and limitations without reading

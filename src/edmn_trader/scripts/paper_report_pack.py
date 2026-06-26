@@ -56,6 +56,7 @@ class PaperReportPack:
     open_questions_entry_count: int
     decision_log_entry_count: int
     follow_up_register_entry_count: int
+    version_notes_entry_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -443,6 +444,27 @@ class MissingFollowUpRegisterInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalVersionNoteEntry:
+    """One descriptive local version-note entry."""
+
+    source_label: str
+    version_label: str
+    artifact_path: str
+    change_summary_label: str
+    owner_label: str
+    status_label: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingVersionNotesInput:
+    """Optional local version-notes descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
 SOURCE_CONTENT_FIELDS = frozenset(
     (
@@ -547,6 +569,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    version_note_entries, missing_version_notes = _read_version_notes(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -591,6 +617,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_decision_log=missing_decision_log,
             follow_up_entries=follow_up_entries,
             missing_follow_up_register=missing_follow_up_register,
+            version_note_entries=version_note_entries,
+            missing_version_notes=missing_version_notes,
         ),
         encoding="utf-8",
         newline="\n",
@@ -619,6 +647,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         open_questions_entry_count=len(open_question_entries),
         decision_log_entry_count=len(decision_log_entries),
         follow_up_register_entry_count=len(follow_up_entries),
+        version_notes_entry_count=len(version_note_entries),
     )
 
 
@@ -650,6 +679,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"open_questions_entries={pack.open_questions_entry_count}",
             f"decision_log_entries={pack.decision_log_entry_count}",
             f"follow_up_register_entries={pack.follow_up_register_entry_count}",
+            f"version_notes_entries={pack.version_notes_entry_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -2743,6 +2773,115 @@ def _parse_follow_up_register_entry(
     )
 
 
+def _read_version_notes(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalVersionNoteEntry, ...],
+    tuple[MissingVersionNotesInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    version_entries: list[LocalVersionNoteEntry] = []
+    missing: list[MissingVersionNotesInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_version_notes":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local version-notes input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingVersionNotesInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        version_entries.extend(
+            _read_version_notes_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(version_entries), tuple(missing)
+
+
+def _read_version_notes_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalVersionNoteEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local version-notes descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="version-notes")
+
+    versions = payload.get("versions")
+    if not isinstance(versions, list):
+        msg = f"{path}: local version-notes descriptor must contain a versions list"
+        raise ValueError(msg)
+
+    parsed_versions: list[LocalVersionNoteEntry] = []
+    for index, item in enumerate(versions, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local version-notes entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="version-notes")
+        parsed_versions.append(
+            _parse_version_note_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_versions)
+
+
+def _parse_version_note_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalVersionNoteEntry:
+    required_fields = (
+        "version_label",
+        "artifact_path",
+        "change_summary_label",
+        "owner_label",
+        "status_label",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local version-notes entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    artifact_path = str(item["artifact_path"])
+    parsed = urlparse(artifact_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local version-notes entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalVersionNoteEntry(
+        source_label=source_label,
+        version_label=str(item["version_label"]),
+        artifact_path=artifact_path,
+        change_summary_label=str(item["change_summary_label"]),
+        owner_label=str(item["owner_label"]),
+        status_label=str(item["status_label"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -2786,6 +2925,8 @@ def _render_markdown(
     missing_decision_log: tuple[MissingDecisionLogInput, ...],
     follow_up_entries: tuple[LocalFollowUpRegisterEntry, ...],
     missing_follow_up_register: tuple[MissingFollowUpRegisterInput, ...],
+    version_note_entries: tuple[LocalVersionNoteEntry, ...],
+    missing_version_notes: tuple[MissingVersionNotesInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -2914,6 +3055,10 @@ def _render_markdown(
                 follow_up_entries,
                 missing_follow_up_register,
             ),
+            "",
+            "## Local Version Notes",
+            "",
+            _render_version_notes(version_note_entries, missing_version_notes),
             "",
             "## SEC Fundamentals",
             "",
@@ -3432,6 +3577,32 @@ def _render_follow_up_register(
     )
     rows.extend(
         f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | "
+        "not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_version_notes(
+    version_entries: tuple[LocalVersionNoteEntry, ...],
+    missing_inputs: tuple[MissingVersionNotesInput, ...],
+) -> str:
+    if not version_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local version notes | not supplied |"
+
+    rows = [
+        "| source | version | artifact path | change summary | owner | status | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.version_label} | "
+        f"{entry.artifact_path} | {entry.change_summary_label} | "
+        f"{entry.owner_label} | {entry.status_label} | {entry.limitation_note} |"
+        for entry in version_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | "
         f"{missing_input.local_path} | not supplied | not supplied | "
         "not supplied | not supplied |"
         for missing_input in missing_inputs

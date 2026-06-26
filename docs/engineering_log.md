@@ -792,6 +792,21 @@ visible in the report pack without reading artifact contents, approving
 distribution, scoring versions, producing advice, or implying production
 readiness.
 
+## Stage 31 local version-notes input
+
+Stage 31 added support for `local_version_notes` manifest entries in the paper
+report pack. The implementation reads a local version-notes descriptor as
+metadata, renders a separate Markdown section, reports missing optional
+version-notes descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, approve
+distribution, or approve decisions. It renders reviewer-supplied report
+version labels, local artifact paths, change-summary labels, owner labels,
+status labels, and limitation notes as descriptive context without scoring
+versions, producing advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:
