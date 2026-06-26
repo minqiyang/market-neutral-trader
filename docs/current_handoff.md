@@ -28,17 +28,17 @@ report-input metadata, plus Stage 27 local limitation-register report-input
 metadata, plus Stage 28 local open-questions report-input metadata, plus Stage
 29 local decision-log report-input metadata, plus Stage 30 local follow-up
 register report-input metadata, plus Stage 31 local version-notes report-input
-metadata. Stage 32 readiness is clarified for a future local/offline
-distribution-checklist report-input kind.
+metadata and Stage 32 local distribution-checklist report-input metadata.
 
 ## Last completed stage
 
-Compact governance audit after Stage 32 readiness clarification.
+Stage 32 implementation: Local distribution-checklist report input,
+local/offline only.
 
 ## Stage plan status
 
 `docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
-1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, and 31. The ledger records
+1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, and 32. The ledger records
 purpose, known commit hashes, files/modules added, validation commands, status,
 next-stage boundary, and safety status for each completed stage.
 
@@ -743,9 +743,24 @@ artifacts, rights status, risk, reproducibility, coverage, sources, or
 securities, recommend allocations, optimize strategies, emit executable
 advice, imply production readiness, or claim profitability.
 
-Next checkpoint: Stage 32 implementation only.
+Stage 32 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local distribution-checklist descriptor referenced
+by the manifest, renders a separate descriptive distribution-checklist section,
+reports missing optional descriptors as not supplied, rejects secret-like
+fields, source-content/excerpt fields, and remote URLs, and does not execute
+commands, run checks from report inputs, execute follow-ups, approve
+distribution, verify rights or licenses, read artifact/evidence/source
+contents, verify outputs, verify local environments, approve decisions, read
+raw private data contents, embed private or proprietary excerpts, add adapters,
+fetch remote data, score or rank distribution items, versions, follow-ups,
+decisions, open questions, limitations, appendix entries, artifacts, rights
+status, risk, reproducibility, coverage, sources, or securities, recommend
+allocations, optimize strategies, emit executable advice, imply production
+readiness, or claim profitability.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only the Stage 32 local/offline local_distribution_checklist report-input kind in the paper report pack, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, command execution from report inputs, validation execution from report inputs, follow-up execution, artifact/evidence/source-content reads, output verification, local environment verification, distribution approval, rights/license verification, decision approval, rights/risk/reproducibility/coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
+Next checkpoint: report-input-kind readiness clarification only.
+
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Clarify only the next local/offline report-input kind after Stage 32 before implementation, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, command execution from report inputs, validation execution from report inputs, follow-up execution, artifact/evidence/source-content reads, output verification, local environment verification, distribution approval, rights/license verification, decision approval, rights/risk/reproducibility/coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
 
 ## Important files
 
@@ -803,8 +818,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   Markdown report generator for Stage 6 logs and explicit fill assumptions.
 - `scripts/07_research_report.py`: root wrapper for Stage 7 reporting.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
-  10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31 offline paper research report-pack generator.
-- `scripts/10_paper_report_pack.py`: root wrapper for Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31
+  10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32 offline paper research report-pack generator.
+- `scripts/10_paper_report_pack.py`: root wrapper for Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32
   report packs.
 - `tests/test_kalshi_client.py`: mocked HTTP coverage for the Stage 2 client.
 - `tests/test_kalshi_orderbook.py`: normalizer coverage.
@@ -823,7 +838,7 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   normalization, guarded public client, and malformed-book coverage.
 - `tests/test_sec_edgar_adapter.py`: Stage 9 SEC companyfacts normalization,
   guarded public client, explicit User-Agent, and malformed-value coverage.
-- `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31 report-pack coverage
+- `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32 report-pack coverage
   for observed metrics, source inventory, missing optional inputs, local SEC
   facts, manifest metadata, local run-comparison metadata, unsafe
   manifest/comparison rejection, local validation-summary metadata, unsafe
@@ -843,8 +858,9 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   limitation-register rejection, local open-questions metadata, unsafe
   open-questions rejection, local decision-log metadata, unsafe decision-log
   rejection, local follow-up-register metadata, unsafe follow-up-register
-  rejection, local version-notes metadata, unsafe version-notes rejection, and
-  CLI output.
+  rejection, local version-notes metadata, unsafe version-notes rejection,
+  local distribution-checklist metadata, unsafe distribution-checklist
+  rejection, and CLI output.
 
 ## Commands that currently pass
 
@@ -952,25 +968,25 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Stage 32 implementation only. Start only after reconfirming clean synced
-`main`, CI, branch protection, required `Validate` status, local validation,
-and whether the owner-direct fast path or PR path applies.
+Report-input-kind readiness clarification only. Start only after reconfirming
+clean synced `main`, CI, branch protection, required `Validate` status, local
+validation, and whether the owner-direct fast path or PR path applies.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Implement only the Stage 32 local/offline
-`local_distribution_checklist` report-input kind in the paper report pack, and
-do not add new market-data adapters, broker integration, credentials, account
-data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote
-fetching, production endpoints, command execution from report inputs,
-validation execution from report inputs, follow-up execution, artifact/
-evidence/source-content reads, output verification, local environment
-verification, distribution approval, rights/license verification, decision
-approval, rights/risk/reproducibility/coverage/source/security ranking,
-allocation advice, executable advice, production-readiness claims, unsupported
-data redistribution, or profitability claims.
+the verified current handoff. Clarify only the next local/offline report-input
+kind after Stage 32 before implementation, and do not add new market-data
+adapters, broker integration, credentials, account data, portfolio data, live
+quote feeds, paid-vendor data, WebSockets, remote fetching, production
+endpoints, command execution from report inputs, validation execution from
+report inputs, follow-up execution, artifact/evidence/source-content reads,
+output verification, local environment verification, distribution approval,
+rights/license verification, decision approval,
+rights/risk/reproducibility/coverage/source/security ranking, allocation
+advice, executable advice, production-readiness claims, unsupported data
+redistribution, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-26 15:25:09 -07:00
+2026-06-26 15:34:32 -07:00

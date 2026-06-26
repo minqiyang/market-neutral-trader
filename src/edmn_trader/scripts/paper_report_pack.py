@@ -57,6 +57,7 @@ class PaperReportPack:
     decision_log_entry_count: int
     follow_up_register_entry_count: int
     version_notes_entry_count: int
+    distribution_checklist_entry_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -465,6 +466,27 @@ class MissingVersionNotesInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalDistributionChecklistEntry:
+    """One descriptive local distribution-checklist entry."""
+
+    source_label: str
+    distribution_item_label: str
+    artifact_path: str
+    readiness_status_label: str
+    owner_label: str
+    review_note: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingDistributionChecklistInput:
+    """Optional local distribution-checklist descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
 SOURCE_CONTENT_FIELDS = frozenset(
     (
@@ -573,6 +595,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    distribution_entries, missing_distribution_checklist = _read_distribution_checklist(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -619,6 +645,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_follow_up_register=missing_follow_up_register,
             version_note_entries=version_note_entries,
             missing_version_notes=missing_version_notes,
+            distribution_entries=distribution_entries,
+            missing_distribution_checklist=missing_distribution_checklist,
         ),
         encoding="utf-8",
         newline="\n",
@@ -648,6 +676,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         decision_log_entry_count=len(decision_log_entries),
         follow_up_register_entry_count=len(follow_up_entries),
         version_notes_entry_count=len(version_note_entries),
+        distribution_checklist_entry_count=len(distribution_entries),
     )
 
 
@@ -680,6 +709,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"decision_log_entries={pack.decision_log_entry_count}",
             f"follow_up_register_entries={pack.follow_up_register_entry_count}",
             f"version_notes_entries={pack.version_notes_entry_count}",
+            f"distribution_checklist_entries={pack.distribution_checklist_entry_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -2882,6 +2912,126 @@ def _parse_version_note_entry(
     )
 
 
+def _read_distribution_checklist(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalDistributionChecklistEntry, ...],
+    tuple[MissingDistributionChecklistInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    checklist_entries: list[LocalDistributionChecklistEntry] = []
+    missing: list[MissingDistributionChecklistInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_distribution_checklist":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local distribution-checklist input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingDistributionChecklistInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        checklist_entries.extend(
+            _read_distribution_checklist_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(checklist_entries), tuple(missing)
+
+
+def _read_distribution_checklist_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalDistributionChecklistEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local distribution-checklist descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(
+        payload,
+        path=path,
+        descriptor_label="distribution-checklist",
+    )
+
+    items = payload.get("items")
+    if not isinstance(items, list):
+        msg = f"{path}: local distribution-checklist descriptor must contain an items list"
+        raise ValueError(msg)
+
+    parsed_items: list[LocalDistributionChecklistEntry] = []
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local distribution-checklist entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(
+            item,
+            path=path,
+            descriptor_label="distribution-checklist",
+        )
+        parsed_items.append(
+            _parse_distribution_checklist_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_items)
+
+
+def _parse_distribution_checklist_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalDistributionChecklistEntry:
+    required_fields = (
+        "distribution_item_label",
+        "artifact_path",
+        "readiness_status_label",
+        "owner_label",
+        "review_note",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local distribution-checklist entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    artifact_path = str(item["artifact_path"])
+    parsed = urlparse(artifact_path)
+    if parsed.scheme or parsed.netloc:
+        msg = (
+            f"{path}: local distribution-checklist entry {index} "
+            "remote URL is not supported"
+        )
+        raise ValueError(msg)
+
+    return LocalDistributionChecklistEntry(
+        source_label=source_label,
+        distribution_item_label=str(item["distribution_item_label"]),
+        artifact_path=artifact_path,
+        readiness_status_label=str(item["readiness_status_label"]),
+        owner_label=str(item["owner_label"]),
+        review_note=str(item["review_note"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -2927,6 +3077,8 @@ def _render_markdown(
     missing_follow_up_register: tuple[MissingFollowUpRegisterInput, ...],
     version_note_entries: tuple[LocalVersionNoteEntry, ...],
     missing_version_notes: tuple[MissingVersionNotesInput, ...],
+    distribution_entries: tuple[LocalDistributionChecklistEntry, ...],
+    missing_distribution_checklist: tuple[MissingDistributionChecklistInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -3060,6 +3212,13 @@ def _render_markdown(
             "",
             _render_version_notes(version_note_entries, missing_version_notes),
             "",
+            "## Local Distribution Checklist",
+            "",
+            _render_distribution_checklist(
+                distribution_entries,
+                missing_distribution_checklist,
+            ),
+            "",
             "## SEC Fundamentals",
             "",
             _render_sec_facts(sec_facts),
@@ -3071,6 +3230,8 @@ def _render_markdown(
             "- Fill assumptions are supplied explicitly or left as not supplied; they are "
             "not inferred.",
             "- This pack is descriptive, non-executable, and does not rank securities.",
+            "- Distribution checklist inputs are reviewer-supplied metadata only; this "
+            "pack does not approve distribution or verify rights.",
             "- This pack does not claim profitability or production readiness.",
             "",
         )
@@ -3600,6 +3761,32 @@ def _render_version_notes(
         f"{entry.artifact_path} | {entry.change_summary_label} | "
         f"{entry.owner_label} | {entry.status_label} | {entry.limitation_note} |"
         for entry in version_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | "
+        "not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_distribution_checklist(
+    checklist_entries: tuple[LocalDistributionChecklistEntry, ...],
+    missing_inputs: tuple[MissingDistributionChecklistInput, ...],
+) -> str:
+    if not checklist_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local distribution checklist | not supplied |"
+
+    rows = [
+        "| source | item | artifact path | readiness status | owner | review note | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.distribution_item_label} | "
+        f"{entry.artifact_path} | {entry.readiness_status_label} | "
+        f"{entry.owner_label} | {entry.review_note} | {entry.limitation_note} |"
+        for entry in checklist_entries
     )
     rows.extend(
         f"| {missing_input.display_label} | not supplied | "

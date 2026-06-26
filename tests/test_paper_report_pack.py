@@ -2106,6 +2106,119 @@ def test_paper_report_pack_rejects_unsafe_version_notes_descriptor(
         )
 
 
+def test_paper_report_pack_renders_local_distribution_checklist_input(
+    tmp_path: Path,
+) -> None:
+    checklist_path = _write_distribution_checklist_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=checklist_path.name,
+        input_kind="local_distribution_checklist",
+        display_label="Local distribution checklist",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.distribution_checklist_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Distribution Checklist" in text
+    assert "Confirm local report package" in text
+    assert "outputs/report_pack.md" in text
+    assert "not approved" in text
+    assert "reviewer" in text
+    assert "metadata only; does not approve distribution" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_distribution_checklist_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-distribution-checklist.json",
+        input_kind="local_distribution_checklist",
+        display_label="Missing distribution checklist",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Distribution Checklist" in text
+    assert "Missing distribution checklist | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_distribution_checklist_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_distribution_checklist_descriptor(
+        tmp_path,
+        extra_item_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_distribution_checklist",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-distribution-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_distribution_checklist_descriptor(
+        tmp_path,
+        artifact_path="https://example.com/report_pack.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_distribution_checklist",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-distribution-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_distribution_checklist_descriptor(
+        tmp_path,
+        extra_item_field={"text": "private distribution contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_distribution_checklist",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-distribution-pack",
+            )
+        )
+
+
 def test_paper_report_pack_cli_writes_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
     output_dir = tmp_path / "pack"
     manifest_path = _write_report_input_manifest(tmp_path)
@@ -2866,6 +2979,44 @@ def _write_version_notes_descriptor(
                         "owner_label": "reviewer",
                         "status_label": "not approved",
                         "limitation_note": "does not verify artifact contents",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_distribution_checklist_descriptor(
+    tmp_path: Path,
+    *,
+    artifact_path: str = "outputs/report_pack.md",
+    extra_item_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "distribution_checklist.json"
+    first_item = {
+        "distribution_item_label": "Confirm local report package",
+        "artifact_path": artifact_path,
+        "readiness_status_label": "not approved",
+        "owner_label": "reviewer",
+        "review_note": "metadata only; does not approve distribution",
+        "limitation_note": "descriptive only; does not verify rights",
+    }
+    if extra_item_field:
+        first_item.update(extra_item_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "items": [
+                    first_item,
+                    {
+                        "distribution_item_label": "Confirm limitation notes",
+                        "artifact_path": "outputs/limitations.md",
+                        "readiness_status_label": "needs review",
+                        "owner_label": "maintainer",
+                        "review_note": "checklist metadata only",
+                        "limitation_note": "does not read referenced artifact",
                     },
                 ]
             }

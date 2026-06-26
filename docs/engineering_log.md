@@ -826,6 +826,21 @@ latest `main` `Validate` run passed, branch protection still required strict
 `Validate`, there were no open pull requests, and the handoff continued to
 point at Stage 32 implementation only.
 
+## Stage 32 local distribution-checklist input
+
+Stage 32 added support for `local_distribution_checklist` manifest entries in
+the paper report pack. The implementation reads a local distribution-checklist
+descriptor as metadata, renders a separate Markdown section, reports missing
+optional descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, approve
+distribution, verify rights, or approve decisions. It renders reviewer-supplied
+distribution item labels, related artifact paths, readiness status labels,
+owner labels, review notes, and limitation notes as descriptive context without
+scoring checklist items, producing advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:

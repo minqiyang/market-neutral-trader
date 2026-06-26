@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 32 local/offline `local_distribution_checklist` report-input
+  support to the paper report pack, with descriptor Markdown output,
+  missing-input disclosure, and rejection of secret-like fields,
+  source-content/excerpt fields, and remote URLs.
 - Completed the compact governance audit after Stage 32 readiness, confirming
   synced `main`, passing `Validate`, branch protection, no open PRs, and no
   drift before continuing to Stage 32 implementation.
