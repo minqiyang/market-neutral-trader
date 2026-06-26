@@ -2,7 +2,7 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages through Stage 17. They are
+These records summarize the locally completed stages through Stage 18. They are
 intended as a durable audit map; implementation details remain in the source,
 tests, changelog, engineering log, and handoff archive.
 
@@ -404,6 +404,29 @@ tests, changelog, engineering log, and handoff archive.
   adapters, no broker integration, no credentials, no account or portfolio
   data, no live quote feed, no paid-vendor market data, no WebSocket, no
   remote fetch, no order placement, no ranking, no allocation advice, no
+  executable advice, no strategy optimization, no production-readiness claim,
+  no unsupported redistribution, and no profitability claim.
+
+### Stage 18: Local citation-index report input, local/offline only
+
+- Status: complete.
+- Commit: pending on the Stage 18 implementation branch.
+- Purpose: add local reviewer-supplied citation labels, local source paths,
+  citation purpose, rights notes, and limitation metadata.
+- Files/modules changed: `src/edmn_trader/scripts/paper_report_pack.py`,
+  `tests/test_paper_report_pack.py`, and documentation updates.
+- Validation commands: `pytest tests/test_paper_report_pack.py`, `pytest`,
+  `ruff check .`, `python scripts/01_replay_orderbook_fixture.py`, and
+  `git diff --check`.
+- Next-stage boundary: later stages may add another concrete report-input kind
+  only after its data-source rights, offline fixture behavior, and
+  non-executable report boundaries are clarified first.
+- Safety status: local/offline citation-index metadata only, no command
+  execution from report inputs, no source-content reads, no raw private data
+  reads, no private/proprietary excerpts, no new data adapters, no broker
+  integration, no credentials, no account or portfolio data, no live quote
+  feed, no paid-vendor market data, no WebSocket, no remote fetch, no order
+  placement, no source or security ranking, no allocation advice, no
   executable advice, no strategy optimization, no production-readiness claim,
   no unsupported redistribution, and no profitability claim.
 

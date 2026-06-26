@@ -554,6 +554,116 @@ def test_paper_report_pack_rejects_unsafe_data_dictionary_descriptor(
         )
 
 
+def test_paper_report_pack_renders_local_citation_index_input(tmp_path: Path) -> None:
+    citation_index_path = _write_citation_index_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=citation_index_path.name,
+        input_kind="local_citation_index",
+        display_label="Local citation index",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.citation_index_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Citation Index" in text
+    assert "stage7 attribution report" in text
+    assert "citation-index.json" in text
+    assert "support observed metrics section" in text
+    assert "local generated artifact" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_citation_index_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-citation-index.json",
+        input_kind="local_citation_index",
+        display_label="Missing citation index",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Citation Index" in text
+    assert "Missing citation index | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_citation_index_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_citation_index_descriptor(
+        tmp_path,
+        extra_citation_field={"secret_token": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_citation_index",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-citation-index-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_citation_index_descriptor(
+        tmp_path,
+        source_path="https://example.com/source.pdf",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_citation_index",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-citation-index-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_citation_index_descriptor(
+        tmp_path,
+        extra_citation_field={"excerpt": "private source contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_citation_index",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-citation-index-pack",
+            )
+        )
+
+
 def test_paper_report_pack_cli_writes_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
     output_dir = tmp_path / "pack"
     manifest_path = _write_report_input_manifest(tmp_path)
@@ -786,6 +896,42 @@ def _write_data_dictionary_descriptor(
                         "definition": "summed local fixture bid quantity",
                         "rights_sensitivity_label": "local fixture metadata",
                         "limitation_note": "not a live feed",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_citation_index_descriptor(
+    tmp_path: Path,
+    *,
+    source_path: str = "citation-index.json",
+    extra_citation_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "citation_index.json"
+    first_citation = {
+        "citation_label": "stage7 attribution report",
+        "source_path": source_path,
+        "citation_purpose": "support observed metrics section",
+        "rights_note": "local generated artifact",
+        "limitation_note": "metadata only; no excerpt included",
+    }
+    if extra_citation_field:
+        first_citation.update(extra_citation_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "citations": [
+                    first_citation,
+                    {
+                        "citation_label": "SEC companyfacts fixture",
+                        "source_path": "citation-index.json",
+                        "citation_purpose": "identify local fixture source",
+                        "rights_note": "public fixture metadata",
+                        "limitation_note": "not a live remote fetch",
                     },
                 ]
             }

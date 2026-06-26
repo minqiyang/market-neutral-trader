@@ -105,12 +105,12 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
-  10/12/13/14/15/16/17
+  10/12/13/14/15/16/17/18
   offline report-pack generator combining Stage 7 attribution with local SEC
   companyfacts fixtures, local report-section metadata, optional manifest input
   metadata, local run-comparison metadata, and local validation-summary
   metadata, local review-notes metadata, local methodology-notes metadata, and
-  local data-dictionary metadata.
+  local data-dictionary metadata, and local citation-index metadata.
 - `src/edmn_trader/**/__init__.py`: package exports.
 
 ## Scripts
@@ -136,7 +136,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   manifest input metadata including Stage 13 local run-comparison descriptors
   Stage 14 local validation-summary descriptors, and Stage 15 local
   review-notes descriptors, Stage 16 local methodology-notes descriptors, and
-  Stage 17 local data-dictionary descriptors.
+  Stage 17 local data-dictionary descriptors, and Stage 18 local
+  citation-index descriptors.
 
 ## Tests and fixtures
 
@@ -163,14 +164,15 @@ context, then read only the files needed for the requested stage. Use `rg` and
   normalization, guarded public client, and malformed-book coverage.
 - `tests/test_sec_edgar_adapter.py`: Stage 9 SEC companyfacts normalization,
   guarded public client, explicit User-Agent, and malformed-value coverage.
-- `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17 offline report-pack coverage
+- `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18 offline report-pack coverage
   for observed metrics, source inventory, not-supplied optional inputs, local
   SEC facts, manifest input metadata, local run-comparison metadata, unsafe
   manifest/comparison rejection, local validation-summary metadata, unsafe
   validation-summary rejection, local review-notes metadata, unsafe
   review-notes rejection, local methodology-notes metadata, unsafe
   methodology-notes rejection, local data-dictionary metadata, unsafe
-  data-dictionary rejection, and CLI output.
+  data-dictionary rejection, local citation-index metadata, unsafe
+  citation-index rejection, and CLI output.
 - `tests/fixtures/kalshi_orderbook_fp_basic.json`: basic local Kalshi-style
   fixture used by the replay script.
 - `tests/fixtures/sec_companyfacts_aapl.json`: local SEC companyfacts fixture

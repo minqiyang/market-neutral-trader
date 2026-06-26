@@ -43,6 +43,7 @@ class PaperReportPack:
     review_note_count: int
     methodology_note_count: int
     data_dictionary_field_count: int
+    citation_index_entry_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,7 +160,38 @@ class MissingDataDictionaryInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalCitationIndexEntry:
+    """One descriptive local citation-index entry."""
+
+    source_label: str
+    citation_label: str
+    source_path: str
+    citation_purpose: str
+    rights_note: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingCitationIndexInput:
+    """Optional local citation-index descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
+CITATION_SOURCE_CONTENT_FIELDS = frozenset(
+    (
+        "content",
+        "excerpt",
+        "quote",
+        "raw_text",
+        "source_content",
+        "source_excerpt",
+        "text",
+    )
+)
 
 
 def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportPack:
@@ -200,6 +232,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    citation_index_entries, missing_citation_index = _read_citation_index(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -218,6 +254,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_methodology_notes=missing_methodology_notes,
             data_dictionary_fields=data_dictionary_fields,
             missing_data_dictionary=missing_data_dictionary,
+            citation_index_entries=citation_index_entries,
+            missing_citation_index=missing_citation_index,
         ),
         encoding="utf-8",
         newline="\n",
@@ -233,6 +271,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         review_note_count=len(review_notes),
         methodology_note_count=len(methodology_notes),
         data_dictionary_field_count=len(data_dictionary_fields),
+        citation_index_entry_count=len(citation_index_entries),
     )
 
 
@@ -251,6 +290,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"review_notes={pack.review_note_count}",
             f"methodology_notes={pack.methodology_note_count}",
             f"data_dictionary_fields={pack.data_dictionary_field_count}",
+            f"citation_index_entries={pack.citation_index_entry_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -905,6 +945,121 @@ def _parse_data_dictionary_field(
     )
 
 
+def _read_citation_index(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[tuple[LocalCitationIndexEntry, ...], tuple[MissingCitationIndexInput, ...]]:
+    if manifest_path is None:
+        return (), ()
+
+    citations: list[LocalCitationIndexEntry] = []
+    missing: list[MissingCitationIndexInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_citation_index":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local citation-index input is missing: "
+                    f"{entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingCitationIndexInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        citations.extend(
+            _read_citation_index_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(citations), tuple(missing)
+
+
+def _read_citation_index_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalCitationIndexEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local citation-index descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_citation_source_content_fields(payload, path=path)
+
+    citations = payload.get("citations")
+    if not isinstance(citations, list):
+        msg = f"{path}: local citation-index descriptor must contain a citations list"
+        raise ValueError(msg)
+
+    parsed_citations: list[LocalCitationIndexEntry] = []
+    for index, item in enumerate(citations, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local citation-index entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_citation_source_content_fields(item, path=path)
+        parsed_citations.append(
+            _parse_citation_index_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_citations)
+
+
+def _reject_citation_source_content_fields(payload: dict[str, object], *, path: Path) -> None:
+    found = sorted(
+        key
+        for key in payload
+        if key.lower().replace("-", "_") in CITATION_SOURCE_CONTENT_FIELDS
+    )
+    if found:
+        msg = f"{path}: local citation-index descriptor contains source-content field(s)"
+        raise ValueError(msg)
+
+
+def _parse_citation_index_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalCitationIndexEntry:
+    required_fields = (
+        "citation_label",
+        "source_path",
+        "citation_purpose",
+        "rights_note",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local citation-index entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    source_path = str(item["source_path"])
+    parsed = urlparse(source_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local citation-index entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalCitationIndexEntry(
+        source_label=source_label,
+        citation_label=str(item["citation_label"]),
+        source_path=source_path,
+        citation_purpose=str(item["citation_purpose"]),
+        rights_note=str(item["rights_note"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -922,6 +1077,8 @@ def _render_markdown(
     missing_methodology_notes: tuple[MissingMethodologyNotesInput, ...],
     data_dictionary_fields: tuple[LocalDataDictionaryField, ...],
     missing_data_dictionary: tuple[MissingDataDictionaryInput, ...],
+    citation_index_entries: tuple[LocalCitationIndexEntry, ...],
+    missing_citation_index: tuple[MissingCitationIndexInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -983,6 +1140,10 @@ def _render_markdown(
             "## Local Data Dictionary",
             "",
             _render_data_dictionary(data_dictionary_fields, missing_data_dictionary),
+            "",
+            "## Local Citation Index",
+            "",
+            _render_citation_index(citation_index_entries, missing_citation_index),
             "",
             "## SEC Fundamentals",
             "",
@@ -1163,6 +1324,31 @@ def _render_data_dictionary(
     rows.extend(
         f"| {missing_input.display_label} | not supplied | {missing_input.local_path} | "
         "not supplied | not supplied | not supplied | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_citation_index(
+    citations: tuple[LocalCitationIndexEntry, ...],
+    missing_inputs: tuple[MissingCitationIndexInput, ...],
+) -> str:
+    if not citations and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local citation index | not supplied |"
+
+    rows = [
+        "| source | citation | source path | purpose | rights note | limitation |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {citation.source_label} | {citation.citation_label} | "
+        f"{citation.source_path} | {citation.citation_purpose} | "
+        f"{citation.rights_note} | {citation.limitation_note} |"
+        for citation in citations
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | {missing_input.local_path} | "
+        "not supplied | not supplied | not supplied |"
         for missing_input in missing_inputs
     )
     return "\n".join(rows)
