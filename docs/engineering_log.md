@@ -588,6 +588,16 @@ mitigation notes, review status labels, evidence paths, and limitation notes as
 descriptive context without scoring risk, producing advice, or implying
 production readiness.
 
+After Stage 23, the next safe report-input kind is a data-rights review. The
+clarified Stage 24 boundary allows a local data-rights descriptor to record
+reviewer-supplied data labels, rights status labels, permitted-use notes,
+restriction notes, local evidence paths, and limitation notes.
+
+The boundary stays descriptive. Stage 24 should make data-rights metadata
+visible in the report pack without reading evidence contents, determining legal
+rights, verifying licenses, deciding redistribution permissions, scoring
+rights status, producing advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:

@@ -2040,3 +2040,84 @@ placement, evidence-content reads, source-content reads, raw local data reads,
 local environment verification, remote fetches, new adapters, production
 endpoints, ranking, allocation, optimization, executable advice, or
 production-readiness claims.
+
+## Stage 24: Local data-rights-review report input, local/offline only
+
+Purpose: clarify the next concrete report-input kind after Stage 23: a local
+data-rights-review input that records reviewer-supplied data labels, rights
+status labels, permitted-use notes, restriction notes, local evidence paths,
+and limitation notes without reading evidence contents, determining legal
+rights, fetching remote data, scoring rights status, or producing executable
+advice.
+
+Deliverables: Stage 24 implementation may add a `local_data_rights_review`
+input kind to the report-input manifest, parse a local data-rights descriptor,
+render a descriptive report section, add offline tests, and update limitation
+notes.
+
+Allowed scope:
+
+- Use a local descriptor file only.
+- Treat the descriptor as reviewer-supplied data-rights metadata, not as legal
+  advice, license verification, evidence reading, policy evaluation, validation
+  execution, scoring, or a redistribution decision.
+- Describe only data labels, rights status labels, permitted-use notes,
+  restriction notes, local evidence paths, and limitation notes.
+- Reject remote URLs, secret-like fields, and source-content/excerpt fields.
+- Preserve separation between observed report metrics, supplied assumptions,
+  fundamentals, manifest metadata, comparison metadata, validation metadata,
+  review notes, methodology notes, data-dictionary metadata, citation-index
+  metadata, term-glossary metadata, assumption-register metadata,
+  coverage-matrix metadata, reproducibility metadata, risk-review metadata,
+  data-rights-review metadata, and limitations.
+- Label missing optional data-rights-review inputs as not supplied.
+
+Acceptance checks:
+
+- The implementation remains local/offline and deterministic.
+- The report pack does not execute commands, run tests from report inputs,
+  evaluate policies, determine legal rights, verify licenses, decide
+  redistribution permissions, place orders, read secrets, read evidence
+  contents, read source contents, read raw private data contents, read account
+  data, read portfolio data, fetch remote data, use live feeds, inspect
+  paid-vendor or proprietary datasets, verify local environment state, or infer
+  private values from referenced files.
+- The output does not include private/proprietary excerpts, score or rank
+  rights status, risk controls, reproducibility steps, coverage, sources, or
+  securities, recommend allocations, optimize strategies, emit executable
+  advice, imply production readiness, or claim profitability.
+- Missing optional data-rights-review inputs produce explicit not-supplied text
+  instead of inferred values.
+- Tests use local descriptors and generated project artifacts only.
+
+Validation commands:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+ruff check .
+python scripts/01_replay_orderbook_fixture.py
+```
+
+Explicit non-goals: no command execution from report inputs, no validation
+execution from report inputs, no legal advice, no legal-rights determination,
+no license verification, no redistribution decision, no policy evaluation, no
+risk-check execution, no order placement, no evidence-content reads, no
+source-content reads, no raw private data reads, no private/proprietary
+excerpts, no local environment verification, no output verification, no new
+market-data adapters, no remote fetching, no broker integration, no
+credentials, no account or portfolio data, no live quote feeds, no paid-vendor
+market data, no WebSockets, no production endpoints, no strategy optimization,
+no rights scoring, no risk scoring, no reproducibility scoring, no coverage
+scoring, no security ranking, no source ranking, no allocation advice, no
+executable advice, no production readiness claim, no unsupported data
+redistribution, and no profitability claims.
+
+Next-stage boundary: implementation may add the local data-rights-review input
+kind only within the local/offline report-pack path and must not add command
+execution, validation execution, legal-rights determination, license
+verification, redistribution decisions, policy evaluation, risk-check
+execution, order placement, evidence-content reads, source-content reads, raw
+local data reads, local environment verification, remote fetches, new adapters,
+production endpoints, ranking, allocation, optimization, executable advice, or
+production-readiness claims.
