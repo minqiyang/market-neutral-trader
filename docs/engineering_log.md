@@ -563,6 +563,16 @@ labels, artifact paths, command labels, environment labels, expected output
 labels, and limitation notes as descriptive context without verifying outputs,
 scoring reproducibility, producing advice, or implying production readiness.
 
+After Stage 22, the next safe report-input kind is a risk review. The
+clarified Stage 23 boundary allows a local risk-review descriptor to record
+reviewer-supplied risk-control labels, boundary labels, mitigation notes,
+review status labels, local evidence paths, and limitation notes.
+
+The boundary stays descriptive. Stage 23 should make risk-review metadata
+visible in the report pack without executing checks, reading evidence contents,
+evaluating policies, placing orders, scoring risk, producing advice, or
+implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:

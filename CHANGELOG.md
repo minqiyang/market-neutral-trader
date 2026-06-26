@@ -6,6 +6,11 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 23 readiness for a local/offline `local_risk_review`
+  report-input kind that records risk-control labels, boundary labels,
+  mitigation notes, review status labels, evidence paths, and limitations
+  without executing checks, reading evidence contents, evaluating policies,
+  scoring risk, placing orders, or producing advice.
 - Added Stage 22 local/offline `local_reproducibility_checklist`
   report-input support to the paper report pack, with descriptor Markdown
   output, missing-input disclosure, and rejection of secret-like fields,
