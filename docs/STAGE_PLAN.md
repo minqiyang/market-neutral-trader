@@ -775,7 +775,7 @@ tests, changelog, engineering log, and handoff archive.
 ### Stage 32: Local distribution-checklist report input, local/offline only
 
 - Status: complete.
-- Commit: pending on the Stage 32 implementation branch.
+- Commit: `04a378e` (merged via PR #75 at `85d06af`).
 - Purpose: add local reviewer-supplied distribution item labels, related
   artifact paths, readiness status labels, owner labels, review notes, and
   limitation metadata.
@@ -805,7 +805,7 @@ tests, changelog, engineering log, and handoff archive.
 ### Stage 33: Local handoff-notes report input, local/offline only
 
 - Status: complete.
-- Commit: pending on the Stage 33 implementation branch.
+- Commit: `3dbf631` (merged via PR #77 at `1395484`).
 - Purpose: add local reviewer-supplied handoff labels, related artifact paths,
   recipient or owner labels, status labels, handoff notes, and limitation
   metadata.
