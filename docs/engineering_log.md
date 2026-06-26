@@ -613,6 +613,17 @@ rights status labels, permitted-use notes, restriction notes, evidence paths,
 and limitation notes as descriptive context without scoring rights status,
 producing advice, or implying production readiness.
 
+After Stage 24, the next safe report-input kind is an artifact inventory. The
+clarified Stage 25 boundary allows a local artifact-inventory descriptor to
+record reviewer-supplied generated artifact labels, artifact type labels,
+local paths, generation-source labels, intended report-use notes, and
+limitation notes.
+
+The boundary stays descriptive. Stage 25 should make artifact-inventory
+metadata visible in the report pack without reading artifact contents,
+verifying outputs, verifying local environments, ranking artifacts, producing
+advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:

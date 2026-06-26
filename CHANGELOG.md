@@ -6,6 +6,11 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 25 readiness for a local/offline
+  `local_artifact_inventory` report-input kind that records generated artifact
+  labels, artifact type labels, local paths, generation-source labels,
+  intended report-use notes, and limitations without reading artifact
+  contents, verifying outputs, ranking artifacts, or producing advice.
 - Added Stage 24 local/offline `local_data_rights_review` report-input support
   to the paper report pack, with descriptor Markdown output, missing-input
   disclosure, and rejection of secret-like fields, source-content/excerpt

@@ -22,11 +22,13 @@ term-glossary report-input metadata, plus Stage 20 local assumption-register
 report-input metadata and Stage 21 local coverage-matrix report-input
 metadata, plus Stage 22 local reproducibility-checklist report-input metadata
 and Stage 23 local risk-review report-input metadata, plus Stage 24 local
-data-rights-review report-input metadata.
+data-rights-review report-input metadata. Stage 25 readiness is clarified for
+a future local/offline artifact-inventory report-input kind.
 
 ## Last completed stage
 
-Stage 24: Local data-rights-review report input, local/offline only.
+Stage 25 readiness clarification: Local artifact-inventory report input,
+local/offline only.
 
 ## Stage plan status
 
@@ -490,9 +492,21 @@ reproducibility, coverage, sources, or securities, recommend allocations,
 optimize strategies, emit executable advice, imply production readiness, or
 claim profitability.
 
-Next checkpoint: next concrete report-input-kind readiness clarification only.
+`docs/STAGE_PLAN.md` now contains the full Stage 25 readiness specification for
+a local/offline `local_artifact_inventory` report-input kind. Stage 25 may
+describe only reviewer-supplied generated artifact labels, artifact type
+labels, local paths, generation-source labels, intended report-use notes, and
+limitation notes, and it must not execute commands, run checks from report
+inputs, read artifact contents, verify outputs, verify local environments, read
+evidence or source contents, read raw private data contents, fetch remote data,
+add adapters, use account or portfolio data, use live feeds, score or rank
+artifacts, rights status, risk, reproducibility, coverage, sources, or
+securities, recommend allocations, optimize strategies, emit executable
+advice, imply production readiness, or claim profitability.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Clarify only the next concrete local/offline report-input kind in docs/STAGE_PLAN.md; do not implement it yet, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, strategy optimization, rights/risk/reproducibility/coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
+Next checkpoint: Stage 25 implementation only.
+
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only the Stage 25 local/offline local_artifact_inventory report-input kind in the paper report pack, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, command execution from report inputs, validation execution from report inputs, artifact-content reads, output verification, local environment verification, rights/risk/reproducibility/coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
 
 ## Important files
 
@@ -692,23 +706,24 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Next concrete report-input-kind readiness clarification only. Start only after
-reconfirming clean synced `main`, CI, branch protection, required `Validate`
-status, local validation, and whether the owner-direct fast path or PR path
-applies.
+Stage 25 implementation only. Start only after reconfirming clean synced
+`main`, CI, branch protection, required `Validate` status, local validation,
+and whether the owner-direct fast path or PR path applies.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Clarify only the next concrete local/offline
-report-input kind in `docs/STAGE_PLAN.md`; do not implement it yet, and do not
-add new market-data adapters, broker integration, credentials, account data,
-portfolio data, live quote feeds, paid-vendor data, WebSockets, remote
-fetching, production endpoints, strategy optimization, rights/risk/
-reproducibility/coverage/source/security ranking, allocation advice,
-executable advice, production-readiness claims, unsupported data
-redistribution, or profitability claims.
+the verified current handoff. Implement only the Stage 25 local/offline
+`local_artifact_inventory` report-input kind in the paper report pack, and do
+not add new market-data adapters, broker integration, credentials, account
+data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote
+fetching, production endpoints, command execution from report inputs,
+validation execution from report inputs, artifact-content reads, output
+verification, local environment verification, rights/risk/reproducibility/
+coverage/source/security ranking, allocation advice, executable advice,
+production-readiness claims, unsupported data redistribution, or profitability
+claims.
 
 ## Last updated timestamp
 
-2026-06-26 13:42:04 -07:00
+2026-06-26 13:56:45 -07:00
