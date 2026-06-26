@@ -675,6 +675,21 @@ metadata visible in the report pack without reading referenced contents,
 verifying outputs, scoring limitations, producing advice, or implying
 production readiness.
 
+## Stage 27 local limitation-register input
+
+Stage 27 added support for `local_limitation_register` manifest entries in the
+paper report pack. The implementation reads a local limitation-register
+descriptor as metadata, renders a separate Markdown section, reports missing
+optional limitation-register descriptors as not supplied, and rejects
+secret-like fields, source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, or approve
+distribution. It renders reviewer-supplied limitation labels, affected report
+section labels, local evidence or artifact paths, scope notes, mitigation
+notes, and limitation notes as descriptive context without scoring limitations,
+producing advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:
