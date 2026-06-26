@@ -44,8 +44,18 @@ an optional skill is unavailable or renamed.
 
 In continuous autopilot, compact governance audits after every three completed
 checkpoints are mandatory but non-terminal when they pass. After a passing audit
-publish, wait for `main` `Validate`, sync local `main`, verify a clean state,
-read the updated handoff, reset the checkpoint counter, and continue.
+is folded into the active delivery branch or otherwise published, wait for
+`main` `Validate`, sync local `main`, verify a clean state, read the updated
+handoff, reset the checkpoint counter, and continue.
+
+Use delivery-unit batching for staged work: keep readiness clarification,
+implementation, tests, docs/log/changelog updates, handoff updates, and due
+passing audit notes on one `codex/` branch when they form one coherent delivery
+unit. Do not publish every small docs or handoff edit; publish after the unit is
+complete, validated, risk-classified, and reviewed. Use docs-only PRs or stop
+only for high/unclear risk, compliance ambiguity, external credentials,
+production endpoints, broker integration, live data, strategy advice, or user
+judgment.
 
 For Kalshi-style binary orderbooks, normalize YES-side books from local data by treating YES bids as canonical bids and NO bids as implied YES asks using `1 - no_price`.
 
