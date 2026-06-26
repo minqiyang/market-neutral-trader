@@ -1995,6 +1995,117 @@ def test_paper_report_pack_rejects_unsafe_follow_up_register_descriptor(
         )
 
 
+def test_paper_report_pack_renders_local_version_notes_input(tmp_path: Path) -> None:
+    version_notes_path = _write_version_notes_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=version_notes_path.name,
+        input_kind="local_version_notes",
+        display_label="Local version notes",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.version_notes_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Version Notes" in text
+    assert "Report pack v1" in text
+    assert "outputs/report_pack.md" in text
+    assert "Stage 30 follow-up section" in text
+    assert "maintainer" in text
+    assert "draft" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_version_notes_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-version-notes.json",
+        input_kind="local_version_notes",
+        display_label="Missing version notes",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Version Notes" in text
+    assert "Missing version notes | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_version_notes_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_version_notes_descriptor(
+        tmp_path,
+        extra_version_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_version_notes",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-version-notes-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_version_notes_descriptor(
+        tmp_path,
+        artifact_path="https://example.com/report_pack.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_version_notes",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-version-notes-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_version_notes_descriptor(
+        tmp_path,
+        extra_version_field={"text": "private version contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_version_notes",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-version-notes-pack",
+            )
+        )
+
+
 def test_paper_report_pack_cli_writes_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
     output_dir = tmp_path / "pack"
     manifest_path = _write_report_input_manifest(tmp_path)
@@ -2717,6 +2828,44 @@ def _write_follow_up_register_descriptor(
                         "status_label": "not reviewed",
                         "tracking_note": "tracks local report context only",
                         "limitation_note": "does not rank follow-ups",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_version_notes_descriptor(
+    tmp_path: Path,
+    *,
+    artifact_path: str = "outputs/report_pack.md",
+    extra_version_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "version_notes.json"
+    first_version = {
+        "version_label": "Report pack v1",
+        "artifact_path": artifact_path,
+        "change_summary_label": "Stage 30 follow-up section",
+        "owner_label": "maintainer",
+        "status_label": "draft",
+        "limitation_note": "metadata only; does not approve distribution",
+    }
+    if extra_version_field:
+        first_version.update(extra_version_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "versions": [
+                    first_version,
+                    {
+                        "version_label": "Report pack v1 review copy",
+                        "artifact_path": "outputs/report_pack_review.md",
+                        "change_summary_label": "Review copy metadata",
+                        "owner_label": "reviewer",
+                        "status_label": "not approved",
+                        "limitation_note": "does not verify artifact contents",
                     },
                 ]
             }
