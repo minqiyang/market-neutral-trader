@@ -1660,6 +1660,117 @@ def test_paper_report_pack_rejects_unsafe_limitation_register_descriptor(
         )
 
 
+def test_paper_report_pack_renders_local_open_questions_input(tmp_path: Path) -> None:
+    open_questions_path = _write_open_questions_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=open_questions_path.name,
+        input_kind="local_open_questions",
+        display_label="Local open questions",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.open_questions_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Open Questions" in text
+    assert "Review output assumptions" in text
+    assert "Limitations" in text
+    assert "docs/current_handoff.md" in text
+    assert "reviewer" in text
+    assert "open" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_open_questions_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-open-questions.json",
+        input_kind="local_open_questions",
+        display_label="Missing open questions",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Open Questions" in text
+    assert "Missing open questions | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_open_questions_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_open_questions_descriptor(
+        tmp_path,
+        extra_question_field={"secret_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_open_questions",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-open-questions-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_open_questions_descriptor(
+        tmp_path,
+        reference_path="https://example.com/questions.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_open_questions",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-open-questions-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_open_questions_descriptor(
+        tmp_path,
+        extra_question_field={"text": "private open question contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_open_questions",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-open-questions-pack",
+            )
+        )
+
+
 def test_paper_report_pack_cli_writes_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
     output_dir = tmp_path / "pack"
     manifest_path = _write_report_input_manifest(tmp_path)
@@ -2264,6 +2375,44 @@ def _write_limitation_register_descriptor(
                         "scope_note": "local report navigation only",
                         "mitigation_note": "avoid redistribution claims",
                         "limitation_note": "descriptive only; does not approve distribution",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_open_questions_descriptor(
+    tmp_path: Path,
+    *,
+    reference_path: str = "docs/current_handoff.md",
+    extra_question_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "open_questions.json"
+    first_question = {
+        "question_label": "Review output assumptions",
+        "affected_section_label": "Limitations",
+        "reference_path": reference_path,
+        "owner_label": "reviewer",
+        "status_label": "open",
+        "limitation_note": "metadata only; does not resolve the question",
+    }
+    if extra_question_field:
+        first_question.update(extra_question_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "questions": [
+                    first_question,
+                    {
+                        "question_label": "Confirm appendix navigation",
+                        "affected_section_label": "Local Appendix Index",
+                        "reference_path": "outputs/report_pack.md",
+                        "owner_label": "maintainer",
+                        "status_label": "not reviewed",
+                        "limitation_note": "descriptive only; does not approve decisions",
                     },
                 ]
             }

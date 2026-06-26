@@ -700,6 +700,21 @@ visible in the report pack without reading referenced contents, verifying
 outputs, scoring questions, approving decisions, producing advice, or implying
 production readiness.
 
+## Stage 28 local open-questions input
+
+Stage 28 added support for `local_open_questions` manifest entries in the
+paper report pack. The implementation reads a local open-questions descriptor
+as metadata, renders a separate Markdown section, reports missing optional
+open-questions descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/evidence/source files referenced
+by the descriptor, verify outputs, verify local environments, or approve
+decisions. It renders reviewer-supplied open question labels, affected report
+section labels, local reference paths, owner labels, status labels, and
+limitation notes as descriptive context without scoring questions, producing
+advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:

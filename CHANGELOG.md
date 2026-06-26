@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 28 local/offline `local_open_questions` report-input support to
+  the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields, source-content/excerpt
+  fields, and remote URLs.
 - Clarified Stage 28 readiness for a local/offline `local_open_questions`
   report-input kind that records open question labels, affected report
   sections, local reference paths, owner/status labels, and limitations without

@@ -53,6 +53,7 @@ class PaperReportPack:
     artifact_inventory_entry_count: int
     appendix_index_entry_count: int
     limitation_register_entry_count: int
+    open_questions_entry_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -375,6 +376,27 @@ class MissingLimitationRegisterInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalOpenQuestionEntry:
+    """One descriptive local open-question entry."""
+
+    source_label: str
+    question_label: str
+    affected_section_label: str
+    reference_path: str
+    owner_label: str
+    status_label: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingOpenQuestionsInput:
+    """Optional local open-questions descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
 SOURCE_CONTENT_FIELDS = frozenset(
     (
@@ -467,6 +489,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    open_question_entries, missing_open_questions = _read_open_questions(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -505,6 +531,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_appendix_index=missing_appendix_index,
             limitation_register_entries=limitation_register_entries,
             missing_limitation_register=missing_limitation_register,
+            open_question_entries=open_question_entries,
+            missing_open_questions=missing_open_questions,
         ),
         encoding="utf-8",
         newline="\n",
@@ -530,6 +558,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         artifact_inventory_entry_count=len(artifact_inventory_entries),
         appendix_index_entry_count=len(appendix_index_entries),
         limitation_register_entry_count=len(limitation_register_entries),
+        open_questions_entry_count=len(open_question_entries),
     )
 
 
@@ -558,6 +587,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"artifact_inventory_entries={pack.artifact_inventory_entry_count}",
             f"appendix_index_entries={pack.appendix_index_entry_count}",
             f"limitation_register_entries={pack.limitation_register_entry_count}",
+            f"open_questions_entries={pack.open_questions_entry_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -2306,6 +2336,115 @@ def _parse_limitation_register_entry(
     )
 
 
+def _read_open_questions(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalOpenQuestionEntry, ...],
+    tuple[MissingOpenQuestionsInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    question_entries: list[LocalOpenQuestionEntry] = []
+    missing: list[MissingOpenQuestionsInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_open_questions":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local open-questions input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingOpenQuestionsInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        question_entries.extend(
+            _read_open_questions_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(question_entries), tuple(missing)
+
+
+def _read_open_questions_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalOpenQuestionEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local open-questions descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="open-questions")
+
+    questions = payload.get("questions")
+    if not isinstance(questions, list):
+        msg = f"{path}: local open-questions descriptor must contain a questions list"
+        raise ValueError(msg)
+
+    parsed_questions: list[LocalOpenQuestionEntry] = []
+    for index, item in enumerate(questions, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local open-questions entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="open-questions")
+        parsed_questions.append(
+            _parse_open_question_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_questions)
+
+
+def _parse_open_question_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalOpenQuestionEntry:
+    required_fields = (
+        "question_label",
+        "affected_section_label",
+        "reference_path",
+        "owner_label",
+        "status_label",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local open-questions entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    reference_path = str(item["reference_path"])
+    parsed = urlparse(reference_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local open-questions entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalOpenQuestionEntry(
+        source_label=source_label,
+        question_label=str(item["question_label"]),
+        affected_section_label=str(item["affected_section_label"]),
+        reference_path=reference_path,
+        owner_label=str(item["owner_label"]),
+        status_label=str(item["status_label"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -2343,6 +2482,8 @@ def _render_markdown(
     missing_appendix_index: tuple[MissingAppendixIndexInput, ...],
     limitation_register_entries: tuple[LocalLimitationRegisterEntry, ...],
     missing_limitation_register: tuple[MissingLimitationRegisterInput, ...],
+    open_question_entries: tuple[LocalOpenQuestionEntry, ...],
+    missing_open_questions: tuple[MissingOpenQuestionsInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -2456,6 +2597,10 @@ def _render_markdown(
                 limitation_register_entries,
                 missing_limitation_register,
             ),
+            "",
+            "## Local Open Questions",
+            "",
+            _render_open_questions(open_question_entries, missing_open_questions),
             "",
             "## SEC Fundamentals",
             "",
@@ -2890,6 +3035,32 @@ def _render_limitation_register(
         f"{entry.affected_section_label} | {entry.reference_path} | "
         f"{entry.scope_note} | {entry.mitigation_note} | {entry.limitation_note} |"
         for entry in limitation_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_open_questions(
+    question_entries: tuple[LocalOpenQuestionEntry, ...],
+    missing_inputs: tuple[MissingOpenQuestionsInput, ...],
+) -> str:
+    if not question_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local open questions | not supplied |"
+
+    rows = [
+        "| source | question | affected section | reference path | owner | "
+        "status | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.question_label} | "
+        f"{entry.affected_section_label} | {entry.reference_path} | "
+        f"{entry.owner_label} | {entry.status_label} | {entry.limitation_note} |"
+        for entry in question_entries
     )
     rows.extend(
         f"| {missing_input.display_label} | not supplied | not supplied | "
