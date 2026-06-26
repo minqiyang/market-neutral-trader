@@ -490,6 +490,16 @@ limitation notes as descriptive context without embedding private/proprietary
 excerpts or turning terminology metadata into ranking, advice, or
 production-readiness claims.
 
+After Stage 19, the next safe report-input kind is an assumption register. The
+clarified Stage 20 boundary allows a local assumption-register descriptor to
+record reviewer-supplied assumption labels, rationale, local source paths,
+scope, and limitation notes.
+
+The boundary stays descriptive. Stage 20 should make assumption metadata
+visible in the report pack without reading source contents, embedding private
+or proprietary excerpts, fetching remote data, ranking assumptions, producing
+advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:

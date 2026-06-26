@@ -1655,3 +1655,70 @@ only within the local/offline report-pack path and must not add command
 execution, source-content reads, raw local data reads, remote fetches, new
 adapters, production endpoints, ranking, allocation, optimization, executable
 advice, or production-readiness claims.
+
+## Stage 20: Local assumption-register report input, local/offline only
+
+Purpose: clarify the next concrete report-input kind after Stage 19: a local
+assumption-register input that records reviewer-supplied assumption labels,
+rationale, source paths, scope, and limitation notes for report packs without
+reading source contents, fetching remote data, ranking assumptions, or
+producing executable advice.
+
+Deliverables: Stage 20 implementation may add a `local_assumption_register`
+input kind to the report-input manifest, parse a local assumption-register
+descriptor, render a descriptive report section, add offline tests, and update
+limitation notes.
+
+Allowed scope:
+
+- Use a local descriptor file only.
+- Treat the descriptor as reviewer-supplied assumption metadata, not as source
+  ingestion, model configuration, validation execution, or recommendation
+  logic.
+- Describe only assumption labels, local source paths, rationale, scope, and
+  limitation notes.
+- Reject remote URLs, secret-like fields, and source-content/excerpt fields.
+- Preserve separation between observed report metrics, supplied assumptions,
+  fundamentals, manifest metadata, comparison metadata, validation metadata,
+  review notes, methodology notes, data-dictionary metadata, citation-index
+  metadata, term-glossary metadata, assumption-register metadata, and
+  limitations.
+- Label missing optional assumption-register inputs as not supplied.
+
+Acceptance checks:
+
+- The implementation remains local/offline and deterministic.
+- The report pack does not execute commands, read secrets, read source
+  contents, read raw private data contents, read account data, read portfolio
+  data, fetch remote data, use live feeds, inspect paid-vendor or proprietary
+  datasets, or infer private values from referenced files.
+- The output does not include private/proprietary excerpts, rank assumptions,
+  terms, sources, or securities, recommend allocations, optimize strategies,
+  emit executable advice, imply production readiness, or claim profitability.
+- Missing optional assumption-register inputs produce explicit not-supplied
+  text instead of inferred values.
+- Tests use local descriptors and generated project artifacts only.
+
+Validation commands:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+ruff check .
+python scripts/01_replay_orderbook_fixture.py
+```
+
+Explicit non-goals: no command execution from report inputs, no source-content
+reads, no raw private data reads, no private/proprietary excerpts, no new
+market-data adapters, no remote fetching, no broker integration, no
+credentials, no account or portfolio data, no live quote feeds, no paid-vendor
+market data, no WebSockets, no production endpoints, no strategy optimization,
+no security ranking, no source ranking, no term ranking, no assumption ranking,
+no allocation advice, no executable advice, no production readiness claim, no
+unsupported data redistribution, and no profitability claims.
+
+Next-stage boundary: implementation may add the local assumption-register input
+kind only within the local/offline report-pack path and must not add command
+execution, source-content reads, raw local data reads, remote fetches, new
+adapters, production endpoints, ranking, allocation, optimization, executable
+advice, or production-readiness claims.
