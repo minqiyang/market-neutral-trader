@@ -876,6 +876,18 @@ latest `main` `Validate` run passed, branch protection still required strict
 `Validate`, there were no open pull requests, and the handoff reset to the
 next report-input-kind readiness clarification.
 
+## Stage 34 readiness clarification
+
+After Stage 33, the next safe report-input kind is archive notes. The clarified
+Stage 34 boundary allows a local archive-notes descriptor to record
+reviewer-supplied archive labels, related artifact paths, archive status
+labels, owner labels, archive notes, and limitation notes.
+
+The boundary stays descriptive. Stage 34 should make archive-note metadata
+visible in the report pack without reading artifact contents, moving or
+deleting files, deciding retention policy, scoring archive readiness, producing
+advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:

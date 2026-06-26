@@ -6,6 +6,11 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 34 readiness for a local/offline `local_archive_notes`
+  report-input kind that records archive labels, related artifact paths,
+  archive status labels, owners, archive notes, and limitations without
+  reading artifact contents, moving or deleting files, deciding retention
+  policy, scoring archive readiness, or producing advice.
 - Completed the compact governance audit after Stage 33 implementation,
   confirming synced `main`, passing `Validate`, branch protection, no open PRs,
   and no drift before continuing to the next readiness checkpoint.

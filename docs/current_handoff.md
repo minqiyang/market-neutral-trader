@@ -30,10 +30,13 @@ metadata, plus Stage 28 local open-questions report-input metadata, plus Stage
 register report-input metadata, plus Stage 31 local version-notes report-input
 metadata and Stage 32 local distribution-checklist report-input metadata.
 Stage 33 local handoff-notes report-input metadata is implemented.
+Stage 34 readiness is clarified for a future local/offline archive-notes
+report-input kind.
 
 ## Last completed stage
 
-Compact governance audit after Stage 33 implementation.
+Stage 34 readiness clarification: Local archive-notes report input,
+local/offline only.
 
 ## Stage plan status
 
@@ -797,9 +800,24 @@ reproducibility, coverage, sources, or securities, recommend allocations,
 optimize strategies, emit executable advice, imply production readiness, or
 claim profitability.
 
-Next checkpoint: report-input-kind readiness clarification only.
+`docs/STAGE_PLAN.md` now contains the full Stage 34 readiness specification for
+a local/offline `local_archive_notes` report-input kind. Stage 34 may describe
+only reviewer-supplied archive labels, related artifact paths, archive status
+labels, owner labels, archive notes, and limitation notes, and it must not
+execute commands, run checks from report inputs, move or delete files, decide
+retention policy, approve distribution, verify rights or licenses, read
+artifact/evidence/source contents, verify outputs, verify local environments,
+approve decisions, read raw private data contents, fetch remote data, add
+adapters, use account or portfolio data, use live feeds, score or rank archive
+readiness, handoffs, distribution items, versions, follow-ups, decisions, open
+questions, limitations, appendix entries, artifacts, rights status, risk,
+reproducibility, coverage, sources, or securities, recommend allocations,
+optimize strategies, emit executable advice, imply production readiness, or
+claim profitability.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Clarify only the next local/offline report-input kind after Stage 33 before implementation, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, command execution from report inputs, validation execution from report inputs, follow-up execution, artifact/evidence/source-content reads, output verification, local environment verification, distribution approval, rights/license verification, decision approval, rights/risk/reproducibility/coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
+Next checkpoint: Stage 34 implementation only.
+
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only the Stage 34 local/offline local_archive_notes report-input kind in the paper report pack, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, command execution from report inputs, validation execution from report inputs, follow-up execution, file movement or deletion, retention-policy decisions, artifact/evidence/source-content reads, output verification, local environment verification, distribution approval, rights/license verification, decision approval, rights/risk/reproducibility/coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
 
 ## Important files
 
@@ -1008,19 +1026,20 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Report-input-kind readiness clarification only. Start only after reconfirming
-clean synced `main`, CI, branch protection, required `Validate` status, local
-validation, and whether the owner-direct fast path or PR path applies.
+Stage 34 implementation only. Start only after reconfirming clean synced
+`main`, CI, branch protection, required `Validate` status, local validation,
+and whether the owner-direct fast path or PR path applies.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Clarify only the next local/offline report-input
-kind after Stage 33 before implementation, and do not add new market-data
-adapters, broker integration, credentials, account data, portfolio data, live
-quote feeds, paid-vendor data, WebSockets, remote fetching, production
-endpoints, command execution from report inputs, validation execution from
-report inputs, follow-up execution, artifact/evidence/source-content reads,
+the verified current handoff. Implement only the Stage 34 local/offline
+`local_archive_notes` report-input kind in the paper report pack, and do not
+add new market-data adapters, broker integration, credentials, account data,
+portfolio data, live quote feeds, paid-vendor data, WebSockets, remote
+fetching, production endpoints, command execution from report inputs,
+validation execution from report inputs, follow-up execution, file movement or
+deletion, retention-policy decisions, artifact/evidence/source-content reads,
 output verification, local environment verification, distribution approval,
 rights/license verification, decision approval,
 rights/risk/reproducibility/coverage/source/security ranking, allocation
@@ -1029,4 +1048,4 @@ redistribution, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-26 15:47:23 -07:00
+2026-06-26 15:50:20 -07:00
