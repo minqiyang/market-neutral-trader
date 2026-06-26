@@ -49,6 +49,7 @@ class PaperReportPack:
     coverage_matrix_entry_count: int
     reproducibility_checklist_step_count: int
     risk_review_entry_count: int
+    data_rights_review_entry_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,6 +289,27 @@ class MissingRiskReviewInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalDataRightsReviewEntry:
+    """One descriptive local data-rights-review entry."""
+
+    source_label: str
+    data_label: str
+    rights_status_label: str
+    permitted_use_note: str
+    restriction_note: str
+    evidence_path: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingDataRightsReviewInput:
+    """Optional local data-rights-review descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
 SOURCE_CONTENT_FIELDS = frozenset(
     (
@@ -364,6 +386,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    data_rights_entries, missing_data_rights = _read_data_rights_review(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -394,6 +420,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_reproducibility=missing_reproducibility,
             risk_review_entries=risk_review_entries,
             missing_risk_review=missing_risk_review,
+            data_rights_entries=data_rights_entries,
+            missing_data_rights=missing_data_rights,
         ),
         encoding="utf-8",
         newline="\n",
@@ -415,6 +443,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         coverage_matrix_entry_count=len(coverage_matrix_entries),
         reproducibility_checklist_step_count=len(reproducibility_steps),
         risk_review_entry_count=len(risk_review_entries),
+        data_rights_review_entry_count=len(data_rights_entries),
     )
 
 
@@ -439,6 +468,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"coverage_matrix_entries={pack.coverage_matrix_entry_count}",
             f"reproducibility_checklist_steps={pack.reproducibility_checklist_step_count}",
             f"risk_review_entries={pack.risk_review_entry_count}",
+            f"data_rights_review_entries={pack.data_rights_review_entry_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -1753,6 +1783,115 @@ def _parse_risk_review_entry(
     )
 
 
+def _read_data_rights_review(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalDataRightsReviewEntry, ...],
+    tuple[MissingDataRightsReviewInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    rights_entries: list[LocalDataRightsReviewEntry] = []
+    missing: list[MissingDataRightsReviewInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_data_rights_review":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local data-rights-review input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingDataRightsReviewInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        rights_entries.extend(
+            _read_data_rights_review_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(rights_entries), tuple(missing)
+
+
+def _read_data_rights_review_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalDataRightsReviewEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local data-rights-review descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="data-rights-review")
+
+    rights = payload.get("rights")
+    if not isinstance(rights, list):
+        msg = f"{path}: local data-rights-review descriptor must contain a rights list"
+        raise ValueError(msg)
+
+    parsed_rights: list[LocalDataRightsReviewEntry] = []
+    for index, item in enumerate(rights, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local data-rights-review entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="data-rights-review")
+        parsed_rights.append(
+            _parse_data_rights_review_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_rights)
+
+
+def _parse_data_rights_review_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalDataRightsReviewEntry:
+    required_fields = (
+        "data_label",
+        "rights_status_label",
+        "permitted_use_note",
+        "restriction_note",
+        "evidence_path",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local data-rights-review entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    evidence_path = str(item["evidence_path"])
+    parsed = urlparse(evidence_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local data-rights-review entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalDataRightsReviewEntry(
+        source_label=source_label,
+        data_label=str(item["data_label"]),
+        rights_status_label=str(item["rights_status_label"]),
+        permitted_use_note=str(item["permitted_use_note"]),
+        restriction_note=str(item["restriction_note"]),
+        evidence_path=evidence_path,
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -1782,6 +1921,8 @@ def _render_markdown(
     missing_reproducibility: tuple[MissingReproducibilityChecklistInput, ...],
     risk_review_entries: tuple[LocalRiskReviewEntry, ...],
     missing_risk_review: tuple[MissingRiskReviewInput, ...],
+    data_rights_entries: tuple[LocalDataRightsReviewEntry, ...],
+    missing_data_rights: tuple[MissingDataRightsReviewInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -1873,6 +2014,10 @@ def _render_markdown(
             "## Local Risk Review",
             "",
             _render_risk_review(risk_review_entries, missing_risk_review),
+            "",
+            "## Local Data Rights Review",
+            "",
+            _render_data_rights_review(data_rights_entries, missing_data_rights),
             "",
             "## SEC Fundamentals",
             "",
@@ -2203,6 +2348,32 @@ def _render_risk_review(
         f"{entry.mitigation_note} | {entry.review_status_label} | {entry.evidence_path} | "
         f"{entry.limitation_note} |"
         for entry in risk_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"not supplied | not supplied | {missing_input.local_path} | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_data_rights_review(
+    rights_entries: tuple[LocalDataRightsReviewEntry, ...],
+    missing_inputs: tuple[MissingDataRightsReviewInput, ...],
+) -> str:
+    if not rights_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local data rights review | not supplied |"
+
+    rows = [
+        "| source | data | rights status | permitted use | restriction | "
+        "evidence path | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.data_label} | {entry.rights_status_label} | "
+        f"{entry.permitted_use_note} | {entry.restriction_note} | {entry.evidence_path} | "
+        f"{entry.limitation_note} |"
+        for entry in rights_entries
     )
     rows.extend(
         f"| {missing_input.display_label} | not supplied | not supplied | "
