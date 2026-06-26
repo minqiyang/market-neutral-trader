@@ -664,6 +664,17 @@ section labels, local artifact paths, appendix purpose notes, and limitation
 notes as descriptive context without ranking appendix entries, producing
 advice, or implying production readiness.
 
+After Stage 26, the next safe report-input kind is a limitation register. The
+clarified Stage 27 boundary allows a local limitation-register descriptor to
+record reviewer-supplied limitation labels, affected report section labels,
+local evidence or artifact paths, scope notes, mitigation notes, and limitation
+notes.
+
+The boundary stays descriptive. Stage 27 should make limitation-register
+metadata visible in the report pack without reading referenced contents,
+verifying outputs, scoring limitations, producing advice, or implying
+production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:

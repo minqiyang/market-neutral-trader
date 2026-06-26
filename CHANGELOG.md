@@ -6,6 +6,11 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 27 readiness for a local/offline
+  `local_limitation_register` report-input kind that records limitation labels,
+  affected report sections, local evidence or artifact paths, scope notes,
+  mitigation notes, and limitations without reading referenced contents,
+  scoring limitations, or producing advice.
 - Added Stage 26 local/offline `local_appendix_index` report-input support to
   the paper report pack, with descriptor Markdown output, missing-input
   disclosure, and rejection of secret-like fields, source-content/excerpt
