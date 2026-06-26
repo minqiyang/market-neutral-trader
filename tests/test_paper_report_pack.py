@@ -664,6 +664,116 @@ def test_paper_report_pack_rejects_unsafe_citation_index_descriptor(
         )
 
 
+def test_paper_report_pack_renders_local_term_glossary_input(tmp_path: Path) -> None:
+    term_glossary_path = _write_term_glossary_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=term_glossary_path.name,
+        input_kind="local_term_glossary",
+        display_label="Local term glossary",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.term_glossary_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Term Glossary" in text
+    assert "observed spread" in text
+    assert "term-glossary.json" in text
+    assert "yes ask minus best yes bid" in text
+    assert "report metrics only" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_term_glossary_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-term-glossary.json",
+        input_kind="local_term_glossary",
+        display_label="Missing term glossary",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Term Glossary" in text
+    assert "Missing term glossary | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_term_glossary_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_term_glossary_descriptor(
+        tmp_path,
+        extra_term_field={"private_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_term_glossary",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-term-glossary-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_term_glossary_descriptor(
+        tmp_path,
+        source_path="https://example.com/glossary.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_term_glossary",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-term-glossary-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_term_glossary_descriptor(
+        tmp_path,
+        extra_term_field={"source_excerpt": "private source contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_term_glossary",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-term-glossary-pack",
+            )
+        )
+
+
 def test_paper_report_pack_cli_writes_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
     output_dir = tmp_path / "pack"
     manifest_path = _write_report_input_manifest(tmp_path)
@@ -932,6 +1042,42 @@ def _write_citation_index_descriptor(
                         "citation_purpose": "identify local fixture source",
                         "rights_note": "public fixture metadata",
                         "limitation_note": "not a live remote fetch",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_term_glossary_descriptor(
+    tmp_path: Path,
+    *,
+    source_path: str = "term-glossary.json",
+    extra_term_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "term_glossary.json"
+    first_term = {
+        "term_label": "observed spread",
+        "source_path": source_path,
+        "definition": "yes ask minus best yes bid",
+        "usage_scope": "report metrics only",
+        "limitation_note": "local terminology metadata only",
+    }
+    if extra_term_field:
+        first_term.update(extra_term_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "terms": [
+                    first_term,
+                    {
+                        "term_label": "source inventory",
+                        "source_path": "term-glossary.json",
+                        "definition": "list of local files supplied to the report pack",
+                        "usage_scope": "local/offline provenance context",
+                        "limitation_note": "not data-rights advice",
                     },
                 ]
             }

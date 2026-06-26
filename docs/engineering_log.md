@@ -476,6 +476,20 @@ the report pack without reading source contents, embedding private or
 proprietary excerpts, fetching remote data, ranking terms, producing advice, or
 implying production readiness.
 
+## Stage 19 local term-glossary input
+
+Stage 19 added support for `local_term_glossary` manifest entries in the paper
+report pack. The implementation reads a local term-glossary descriptor as
+metadata, renders a separate Markdown section, reports missing optional
+term-glossary descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read source files referenced by the descriptor.
+It renders reviewer-supplied terms, source paths, definitions, usage scope, and
+limitation notes as descriptive context without embedding private/proprietary
+excerpts or turning terminology metadata into ranking, advice, or
+production-readiness claims.
+
 ## Interview narrative
 
 A concise way to explain the current project:
