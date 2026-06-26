@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 21 readiness for a local/offline `local_coverage_matrix`
+  report-input kind that records report-section/input/check coverage metadata
+  without executing checks, reading source contents, fetching remote data,
+  scoring coverage, or producing advice.
 - Added Stage 20 local/offline `local_assumption_register` report-input
   support to the paper report pack, with descriptor Markdown output,
   missing-input disclosure, and rejection of secret-like fields,
