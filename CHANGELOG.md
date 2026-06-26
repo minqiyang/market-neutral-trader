@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Completed the compact governance audit after Stage 35 readiness, confirming
+  synced `main`, passing `Validate`, branch protection, no open PRs, and no
+  drift before continuing to Stage 35 implementation.
 - Clarified Stage 35 readiness for a local/offline `local_delivery_notes`
   report-input kind that records delivery labels, related artifact paths,
   recipient labels, delivery status labels, delivery notes, and limitations
