@@ -6,6 +6,11 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 30 readiness for a local/offline
+  `local_follow_up_register` report-input kind that records follow-up labels,
+  related report section labels, local reference paths, owner/status labels,
+  tracking notes, and limitations without reading referenced contents,
+  executing follow-ups, scoring follow-ups, or producing advice.
 - Added Stage 29 local/offline `local_decision_log` report-input support to
   the paper report pack, with descriptor Markdown output, missing-input
   disclosure, and rejection of secret-like fields, source-content/excerpt

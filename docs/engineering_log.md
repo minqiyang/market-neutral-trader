@@ -748,6 +748,16 @@ labels, local reference paths, owner labels, status labels, rationale notes,
 and limitation notes as descriptive context without scoring decisions,
 producing advice, or implying production readiness.
 
+After Stage 29, the next safe report-input kind is a follow-up register. The
+clarified Stage 30 boundary allows a local follow-up descriptor to record
+reviewer-supplied follow-up labels, related report section labels, local
+reference paths, owner labels, status labels, tracking notes, and limitation
+notes.
+
+The boundary stays descriptive. Stage 30 should make follow-up metadata visible
+in the report pack without reading referenced contents, executing follow-ups,
+scoring follow-ups, producing advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:
