@@ -27,6 +27,13 @@ completed checkpoints are mandatory but non-terminal when they pass. Continue
 after a passing audit once `main` validation, local sync, clean state, and the
 updated handoff are verified.
 
+Use delivery-unit batching for staged work: internal checkpoints do not require
+immediate PRs, and Codex should publish once per coherent `codex/` branch after
+the readiness/spec, implementation, tests, docs/logs/changelog, handoff, and
+any due passing audit note are complete. Create docs-only or audit-only PRs
+only when the controller's stop/risk rules require them or no active delivery
+branch can safely carry the update.
+
 ## First-read workflow
 
 For future Codex runs, read these before broad exploration:
@@ -44,9 +51,9 @@ Use `docs/codex_long_running_controller.md` for PR, auto-merge, and
 owner-direct fast-path workflow rules. Codex must not bypass branch protection,
 force push, use admin override, or direct-merge/push to `main` unless every
 owner-direct fast-path condition in the controller is satisfied. GitHub
-auto-merge may be enabled only for clearly low-risk small PRs that meet the
-controller policy. Passing governance audits do not by themselves require a
-final report or pause.
+auto-merge may be enabled only for clearly low-risk delivery units that meet
+the controller policy. Passing governance audits do not by themselves require a
+final report, pause, or standalone PR.
 
 ## Continuity docs
 

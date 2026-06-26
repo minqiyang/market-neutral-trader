@@ -1053,6 +1053,17 @@ skills as accelerators rather than blockers, reserve Ponytail, TDD, grill-me,
 and handoff for the narrow cases named there, and keep skill use bounded unless
 a stop gate is triggered.
 
+`docs/codex_long_running_controller.md` now uses delivery-unit batching for
+staged publishes. Internal checkpoints are not publish checkpoints. Codex
+should work on one `codex/` branch per coherent delivery unit and publish only
+after the unit is complete, validated, risk-classified, reviewed when needed,
+and the docs/logs/handoff are updated. Readiness clarification, implementation,
+tests, docs/log/changelog updates, handoff updates, and due passing audit notes
+may be folded into the same delivery branch when they are one coherent unit.
+Do not create PRs for every small docs or handoff edit, and do not create
+standalone handoff-only or audit-only PRs unless the controller risk/stop rules
+or lack of an active delivery branch require them.
+
 ## Safety boundaries
 
 - Do not add credentials or secrets.
