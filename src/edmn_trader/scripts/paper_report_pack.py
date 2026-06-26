@@ -51,6 +51,7 @@ class PaperReportPack:
     risk_review_entry_count: int
     data_rights_review_entry_count: int
     artifact_inventory_entry_count: int
+    appendix_index_entry_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,6 +333,26 @@ class MissingArtifactInventoryInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalAppendixIndexEntry:
+    """One descriptive local appendix-index entry."""
+
+    source_label: str
+    appendix_label: str
+    report_section_label: str
+    artifact_path: str
+    appendix_purpose_note: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingAppendixIndexInput:
+    """Optional local appendix-index descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
 SOURCE_CONTENT_FIELDS = frozenset(
     (
@@ -416,6 +437,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    appendix_index_entries, missing_appendix_index = _read_appendix_index(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -450,6 +475,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_data_rights=missing_data_rights,
             artifact_inventory_entries=artifact_inventory_entries,
             missing_artifact_inventory=missing_artifact_inventory,
+            appendix_index_entries=appendix_index_entries,
+            missing_appendix_index=missing_appendix_index,
         ),
         encoding="utf-8",
         newline="\n",
@@ -473,6 +500,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         risk_review_entry_count=len(risk_review_entries),
         data_rights_review_entry_count=len(data_rights_entries),
         artifact_inventory_entry_count=len(artifact_inventory_entries),
+        appendix_index_entry_count=len(appendix_index_entries),
     )
 
 
@@ -499,6 +527,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"risk_review_entries={pack.risk_review_entry_count}",
             f"data_rights_review_entries={pack.data_rights_review_entry_count}",
             f"artifact_inventory_entries={pack.artifact_inventory_entry_count}",
+            f"appendix_index_entries={pack.appendix_index_entry_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -2031,6 +2060,113 @@ def _parse_artifact_inventory_entry(
     )
 
 
+def _read_appendix_index(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[
+    tuple[LocalAppendixIndexEntry, ...],
+    tuple[MissingAppendixIndexInput, ...],
+]:
+    if manifest_path is None:
+        return (), ()
+
+    appendix_entries: list[LocalAppendixIndexEntry] = []
+    missing: list[MissingAppendixIndexInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_appendix_index":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local appendix-index input is "
+                    f"missing: {entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingAppendixIndexInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        appendix_entries.extend(
+            _read_appendix_index_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(appendix_entries), tuple(missing)
+
+
+def _read_appendix_index_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalAppendixIndexEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local appendix-index descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="appendix-index")
+
+    appendices = payload.get("appendices")
+    if not isinstance(appendices, list):
+        msg = f"{path}: local appendix-index descriptor must contain an appendices list"
+        raise ValueError(msg)
+
+    parsed_appendices: list[LocalAppendixIndexEntry] = []
+    for index, item in enumerate(appendices, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local appendix-index entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="appendix-index")
+        parsed_appendices.append(
+            _parse_appendix_index_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_appendices)
+
+
+def _parse_appendix_index_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalAppendixIndexEntry:
+    required_fields = (
+        "appendix_label",
+        "report_section_label",
+        "artifact_path",
+        "appendix_purpose_note",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local appendix-index entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    artifact_path = str(item["artifact_path"])
+    parsed = urlparse(artifact_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local appendix-index entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalAppendixIndexEntry(
+        source_label=source_label,
+        appendix_label=str(item["appendix_label"]),
+        report_section_label=str(item["report_section_label"]),
+        artifact_path=artifact_path,
+        appendix_purpose_note=str(item["appendix_purpose_note"]),
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -2064,6 +2200,8 @@ def _render_markdown(
     missing_data_rights: tuple[MissingDataRightsReviewInput, ...],
     artifact_inventory_entries: tuple[LocalArtifactInventoryEntry, ...],
     missing_artifact_inventory: tuple[MissingArtifactInventoryInput, ...],
+    appendix_index_entries: tuple[LocalAppendixIndexEntry, ...],
+    missing_appendix_index: tuple[MissingAppendixIndexInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -2166,6 +2304,10 @@ def _render_markdown(
                 artifact_inventory_entries,
                 missing_artifact_inventory,
             ),
+            "",
+            "## Local Appendix Index",
+            "",
+            _render_appendix_index(appendix_index_entries, missing_appendix_index),
             "",
             "## SEC Fundamentals",
             "",
@@ -2553,6 +2695,31 @@ def _render_artifact_inventory(
     rows.extend(
         f"| {missing_input.display_label} | not supplied | not supplied | "
         f"{missing_input.local_path} | not supplied | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_appendix_index(
+    appendix_entries: tuple[LocalAppendixIndexEntry, ...],
+    missing_inputs: tuple[MissingAppendixIndexInput, ...],
+) -> str:
+    if not appendix_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local appendix index | not supplied |"
+
+    rows = [
+        "| source | appendix | report section | artifact path | purpose | limitation |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.appendix_label} | "
+        f"{entry.report_section_label} | {entry.artifact_path} | "
+        f"{entry.appendix_purpose_note} | {entry.limitation_note} |"
+        for entry in appendix_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"{missing_input.local_path} | not supplied | not supplied |"
         for missing_input in missing_inputs
     )
     return "\n".join(rows)

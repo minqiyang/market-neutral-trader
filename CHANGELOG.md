@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 26 local/offline `local_appendix_index` report-input support to
+  the paper report pack, with descriptor Markdown output, missing-input
+  disclosure, and rejection of secret-like fields, source-content/excerpt
+  fields, and remote URLs.
 - Clarified Stage 26 readiness for a local/offline `local_appendix_index`
   report-input kind that records appendix entry labels, report section labels,
   local artifact paths, appendix purpose notes, and limitations without reading

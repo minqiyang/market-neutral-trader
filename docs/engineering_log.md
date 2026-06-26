@@ -649,6 +649,21 @@ visible in the report pack without reading artifact contents, verifying
 outputs, approving distribution, ranking appendix entries, producing advice, or
 implying production readiness.
 
+## Stage 26 local appendix-index input
+
+Stage 26 added support for `local_appendix_index` manifest entries in the
+paper report pack. The implementation reads a local appendix-index descriptor
+as metadata, renders a separate Markdown section, reports missing optional
+appendix-index descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not read artifact/source files referenced by the
+descriptor, verify outputs, verify local environments, or approve
+distribution. It renders reviewer-supplied appendix entry labels, report
+section labels, local artifact paths, appendix purpose notes, and limitation
+notes as descriptive context without ranking appendix entries, producing
+advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:
