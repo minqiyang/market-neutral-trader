@@ -6,6 +6,11 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 32 readiness for a local/offline
+  `local_distribution_checklist` report-input kind that records distribution
+  item labels, related artifact paths, readiness status labels, owners, review
+  notes, and limitations without reading artifact contents, approving
+  distribution, verifying rights, scoring checklist items, or producing advice.
 - Added Stage 31 local/offline `local_version_notes` report-input support to
   the paper report pack, with descriptor Markdown output, missing-input
   disclosure, and rejection of secret-like fields, source-content/excerpt

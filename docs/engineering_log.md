@@ -807,6 +807,17 @@ version labels, local artifact paths, change-summary labels, owner labels,
 status labels, and limitation notes as descriptive context without scoring
 versions, producing advice, or implying production readiness.
 
+After Stage 31, the next safe report-input kind is a distribution checklist.
+The clarified Stage 32 boundary allows a local distribution-checklist
+descriptor to record reviewer-supplied distribution item labels, related
+artifact paths, readiness status labels, owner labels, review notes, and
+limitation notes.
+
+The boundary stays descriptive. Stage 32 should make distribution-checklist
+metadata visible in the report pack without reading artifact contents,
+approving distribution, verifying rights, scoring checklist items, producing
+advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:
