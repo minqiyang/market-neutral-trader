@@ -1060,9 +1060,18 @@ after the unit is complete, validated, risk-classified, reviewed when needed,
 and the docs/logs/handoff are updated. Readiness clarification, implementation,
 tests, docs/log/changelog updates, handoff updates, and due passing audit notes
 may be folded into the same delivery branch when they are one coherent unit.
-Do not create PRs for every small docs or handoff edit, and do not create
+Do not create PRs for every small docs, handoff, or audit edit, and do not create
 standalone handoff-only or audit-only PRs unless the controller risk/stop rules
 or lack of an active delivery branch require them.
+
+The controller now also has a token-economical optional-skill policy. The
+project Skill and token-budget rules stay default; TDD is for behavior changes;
+Ponytail review is for final publish of implementation diffs; Matt Pocock
+`grill-with-docs` is only for ambiguous/high-risk design or domain terminology
+drift; EDD/eval-before-ship style is used only if installed and useful, or by
+the equivalent checklist; and Skill Maker / skill-creator is reserved for
+workflows that have repeated at least twice. If an optional skill is missing,
+renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Safety boundaries
 

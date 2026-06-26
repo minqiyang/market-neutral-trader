@@ -34,6 +34,15 @@ any due passing audit note are complete. Create docs-only or audit-only PRs
 only when the controller's stop/risk rules require them or no active delivery
 branch can safely carry the update.
 
+Use optional skills only when they save tokens or reduce risk. The project
+Skill and long-session controller remain the default. Use TDD for behavior
+changes, Ponytail review before final publish for implementation diffs,
+Matt Pocock `grill-with-docs` only for ambiguous/high-risk design or domain
+terminology drift, EDD/eval-before-ship style only when installed and useful
+or by equivalent checklist, and Skill Maker / skill-creator only after a
+workflow repeats at least twice. Do not spend tokens debugging unavailable
+optional skills; use the equivalent checklist and continue.
+
 ## First-read workflow
 
 For future Codex runs, read these before broad exploration:

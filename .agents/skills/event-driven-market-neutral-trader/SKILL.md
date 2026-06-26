@@ -57,6 +57,14 @@ only for high/unclear risk, compliance ambiguity, external credentials,
 production endpoints, broker integration, live data, strategy advice, or user
 judgment.
 
+Use optional skills only when they save tokens or reduce risk. Use TDD for
+behavior changes, Ponytail review before final publish for implementation
+diffs, Matt Pocock `grill-with-docs` only for ambiguous/high-risk design or
+domain terminology drift, EDD/eval-before-ship style only when installed and
+useful or by equivalent checklist, and Skill Maker / skill-creator only after a
+workflow repeats at least twice. If an optional skill is unavailable, renamed,
+or noisy to invoke, use the equivalent checklist and continue.
+
 For Kalshi-style binary orderbooks, normalize YES-side books from local data by treating YES bids as canonical bids and NO bids as implied YES asks using `1 - no_price`.
 
 For staged project work, read `docs/current_handoff.md` and `docs/repo_map.md` before broad exploration. After a stage-sized change, update `docs/current_handoff.md`, `docs/engineering_log.md`, and `CHANGELOG.md` with concise durable context.

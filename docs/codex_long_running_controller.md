@@ -22,25 +22,28 @@ demo-first, risk-controlled stage plan.
 
 - Apply this controller's stage boundary, stop gates, context-budget and
   token-budget rules, and final-report rules on every checkpoint.
-- Use the project Skill for repository-specific staged work before optional
-  skills.
-- Keep optional skills token-efficient: project Skill and token-budget rules
-  always apply, TDD applies to behavior changes, Ponytail review applies before
-  publish for implementation diffs, and Matt Pocock `grill-me` applies only for
-  ambiguous or high-risk design.
+- Always use the project long-session governance and token-budget rules.
+- Use the project Skill first when it exists and is relevant.
+- Keep optional skills token-economical: use them only when they save tokens,
+  reduce risk, or provide a reusable checklist that is shorter than manual
+  exploration.
+- Use TDD workflow for behavior-changing implementation.
+- Use Ponytail review only before final publish for implementation diffs,
+  mainly to remove over-engineering.
+- Use Matt Pocock `grill-with-docs` only when the active stage has ambiguous or
+  high-risk design, or when domain terminology has drifted enough that durable
+  docs need to be sharpened.
+- Use Matt Pocock EDD/eval-before-ship style only if the installed skill exists
+  and is easy to invoke; otherwise use the equivalent checklist: define
+  expected outputs, add offline fixtures or tests first, then implement.
+- Use Skill Maker / skill-creator only when a repeated workflow has appeared
+  at least twice and should become reusable project memory.
 - Treat optional skills and preset commands as accelerators, not dependencies.
   If a skill is unavailable, uninstalled, renamed, or noisy to invoke, use the
   equivalent checklist and keep moving.
 - Limit optional skill use to at most one planning skill before implementation
   and one review skill before final merge or PR unless a stop gate triggers
   deeper review.
-- Use Ponytail review only for implementation diffs, mainly before final
-  merge/push or PR to catch over-engineering; skip it for readiness checks and
-  documentation-only changes.
-- Use Matt Pocock `grill-me` only for ambiguous or high-risk design stages;
-  skip it for simple readiness/docs work and when `docs/STAGE_PLAN.md` already
-  gives complete acceptance criteria.
-- Use TDD-style workflow for implementation stages that add behavior.
 - Use handoff or compaction only when context is large, before switching
   sessions, or when a stop gate requires preserving state.
 
@@ -61,16 +64,17 @@ demo-first, risk-controlled stage plan.
 - A delivery unit may include readiness/spec clarification, implementation,
   tests, docs/log/changelog updates, handoff updates, and a compact audit note
   when due.
-- Do not create a PR for every small docs, log, or handoff edit.
+- Do not create a PR for every small docs, log, handoff, or audit edit.
 - Do not create separate handoff-only PRs unless a stale handoff blocks all
   safe continuation.
 - If a spec is incomplete but can be safely clarified and implemented within
   the same stage/run, clarify it on the same branch and continue. Publish once
   after the full delivery unit is complete.
 - If the spec gap involves high or unclear risk, compliance ambiguity,
-  external credentials, production endpoints, broker integration, live data,
-  strategy advice, or user judgment, create a docs-only clarification PR or
-  stop for review.
+  compliance-sensitive scope, external credentials, production endpoints,
+  broker integration, live data, strategy advice, or user judgment, create a
+  docs-only clarification PR or stop for review.
+- Publish once after the coherent delivery unit is complete and validated.
 - If a delivery unit grows too large or mixes unrelated risk domains, split it
   before publish.
 
@@ -111,6 +115,11 @@ demo-first, risk-controlled stage plan.
 
 Apply this publish policy at the delivery-unit boundary, not after every small
 edit.
+
+Keep the existing owner-direct fast path and PR fallback rules, but evaluate
+them only at the delivery-unit boundary. Never force push, never use admin
+override, and never bypass failed checks. High or unclear risk stops for human
+review.
 
 Publish only after:
 
