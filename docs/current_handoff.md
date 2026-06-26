@@ -23,18 +23,17 @@ report-input metadata and Stage 21 local coverage-matrix report-input
 metadata, plus Stage 22 local reproducibility-checklist report-input metadata
 and Stage 23 local risk-review report-input metadata, plus Stage 24 local
 data-rights-review report-input metadata, plus Stage 25 local
-artifact-inventory report-input metadata. Stage 26 readiness is clarified for
-a future local/offline appendix-index report-input kind.
+artifact-inventory report-input metadata, plus Stage 26 local appendix-index
+report-input metadata.
 
 ## Last completed stage
 
-Stage 26 readiness clarification: Local appendix-index report input,
-local/offline only.
+Stage 26: Local appendix-index report input, local/offline only.
 
 ## Stage plan status
 
 `docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
-1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, and 25. The ledger records
+1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, and 26. The ledger records
 purpose, known commit hashes, files/modules added, validation commands, status,
 next-stage boundary, and safety status for each completed stage.
 
@@ -540,9 +539,22 @@ entries, artifacts, rights status, risk, reproducibility, coverage, sources, or
 securities, recommend allocations, optimize strategies, emit executable
 advice, imply production readiness, or claim profitability.
 
-Next checkpoint: Stage 26 implementation only.
+Stage 26 is now implemented as a local/offline report-input kind for the paper
+report pack. It reads only a local appendix-index descriptor referenced by the
+manifest, renders a separate descriptive appendix-index section, reports
+missing optional appendix-index descriptors as not supplied, rejects
+secret-like fields, source-content/excerpt fields, and remote URLs, and does
+not execute commands, run checks from report inputs, read artifact contents,
+verify outputs, verify local environments, approve distribution, read evidence
+contents, read source contents, read raw private data contents, embed private
+or proprietary excerpts, add adapters, fetch remote data, score or rank
+appendix entries, artifacts, rights status, risk, reproducibility, coverage,
+sources, or securities, recommend allocations, optimize strategies, emit
+executable advice, imply production readiness, or claim profitability.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only the Stage 26 local/offline local_appendix_index report-input kind in the paper report pack, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, command execution from report inputs, validation execution from report inputs, artifact-content reads, output verification, local environment verification, distribution approval, rights/risk/reproducibility/coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
+Next checkpoint: next concrete report-input-kind readiness clarification only.
+
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Clarify only the next concrete local/offline report-input kind in docs/STAGE_PLAN.md; do not implement it yet, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, strategy optimization, rights/risk/reproducibility/coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
 
 ## Important files
 
@@ -600,8 +612,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   Markdown report generator for Stage 6 logs and explicit fill assumptions.
 - `scripts/07_research_report.py`: root wrapper for Stage 7 reporting.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
-  10/12/13/14/15/16/17/18/19/20/21/22/23/24/25 offline paper research report-pack generator.
-- `scripts/10_paper_report_pack.py`: root wrapper for Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25
+  10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26 offline paper research report-pack generator.
+- `scripts/10_paper_report_pack.py`: root wrapper for Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26
   report packs.
 - `tests/test_kalshi_client.py`: mocked HTTP coverage for the Stage 2 client.
 - `tests/test_kalshi_orderbook.py`: normalizer coverage.
@@ -620,7 +632,7 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   normalization, guarded public client, and malformed-book coverage.
 - `tests/test_sec_edgar_adapter.py`: Stage 9 SEC companyfacts normalization,
   guarded public client, explicit User-Agent, and malformed-value coverage.
-- `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25 report-pack coverage
+- `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26 report-pack coverage
   for observed metrics, source inventory, missing optional inputs, local SEC
   facts, manifest metadata, local run-comparison metadata, unsafe
   manifest/comparison rejection, local validation-summary metadata, unsafe
@@ -635,7 +647,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   reproducibility-checklist rejection, local risk-review metadata, unsafe
   risk-review rejection, local data-rights-review metadata, unsafe
   data-rights-review rejection, local artifact-inventory metadata, unsafe
-  artifact-inventory rejection, and CLI output.
+  artifact-inventory rejection, local appendix-index metadata, unsafe
+  appendix-index rejection, and CLI output.
 
 ## Commands that currently pass
 
@@ -743,24 +756,23 @@ a stop gate is triggered.
 
 ## Next recommended stage
 
-Stage 26 implementation only. Start only after reconfirming clean synced
-`main`, CI, branch protection, required `Validate` status, local validation,
-and whether the owner-direct fast path or PR path applies.
+Next concrete report-input-kind readiness clarification only. Start only after
+reconfirming clean synced `main`, CI, branch protection, required `Validate`
+status, local validation, and whether the owner-direct fast path or PR path
+applies.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Implement only the Stage 26 local/offline
-`local_appendix_index` report-input kind in the paper report pack, and do not
+the verified current handoff. Clarify only the next concrete local/offline
+report-input kind in `docs/STAGE_PLAN.md`; do not implement it yet, and do not
 add new market-data adapters, broker integration, credentials, account data,
 portfolio data, live quote feeds, paid-vendor data, WebSockets, remote
-fetching, production endpoints, command execution from report inputs,
-validation execution from report inputs, artifact-content reads, output
-verification, local environment verification, distribution approval,
-rights/risk/reproducibility/coverage/source/security ranking, allocation
-advice, executable advice, production-readiness claims, unsupported data
+fetching, production endpoints, strategy optimization, rights/risk/
+reproducibility/coverage/source/security ranking, allocation advice,
+executable advice, production-readiness claims, unsupported data
 redistribution, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-26 14:05:47 -07:00
+2026-06-26 14:14:08 -07:00
