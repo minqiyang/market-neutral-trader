@@ -2,7 +2,7 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages through Stage 22. They are
+These records summarize the locally completed stages through Stage 23. They are
 intended as a durable audit map; implementation details remain in the source,
 tests, changelog, engineering log, and handoff archive.
 
@@ -525,6 +525,33 @@ tests, changelog, engineering log, and handoff archive.
   coverage/source/security ranking, no allocation advice, no executable advice,
   no strategy optimization, no production-readiness claim, no unsupported
   redistribution, and no profitability claim.
+
+### Stage 23: Local risk-review report input, local/offline only
+
+- Status: complete.
+- Commit: pending on the Stage 23 implementation branch.
+- Purpose: add local reviewer-supplied risk-control labels, boundary labels,
+  mitigation notes, review status labels, local evidence paths, and limitation
+  metadata.
+- Files/modules changed: `src/edmn_trader/scripts/paper_report_pack.py`,
+  `tests/test_paper_report_pack.py`, and documentation updates.
+- Validation commands: `pytest tests/test_paper_report_pack.py`, `pytest`,
+  `ruff check .`, `python scripts/01_replay_orderbook_fixture.py`, and
+  `git diff --check`.
+- Next-stage boundary: later stages may add another concrete report-input kind
+  only after its data-source rights, offline fixture behavior, and
+  non-executable report boundaries are clarified first.
+- Safety status: local/offline risk-review metadata only, no command execution
+  from report inputs, no validation execution from report inputs, no policy
+  evaluation, no risk-check execution, no order placement, no evidence-content
+  reads, no source-content reads, no raw private data reads, no
+  private/proprietary excerpts, no local environment verification, no output
+  verification, no new data adapters, no broker integration, no credentials, no
+  account or portfolio data, no live quote feed, no paid-vendor market data,
+  no WebSocket, no remote fetch, no risk/reproducibility/coverage/source/
+  security ranking, no allocation advice, no executable advice, no strategy
+  optimization, no production-readiness claim, no unsupported redistribution,
+  and no profitability claim.
 
 ## Stage 0: Repository foundation
 

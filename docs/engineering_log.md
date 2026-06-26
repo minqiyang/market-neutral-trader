@@ -573,6 +573,21 @@ visible in the report pack without executing checks, reading evidence contents,
 evaluating policies, placing orders, scoring risk, producing advice, or
 implying production readiness.
 
+## Stage 23 local risk-review input
+
+Stage 23 added support for `local_risk_review` manifest entries in the paper
+report pack. The implementation reads a local risk-review descriptor as
+metadata, renders a separate Markdown section, reports missing optional
+risk-review descriptors as not supplied, and rejects secret-like fields,
+source-content or excerpt fields, and remote URLs.
+
+The report pack still does not execute checks, evaluate policies, run risk
+checks, place orders, or read evidence/source files referenced by the
+descriptor. It renders reviewer-supplied risk-control labels, boundary labels,
+mitigation notes, review status labels, evidence paths, and limitation notes as
+descriptive context without scoring risk, producing advice, or implying
+production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:

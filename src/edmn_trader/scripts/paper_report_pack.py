@@ -48,6 +48,7 @@ class PaperReportPack:
     assumption_register_entry_count: int
     coverage_matrix_entry_count: int
     reproducibility_checklist_step_count: int
+    risk_review_entry_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,6 +267,27 @@ class MissingReproducibilityChecklistInput:
     local_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class LocalRiskReviewEntry:
+    """One descriptive local risk-review entry."""
+
+    source_label: str
+    risk_control_label: str
+    boundary_label: str
+    mitigation_note: str
+    review_status_label: str
+    evidence_path: str
+    limitation_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class MissingRiskReviewInput:
+    """Optional local risk-review descriptor that was not supplied."""
+
+    display_label: str
+    local_path: str
+
+
 VALIDATION_SUMMARY_STATUSES = frozenset(("pass", "fail", "skipped"))
 SOURCE_CONTENT_FIELDS = frozenset(
     (
@@ -338,6 +360,10 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         pack_input.report_input_manifest,
         manifest_entries,
     )
+    risk_review_entries, missing_risk_review = _read_risk_review(
+        pack_input.report_input_manifest,
+        manifest_entries,
+    )
     output_path = pack_input.output_dir / "report_pack.md"
     output_path.write_text(
         _render_markdown(
@@ -366,6 +392,8 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
             missing_coverage_matrix=missing_coverage_matrix,
             reproducibility_steps=reproducibility_steps,
             missing_reproducibility=missing_reproducibility,
+            risk_review_entries=risk_review_entries,
+            missing_risk_review=missing_risk_review,
         ),
         encoding="utf-8",
         newline="\n",
@@ -386,6 +414,7 @@ def generate_paper_report_pack(pack_input: PaperReportPackInput) -> PaperReportP
         assumption_register_entry_count=len(assumption_register_entries),
         coverage_matrix_entry_count=len(coverage_matrix_entries),
         reproducibility_checklist_step_count=len(reproducibility_steps),
+        risk_review_entry_count=len(risk_review_entries),
     )
 
 
@@ -409,6 +438,7 @@ def render_summary(pack: PaperReportPack) -> str:
             f"assumption_register_entries={pack.assumption_register_entry_count}",
             f"coverage_matrix_entries={pack.coverage_matrix_entry_count}",
             f"reproducibility_checklist_steps={pack.reproducibility_checklist_step_count}",
+            f"risk_review_entries={pack.risk_review_entry_count}",
             "limitations=local/offline pack; descriptive only; no profitability claims",
         )
     )
@@ -1617,6 +1647,112 @@ def _parse_reproducibility_checklist_step(
     )
 
 
+def _read_risk_review(
+    manifest_path: Path | None,
+    manifest_entries: tuple[ReportInputManifestEntry, ...],
+) -> tuple[tuple[LocalRiskReviewEntry, ...], tuple[MissingRiskReviewInput, ...]]:
+    if manifest_path is None:
+        return (), ()
+
+    risk_entries: list[LocalRiskReviewEntry] = []
+    missing: list[MissingRiskReviewInput] = []
+    for entry in manifest_entries:
+        if entry.input_kind != "local_risk_review":
+            continue
+        descriptor_path = _resolve_manifest_local_path(manifest_path, entry.local_path)
+        if not descriptor_path.exists():
+            if entry.required:
+                msg = (
+                    f"{manifest_path}: required local risk-review input is missing: "
+                    f"{entry.local_path}"
+                )
+                raise ValueError(msg)
+            missing.append(
+                MissingRiskReviewInput(
+                    display_label=entry.display_label,
+                    local_path=entry.local_path,
+                )
+            )
+            continue
+
+        risk_entries.extend(
+            _read_risk_review_descriptor(
+                descriptor_path,
+                source_label=entry.display_label,
+            )
+        )
+    return tuple(risk_entries), tuple(missing)
+
+
+def _read_risk_review_descriptor(
+    path: Path, *, source_label: str
+) -> tuple[LocalRiskReviewEntry, ...]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        msg = f"{path}: local risk-review descriptor must contain a JSON object"
+        raise ValueError(msg)
+    _reject_secret_like_fields(payload, path=path)
+    _reject_source_content_fields(payload, path=path, descriptor_label="risk-review")
+
+    risks = payload.get("risks")
+    if not isinstance(risks, list):
+        msg = f"{path}: local risk-review descriptor must contain a risks list"
+        raise ValueError(msg)
+
+    parsed_risks: list[LocalRiskReviewEntry] = []
+    for index, item in enumerate(risks, start=1):
+        if not isinstance(item, dict):
+            msg = f"{path}: local risk-review entry {index} must be an object"
+            raise ValueError(msg)
+        _reject_secret_like_fields(item, path=path)
+        _reject_source_content_fields(item, path=path, descriptor_label="risk-review")
+        parsed_risks.append(
+            _parse_risk_review_entry(
+                item,
+                path=path,
+                index=index,
+                source_label=source_label,
+            )
+        )
+    return tuple(parsed_risks)
+
+
+def _parse_risk_review_entry(
+    item: dict[str, object], *, path: Path, index: int, source_label: str
+) -> LocalRiskReviewEntry:
+    required_fields = (
+        "risk_control_label",
+        "boundary_label",
+        "mitigation_note",
+        "review_status_label",
+        "evidence_path",
+        "limitation_note",
+    )
+    missing = [field for field in required_fields if field not in item]
+    if missing:
+        msg = (
+            f"{path}: local risk-review entry {index} "
+            f"missing field(s): {', '.join(missing)}"
+        )
+        raise ValueError(msg)
+
+    evidence_path = str(item["evidence_path"])
+    parsed = urlparse(evidence_path)
+    if parsed.scheme or parsed.netloc:
+        msg = f"{path}: local risk-review entry {index} remote URL is not supported"
+        raise ValueError(msg)
+
+    return LocalRiskReviewEntry(
+        source_label=source_label,
+        risk_control_label=str(item["risk_control_label"]),
+        boundary_label=str(item["boundary_label"]),
+        mitigation_note=str(item["mitigation_note"]),
+        review_status_label=str(item["review_status_label"]),
+        evidence_path=evidence_path,
+        limitation_note=str(item["limitation_note"]),
+    )
+
+
 def _render_markdown(
     *,
     pack_input: PaperReportPackInput,
@@ -1644,6 +1780,8 @@ def _render_markdown(
     missing_coverage_matrix: tuple[MissingCoverageMatrixInput, ...],
     reproducibility_steps: tuple[LocalReproducibilityChecklistStep, ...],
     missing_reproducibility: tuple[MissingReproducibilityChecklistInput, ...],
+    risk_review_entries: tuple[LocalRiskReviewEntry, ...],
+    missing_risk_review: tuple[MissingRiskReviewInput, ...],
 ) -> str:
     return "\n".join(
         (
@@ -1731,6 +1869,10 @@ def _render_markdown(
                 reproducibility_steps,
                 missing_reproducibility,
             ),
+            "",
+            "## Local Risk Review",
+            "",
+            _render_risk_review(risk_review_entries, missing_risk_review),
             "",
             "## SEC Fundamentals",
             "",
@@ -2039,6 +2181,32 @@ def _render_reproducibility_checklist(
     rows.extend(
         f"| {missing_input.display_label} | not supplied | {missing_input.local_path} | "
         "not supplied | not supplied | not supplied | not supplied |"
+        for missing_input in missing_inputs
+    )
+    return "\n".join(rows)
+
+
+def _render_risk_review(
+    risk_entries: tuple[LocalRiskReviewEntry, ...],
+    missing_inputs: tuple[MissingRiskReviewInput, ...],
+) -> str:
+    if not risk_entries and not missing_inputs:
+        return "| input | status |\n| --- | --- |\n| Local risk review | not supplied |"
+
+    rows = [
+        "| source | risk control | boundary | mitigation | review status | "
+        "evidence path | limitation |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    rows.extend(
+        f"| {entry.source_label} | {entry.risk_control_label} | {entry.boundary_label} | "
+        f"{entry.mitigation_note} | {entry.review_status_label} | {entry.evidence_path} | "
+        f"{entry.limitation_note} |"
+        for entry in risk_entries
+    )
+    rows.extend(
+        f"| {missing_input.display_label} | not supplied | not supplied | "
+        f"not supplied | not supplied | {missing_input.local_path} | not supplied |"
         for missing_input in missing_inputs
     )
     return "\n".join(rows)

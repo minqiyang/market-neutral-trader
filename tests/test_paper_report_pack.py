@@ -1107,6 +1107,117 @@ def test_paper_report_pack_rejects_unsafe_reproducibility_checklist_descriptor(
         )
 
 
+def test_paper_report_pack_renders_local_risk_review_input(tmp_path: Path) -> None:
+    risk_review_path = _write_risk_review_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=risk_review_path.name,
+        input_kind="local_risk_review",
+        display_label="Local risk review",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.risk_review_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Risk Review" in text
+    assert "No live order placement" in text
+    assert "LIVE_DISABLED boundary" in text
+    assert "keep execution disabled outside fake adapter demos" in text
+    assert "reviewed" in text
+    assert "docs/RISK_POLICY.md" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_risk_review_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-risk-review.json",
+        input_kind="local_risk_review",
+        display_label="Missing risk review",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Risk Review" in text
+    assert "Missing risk review | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_risk_review_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_risk_review_descriptor(
+        tmp_path,
+        extra_risk_field={"api_secret": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_risk_review",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-risk-review-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_risk_review_descriptor(
+        tmp_path,
+        evidence_path="https://example.com/risk.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_risk_review",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-risk-review-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_risk_review_descriptor(
+        tmp_path,
+        extra_risk_field={"text": "private evidence contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_risk_review",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-risk-review-pack",
+            )
+        )
+
+
 def test_paper_report_pack_cli_writes_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
     output_dir = tmp_path / "pack"
     manifest_path = _write_report_input_manifest(tmp_path)
@@ -1523,6 +1634,44 @@ def _write_reproducibility_checklist_descriptor(
                         "environment_label": "local editable install",
                         "expected_output_label": "test output already supplied",
                         "limitation_note": "descriptive only; does not verify output",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_risk_review_descriptor(
+    tmp_path: Path,
+    *,
+    evidence_path: str = "docs/RISK_POLICY.md",
+    extra_risk_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "risk_review.json"
+    first_risk = {
+        "risk_control_label": "No live order placement",
+        "boundary_label": "LIVE_DISABLED boundary",
+        "mitigation_note": "keep execution disabled outside fake adapter demos",
+        "review_status_label": "reviewed",
+        "evidence_path": evidence_path,
+        "limitation_note": "metadata only; does not evaluate policies",
+    }
+    if extra_risk_field:
+        first_risk.update(extra_risk_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "risks": [
+                    first_risk,
+                    {
+                        "risk_control_label": "No external credentials",
+                        "boundary_label": "local/offline report input",
+                        "mitigation_note": "descriptor contains labels only",
+                        "review_status_label": "not supplied by automation",
+                        "evidence_path": "docs/current_handoff.md",
+                        "limitation_note": "descriptive only; does not score risk",
                     },
                 ]
             }

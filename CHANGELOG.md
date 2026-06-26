@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 23 local/offline `local_risk_review` report-input support to the
+  paper report pack, with descriptor Markdown output, missing-input disclosure,
+  and rejection of secret-like fields, source-content/excerpt fields, and
+  remote URLs.
 - Clarified Stage 23 readiness for a local/offline `local_risk_review`
   report-input kind that records risk-control labels, boundary labels,
   mitigation notes, review status labels, evidence paths, and limitations
