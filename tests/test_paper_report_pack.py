@@ -774,6 +774,116 @@ def test_paper_report_pack_rejects_unsafe_term_glossary_descriptor(
         )
 
 
+def test_paper_report_pack_renders_local_assumption_register_input(tmp_path: Path) -> None:
+    assumption_register_path = _write_assumption_register_descriptor(tmp_path)
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=assumption_register_path.name,
+        input_kind="local_assumption_register",
+        display_label="Local assumption register",
+    )
+    output_dir = tmp_path / "pack"
+
+    pack = generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    assert pack.assumption_register_entry_count == 2
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Assumption Register" in text
+    assert "fills not inferred" in text
+    assert "assumption-register.json" in text
+    assert "keep observed metrics separate" in text
+    assert "paper report pack only" in text
+    assert "recommend" not in text.lower()
+
+
+def test_paper_report_pack_marks_missing_optional_assumption_register_not_supplied(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path="missing-assumption-register.json",
+        input_kind="local_assumption_register",
+        display_label="Missing assumption register",
+    )
+    output_dir = tmp_path / "pack"
+
+    generate_paper_report_pack(
+        PaperReportPackInput(
+            market_maker_logs=(_write_stage_6_log(tmp_path),),
+            report_input_manifest=manifest_path,
+            output_dir=output_dir,
+        )
+    )
+
+    text = (output_dir / "report_pack.md").read_text(encoding="utf-8")
+    assert "Local Assumption Register" in text
+    assert "Missing assumption register | not supplied" in text
+
+
+def test_paper_report_pack_rejects_unsafe_assumption_register_descriptor(
+    tmp_path: Path,
+) -> None:
+    secret_descriptor_path = _write_assumption_register_descriptor(
+        tmp_path,
+        extra_assumption_field={"api_key": "should-not-be-read"},
+    )
+    secret_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=secret_descriptor_path.name,
+        input_kind="local_assumption_register",
+    )
+    with pytest.raises(ValueError, match="secret-like"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=secret_manifest_path,
+                output_dir=tmp_path / "secret-assumption-register-pack",
+            )
+        )
+
+    remote_descriptor_path = _write_assumption_register_descriptor(
+        tmp_path,
+        source_path="https://example.com/assumptions.md",
+    )
+    remote_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=remote_descriptor_path.name,
+        input_kind="local_assumption_register",
+    )
+    with pytest.raises(ValueError, match="remote URL"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=remote_manifest_path,
+                output_dir=tmp_path / "remote-assumption-register-pack",
+            )
+        )
+
+    excerpt_descriptor_path = _write_assumption_register_descriptor(
+        tmp_path,
+        extra_assumption_field={"raw_text": "private source contents"},
+    )
+    excerpt_manifest_path = _write_report_input_manifest(
+        tmp_path,
+        local_path=excerpt_descriptor_path.name,
+        input_kind="local_assumption_register",
+    )
+    with pytest.raises(ValueError, match="source-content"):
+        generate_paper_report_pack(
+            PaperReportPackInput(
+                market_maker_logs=(_write_stage_6_log(tmp_path),),
+                report_input_manifest=excerpt_manifest_path,
+                output_dir=tmp_path / "excerpt-assumption-register-pack",
+            )
+        )
+
+
 def test_paper_report_pack_cli_writes_markdown(tmp_path: Path, capsys, monkeypatch) -> None:
     output_dir = tmp_path / "pack"
     manifest_path = _write_report_input_manifest(tmp_path)
@@ -1078,6 +1188,42 @@ def _write_term_glossary_descriptor(
                         "definition": "list of local files supplied to the report pack",
                         "usage_scope": "local/offline provenance context",
                         "limitation_note": "not data-rights advice",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return descriptor_path
+
+
+def _write_assumption_register_descriptor(
+    tmp_path: Path,
+    *,
+    source_path: str = "assumption-register.json",
+    extra_assumption_field: dict[str, str] | None = None,
+) -> Path:
+    descriptor_path = tmp_path / "assumption_register.json"
+    first_assumption = {
+        "assumption_label": "fills not inferred",
+        "source_path": source_path,
+        "rationale": "keep observed metrics separate",
+        "scope": "paper report pack only",
+        "limitation_note": "descriptive assumption metadata only",
+    }
+    if extra_assumption_field:
+        first_assumption.update(extra_assumption_field)
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "assumptions": [
+                    first_assumption,
+                    {
+                        "assumption_label": "local descriptors only",
+                        "source_path": "assumption-register.json",
+                        "rationale": "avoid remote fetching",
+                        "scope": "local/offline report inputs",
+                        "limitation_note": "not investment advice",
                     },
                 ]
             }
