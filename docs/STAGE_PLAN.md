@@ -456,7 +456,7 @@ tests, changelog, engineering log, and handoff archive.
 ### Stage 20: Local assumption-register report input, local/offline only
 
 - Status: complete.
-- Commit: pending on the Stage 20 implementation branch.
+- Commit: `59467cdaca11735b3bb1c64d5207c8252def3846` on `main`.
 - Purpose: add local reviewer-supplied assumption labels, rationale, source
   paths, scope, and limitation metadata.
 - Files/modules changed: `src/edmn_trader/scripts/paper_report_pack.py`,
@@ -479,7 +479,7 @@ tests, changelog, engineering log, and handoff archive.
 ### Stage 21: Local coverage-matrix report input, local/offline only
 
 - Status: complete.
-- Commit: pending on the Stage 21 implementation branch.
+- Commit: `a8a63eef772bb934a7b030b4cbae92c9ff5d1b80` on `main`.
 - Purpose: add local reviewer-supplied mappings between report sections, local
   inputs, validation labels, source paths, coverage notes, and limitations.
 - Files/modules changed: `src/edmn_trader/scripts/paper_report_pack.py`,
