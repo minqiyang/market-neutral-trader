@@ -538,6 +538,17 @@ input labels, validation labels, coverage notes, and limitation notes as
 descriptive context without scoring coverage or turning coverage metadata into
 ranking, advice, or production-readiness claims.
 
+After Stage 21, the next safe report-input kind is a reproducibility
+checklist. The clarified Stage 22 boundary allows a local reproducibility
+descriptor to record reviewer-supplied reproduction step labels, local artifact
+paths, command labels, environment labels, expected output labels, and
+limitation notes.
+
+The boundary stays descriptive. Stage 22 should make reproducibility metadata
+visible in the report pack without executing commands, reading artifact or
+source contents, verifying local environments or outputs, fetching remote data,
+scoring reproducibility, producing advice, or implying production readiness.
+
 ## Interview narrative
 
 A concise way to explain the current project:

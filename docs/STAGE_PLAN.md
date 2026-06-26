@@ -1839,3 +1839,76 @@ kind only within the local/offline report-pack path and must not add command
 execution, validation execution, source-content reads, raw local data reads,
 remote fetches, new adapters, production endpoints, ranking, allocation,
 optimization, executable advice, or production-readiness claims.
+
+## Stage 22: Local reproducibility-checklist report input, local/offline only
+
+Purpose: clarify the next concrete report-input kind after Stage 21: a local
+reproducibility-checklist input that records reviewer-supplied reproduction
+step labels, local artifact paths, command labels, environment labels, expected
+output labels, and limitation notes without executing commands, reading
+artifact contents, fetching remote data, verifying outputs, ranking coverage,
+or producing executable advice.
+
+Deliverables: Stage 22 implementation may add a `local_reproducibility_checklist`
+input kind to the report-input manifest, parse a local reproducibility
+descriptor, render a descriptive report section, add offline tests, and update
+limitation notes.
+
+Allowed scope:
+
+- Use a local descriptor file only.
+- Treat the descriptor as reviewer-supplied reproducibility metadata, not as a
+  script runner, environment verifier, artifact reader, validation executor,
+  scoring system, or recommendation engine.
+- Describe only reproduction step labels, local artifact paths, command labels,
+  environment labels, expected output labels, and limitation notes.
+- Reject remote URLs, secret-like fields, and source-content/excerpt fields.
+- Preserve separation between observed report metrics, supplied assumptions,
+  fundamentals, manifest metadata, comparison metadata, validation metadata,
+  review notes, methodology notes, data-dictionary metadata, citation-index
+  metadata, term-glossary metadata, assumption-register metadata,
+  coverage-matrix metadata, reproducibility metadata, and limitations.
+- Label missing optional reproducibility-checklist inputs as not supplied.
+
+Acceptance checks:
+
+- The implementation remains local/offline and deterministic.
+- The report pack does not execute commands, run tests from report inputs, read
+  secrets, read artifact contents, read source contents, read raw private data
+  contents, read account data, read portfolio data, fetch remote data, use live
+  feeds, inspect paid-vendor or proprietary datasets, verify local environment
+  state, or infer private values from referenced files.
+- The output does not include private/proprietary excerpts, score or rank
+  reproducibility steps, coverage, sources, or securities, recommend
+  allocations, optimize strategies, emit executable advice, imply production
+  readiness, or claim profitability.
+- Missing optional reproducibility-checklist inputs produce explicit
+  not-supplied text instead of inferred values.
+- Tests use local descriptors and generated project artifacts only.
+
+Validation commands:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+ruff check .
+python scripts/01_replay_orderbook_fixture.py
+```
+
+Explicit non-goals: no command execution from report inputs, no validation
+execution from report inputs, no artifact-content reads, no source-content
+reads, no raw private data reads, no private/proprietary excerpts, no local
+environment verification, no output verification, no new market-data adapters,
+no remote fetching, no broker integration, no credentials, no account or
+portfolio data, no live quote feeds, no paid-vendor market data, no WebSockets,
+no production endpoints, no strategy optimization, no reproducibility scoring,
+no coverage scoring, no security ranking, no source ranking, no allocation
+advice, no executable advice, no production readiness claim, no unsupported
+data redistribution, and no profitability claims.
+
+Next-stage boundary: implementation may add the local reproducibility-checklist
+input kind only within the local/offline report-pack path and must not add
+command execution, validation execution, artifact-content reads,
+source-content reads, raw local data reads, local environment verification,
+remote fetches, new adapters, production endpoints, ranking, allocation,
+optimization, executable advice, or production-readiness claims.

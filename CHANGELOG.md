@@ -6,6 +6,12 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Clarified Stage 22 readiness for a local/offline
+  `local_reproducibility_checklist` report-input kind that records
+  reproduction step labels, artifact paths, command labels, environment labels,
+  expected output labels, and limitations without executing commands, reading
+  artifact contents, verifying environments or outputs, fetching remote data,
+  scoring reproducibility, or producing advice.
 - Added Stage 21 local/offline `local_coverage_matrix` report-input support to
   the paper report pack, with descriptor Markdown output, missing-input
   disclosure, and rejection of secret-like fields, source-content/excerpt
