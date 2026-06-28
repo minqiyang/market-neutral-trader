@@ -953,6 +953,30 @@ addition of small report-input metadata kinds.
   agent, no strategy optimization, no investment advice, no executable order
   intents, and no profitability claims.
 
+### Stage 39: Live event schema and mocked WebSocket harness
+
+- Status: complete.
+- Commit: pending on the Stage 39 mocked recorder branch.
+- Purpose: define a durable read-only live market-data event schema and a
+  mocked WebSocket-style recorder harness before any real live connection code.
+- Files/modules changed: `src/edmn_trader/data/live_events.py`,
+  `src/edmn_trader/data/payload_safety.py`,
+  `src/edmn_trader/scripts/mock_live_event_recorder.py`,
+  `scripts/39_mock_live_event_recorder.py`, `tests/test_live_event_recorder.py`,
+  and documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/39_mock_live_event_recorder.py --input
+  /tmp/edmn_stage39_events.json --output /tmp/edmn_stage39_events.jsonl`,
+  `python scripts/01_replay_orderbook_fixture.py`, and `git diff --check`.
+- Next-stage boundary: Stage 40 may add the Kalshi live read-only recorder
+  implementation only. It must default disabled/offline, require explicit
+  `--live-readonly-opt-in`, use mocked tests, and must not execute real live
+  venue connections during validation.
+- Safety status: schema and mocked recorder harness only, no real network
+  connection, no credentials, no credential prompts, no authenticated requests,
+  no user-order channel, no order placement imports, no production endpoints,
+  no strategy optimization, no investment advice, and no profitability claims.
+
 ## Stage 0: Repository foundation
 
 Purpose: establish the package, public positioning, tooling, and safety
