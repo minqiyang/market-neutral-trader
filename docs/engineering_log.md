@@ -1014,6 +1014,19 @@ The output is audit/replay research metadata only. It does not connect to live
 venues, authenticate, place orders, optimize strategy, or present replayed
 state as advice or profitability evidence.
 
+## Stage 43 taker fill, slippage, and failed-leg simulator
+
+Stage 43 adds the first explicit two-leg taker-fill stress model for complement
+research. It consumes local scenario fixtures, computes a complement candidate,
+and simulates FOK/IOC-like fill policy assumptions, available depth after
+latency, leg-level slippage, latency shock, and failed-leg reserve.
+
+The simulator emits deterministic JSONL and Markdown audit records. It records
+completed pair size, partial-fill exposure, failed-leg reserve totals, and
+simulated net edge under the supplied assumptions. It does not create order
+intents, connect to a venue, authenticate, optimize strategy, recommend trades,
+or claim the simulated results are executable or profitable.
+
 ## Interview narrative
 
 A concise way to explain the current project:

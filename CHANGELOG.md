@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 43 offline taker fill/slippage/failed-leg simulation that
+  stresses FOK/IOC-like two-leg assumptions, partial fills, latency shock, and
+  failed-leg reserve from explicit local fixtures without executable order
+  intents.
 - Added Stage 42 offline order book rebuild and replay consistency tooling
   that reads recorded event JSONL, writes normalized snapshots, emits
   deterministic book hashes, and reports gap/stale/out-of-order flags without

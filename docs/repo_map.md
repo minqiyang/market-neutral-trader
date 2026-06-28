@@ -88,6 +88,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/arb/scanner.py`: Stage 38 offline complement scanner for
   local fixture JSON and existing snapshot JSONL inputs. Read for scanner
   output, rejection reason, and data-quality flag behavior.
+- `src/edmn_trader/arb/fill_simulation.py`: Stage 43 offline taker fill,
+  slippage, latency shock, and failed-leg reserve simulator.
 - `src/edmn_trader/fees/base.py`: venue-neutral fee estimate status and
   Decimal fee assumption model. Read for fee-model work.
 - `src/edmn_trader/fees/kalshi.py`: Kalshi fee estimate scaffold with explicit
@@ -138,6 +140,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   guarded Polymarket US market-channel recorder CLI entry point.
 - `src/edmn_trader/scripts/rebuild_orderbooks.py`: importable Stage 42
   recorded-event rebuild CLI entry point.
+- `src/edmn_trader/scripts/simulate_taker_fill.py`: importable Stage 43
+  offline taker fill simulation CLI entry point.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
@@ -184,6 +188,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `scripts/42_rebuild_orderbooks.py`: rebuilds normalized order books from
   recorded event JSONL and writes snapshots, frame hashes, and a Markdown
   consistency summary.
+- `scripts/43_simulate_taker_fill.py`: runs local/offline two-leg taker fill
+  simulations from explicit fixture assumptions.
 - `scripts/07_research_report.py`: writes a local/offline Markdown attribution
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
 - `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
@@ -234,6 +240,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `tests/test_book_rebuild.py`: Stage 42 order book rebuild coverage for
   deterministic hashes, gap/stale/out-of-order flags, JSONL/Markdown output,
   CLI behavior, and unsupported-event rejection.
+- `tests/test_fill_simulation.py`: Stage 43 fill simulator coverage for
+  FOK/IOC-like policy assumptions, partial fills, slippage, latency shock,
+  failed-leg reserve, deterministic output, and local fixture CLI behavior.
 - `tests/test_snapshots_jsonl.py`: JSONL roundtrip, Decimal precision,
   malformed JSONL, append behavior, and snapshot raw-payload safety coverage.
 - `tests/test_replay_snapshots.py`: replay ordering, replay metrics, and
