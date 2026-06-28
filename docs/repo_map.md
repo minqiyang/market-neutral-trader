@@ -90,6 +90,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
   with explicit supplied/missing/unknown assumptions only.
 - `src/edmn_trader/data/snapshots.py`: offline market-data snapshot model and
   snapshot JSONL persistence helpers. Read for recorded data schema changes.
+- `src/edmn_trader/data/live_events.py`: Stage 39 read-only live market-data
+  event schema and mocked WebSocket-style recorder harness.
+- `src/edmn_trader/data/payload_safety.py`: shared raw-payload secret-key
+  rejection helper for recorded market-data payloads.
 - `src/edmn_trader/data/jsonl.py`: Decimal-safe JSONL read/write/append helpers.
   Read for storage behavior and malformed JSONL handling.
 - `src/edmn_trader/data/replay.py`: deterministic replay session and book
@@ -118,6 +122,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   replay workflow for quote lifecycle, risk gates, logs, and run summaries.
 - `src/edmn_trader/scripts/scan_complement_arb.py`: importable Stage 38
   offline complement scanner CLI entry point.
+- `src/edmn_trader/scripts/mock_live_event_recorder.py`: importable Stage 39
+  local mocked WebSocket recorder CLI entry point.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
@@ -155,6 +161,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `scripts/23_scan_complement_arb.py`: runs the offline complement scanner
   against local fixture JSON or existing snapshot JSONL and writes JSONL plus
   Markdown research reports.
+- `scripts/39_mock_live_event_recorder.py`: runs the local-only Stage 39
+  mocked WebSocket recorder fixture harness.
 - `scripts/07_research_report.py`: writes a local/offline Markdown attribution
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
 - `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
@@ -191,6 +199,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `tests/test_complement_scanner.py`: Stage 38 scanner coverage for
   deterministic JSONL/Markdown output, audit/reject counts, fee blocking,
   invalid local input, non-executable records, and Decimal preservation.
+- `tests/test_live_event_recorder.py`: Stage 39 live-event schema and mocked
+  recorder coverage for JSONL roundtrip, payload safety, deterministic output,
+  local fixture CLI behavior, and timezone validation.
 - `tests/test_snapshots_jsonl.py`: JSONL roundtrip, Decimal precision,
   malformed JSONL, append behavior, and snapshot raw-payload safety coverage.
 - `tests/test_replay_snapshots.py`: replay ordering, replay metrics, and

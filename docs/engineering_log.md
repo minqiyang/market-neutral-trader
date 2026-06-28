@@ -961,6 +961,18 @@ data-quality counts. Scanner records are audit/paper research metadata only:
 there is no live lookup, credential input, network call, order intent,
 strategy optimization, investment advice, or profitability claim.
 
+## Stage 39 live event schema and mocked recorder
+
+Stage 39 adds the live-event envelope and recorder behavior without adding a
+real network connection. `LiveMarketDataEvent` records venue, channel, market,
+event type, sequence, timestamps, raw payload, source type, and tags. Payloads
+reuse a shared secret-key rejection helper before JSONL persistence.
+
+The mocked recorder is intentionally local and finite. It reads fixture events,
+writes deterministic JSONL, and gives Stage 40 and Stage 41 a recorder contract
+to target. It does not open sockets, prompt for credentials, subscribe to live
+venues, authenticate, place orders, or describe output as advice.
+
 ## Interview narrative
 
 A concise way to explain the current project:

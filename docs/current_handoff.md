@@ -37,11 +37,12 @@ The repository now includes `docs/ARBITRAGE_ROADMAP.md`, the first offline
 Decimal-only complement candidate model under `src/edmn_trader/arb/`, and a
 Stage 37 venue fee estimate scaffold under `src/edmn_trader/fees/`, plus a
 Stage 38 offline complement scanner that emits deterministic JSONL and
-Markdown research reports from local fixture/snapshot-style inputs.
+Markdown research reports from local fixture/snapshot-style inputs, plus a
+Stage 39 live-event schema and local mocked WebSocket-style recorder harness.
 
 ## Last completed stage
 
-Stage 38 offline complement scanner.
+Stage 39 live event schema and mocked WebSocket harness.
 
 ## Stage plan status
 
@@ -49,8 +50,9 @@ Stage 38 offline complement scanner.
 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, Stage 35 arbitrage
 roadmap reset, Stage 36 complement candidate schema, Stage 37 venue fee model
-scaffold, and Stage 38 offline complement scanner. The ledger records purpose,
-known commit hashes, files/modules
+scaffold, Stage 38 offline complement scanner, and Stage 39 live event schema
+with mocked WebSocket harness. The ledger records purpose, known commit hashes,
+files/modules
 added, validation commands, status, next-stage boundary, and safety status for
 each completed stage.
 
@@ -75,6 +77,11 @@ Stage 38 adds `src/edmn_trader/arb/scanner.py` and
 The scanner writes deterministic JSONL and Markdown summaries with candidate,
 audit, reject, fee-status, rejection-reason, and data-quality counts. Scanner
 records are research metadata only and never executable order intents.
+
+Stage 39 adds `src/edmn_trader/data/live_events.py` and
+`scripts/39_mock_live_event_recorder.py` for a read-only live-event envelope
+and local mocked WebSocket-style recorder harness. It writes deterministic
+JSONL from fixture events only and opens no real network connection.
 
 `docs/STAGE_PLAN.md` now contains the full Stage 3 specification: snapshot
 schema requirements, Decimal-safe JSONL recorder requirements, deterministic
@@ -883,10 +890,9 @@ checkpoint. Complement-parity work must stay deterministic and offline until
 later reviewed stages add fee models, scanners, recorders, simulators, paper
 ledgers, risk/manual approval, or demo connector boundaries.
 
-Next checkpoint: Stage 39 live event schema plus mocked WebSocket recorder
-harness only.
+Next checkpoint: Stage 40 Kalshi live read-only recorder implementation only.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 39 live event schema plus mocked WebSocket recorder harness. Add schema and mocked recorder tests only. Do not add real live data connections, REST network calls, credentials, authenticated requests, wallets, order placement, broker integration, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 40 Kalshi live read-only recorder implementation. Add code and tests only; do not execute real live venue connections. The live script must default disabled/offline, require explicit --live-readonly-opt-in, reject production endpoints, use mocked network in tests, and add no real credentials, credential prompts, user-order channel, order placement imports, wallets, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
 
 ## Important files
 
@@ -925,6 +931,10 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   persistence helpers.
 - `src/edmn_trader/data/jsonl.py`: Decimal-safe JSONL helpers.
 - `src/edmn_trader/data/replay.py`: deterministic replay session and metrics.
+- `src/edmn_trader/data/live_events.py`: Stage 39 live-event schema and
+  mocked recorder harness.
+- `src/edmn_trader/data/payload_safety.py`: shared secret-key rejection helper
+  for raw payload persistence.
 - `src/edmn_trader/arb/complement.py`: offline complement-parity candidate
   model.
 - `src/edmn_trader/arb/scanner.py`: offline scanner for local fixture JSON and
@@ -952,6 +962,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
 - `scripts/06_market_maker_replay.py`: root wrapper for Stage 6 replay.
 - `scripts/23_scan_complement_arb.py`: root wrapper for Stage 38 offline
   complement scanner.
+- `scripts/39_mock_live_event_recorder.py`: root wrapper for the Stage 39
+  local mocked WebSocket recorder harness.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   Markdown report generator for Stage 6 logs and explicit fill assumptions.
 - `scripts/07_research_report.py`: root wrapper for Stage 7 reporting.
@@ -976,6 +988,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   normalization, guarded public client, and malformed-book coverage.
 - `tests/test_sec_edgar_adapter.py`: Stage 9 SEC companyfacts normalization,
   guarded public client, explicit User-Agent, and malformed-value coverage.
+- `tests/test_live_event_recorder.py`: Stage 39 live-event schema and mocked
+  recorder coverage.
 - `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33/34 report-pack coverage
   for observed metrics, source inventory, missing optional inputs, local SEC
   facts, manifest metadata, local run-comparison metadata, unsafe
@@ -1139,24 +1153,25 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended stage
 
-Stage 39 live event schema plus mocked WebSocket recorder harness only.
+Stage 40 Kalshi live read-only recorder implementation only.
 Start only after reconfirming clean synced `main`, CI, branch protection,
 required `Validate` status, local validation, and whether the owner-direct fast
-path or PR path applies. Do not add real live data connections, REST network
-calls, authenticated requests, credentials, order placement, wallets,
-production endpoints, strategy optimization, investment advice, or
-profitability claims.
+path or PR path applies. Do not execute real live venue connections; scripts
+must default disabled/offline, require explicit `--live-readonly-opt-in`,
+reject production endpoints, and tests must use mocked network or fixtures.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Implement only Stage 39 live event schema plus
-mocked WebSocket recorder harness. Add schema and mocked recorder tests only.
-Do not add real live data connections, REST network calls, credentials,
-authenticated requests, wallets, broker integration, production endpoints,
-strategy optimization, investment advice, executable advice,
-production-readiness claims, or profitability claims.
+the verified current handoff. Implement only Stage 40 Kalshi live read-only
+recorder implementation. Add code and tests only; do not execute real live
+venue connections. The live script must default disabled/offline, require
+explicit --live-readonly-opt-in, reject production endpoints, use mocked
+network in tests, and add no real credentials, credential prompts, user-order
+channel, order placement imports, wallets, strategy optimization, investment
+advice, executable advice, production-readiness claims, or profitability
+claims.
 
 ## Last updated timestamp
 
-2026-06-28 11:28:30 -07:00
+2026-06-28 15:16:56 -07:00

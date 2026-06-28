@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -16,21 +16,10 @@ from edmn_trader.data.jsonl import (
     read_jsonl_records,
     write_jsonl_records,
 )
+from edmn_trader.data.payload_safety import validate_no_secret_payload
 
 SNAPSHOT_SCHEMA_VERSION = 1
 SourceType = Literal["fixture", "rest", "manual"]
-
-_FORBIDDEN_RAW_KEY_PARTS = (
-    "authorization",
-    "api_key",
-    "apikey",
-    "secret",
-    "signature",
-    "token",
-    "private_key",
-    "password",
-    "headers",
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,7 +53,7 @@ class MarketDataSnapshot:
             msg = "source_type must be fixture, rest, or manual"
             raise ValueError(msg)
         if self.raw_payload is not None:
-            _validate_raw_payload(self.raw_payload)
+            validate_no_secret_payload(self.raw_payload, path="raw_payload")
         object.__setattr__(self, "tags", tuple(self.tags))
 
     @classmethod
@@ -160,20 +149,6 @@ def _require_aware_datetime(value: datetime, *, field_name: str) -> None:
     if value.tzinfo is None or value.utcoffset() is None:
         msg = f"{field_name} must be timezone-aware"
         raise ValueError(msg)
-
-
-def _validate_raw_payload(value: Mapping[str, Any], *, path: str = "raw_payload") -> None:
-    for key, item in value.items():
-        key_text = str(key).lower()
-        if any(forbidden in key_text for forbidden in _FORBIDDEN_RAW_KEY_PARTS):
-            msg = f"{path}.{key} must not contain credentials, headers, or secrets"
-            raise ValueError(msg)
-        if isinstance(item, Mapping):
-            _validate_raw_payload(item, path=f"{path}.{key}")
-        elif isinstance(item, Sequence) and not isinstance(item, str | bytes | bytearray):
-            for index, nested_item in enumerate(item):
-                if isinstance(nested_item, Mapping):
-                    _validate_raw_payload(nested_item, path=f"{path}.{key}[{index}]")
 
 
 def _expect_mapping(record: Mapping[str, Any], field_name: str) -> Mapping[str, Any]:

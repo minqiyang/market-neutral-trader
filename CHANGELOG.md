@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added a Stage 39 live market-data event schema and local mocked
+  WebSocket-style recorder harness with deterministic JSONL output and
+  payload secret-key rejection, without real live connections or credentials.
 - Added a Stage 38 offline complement scanner that reads local fixture JSON or
   existing snapshot JSONL, applies explicit fee assumptions, and emits
   deterministic JSONL plus Markdown audit/paper research reports without
