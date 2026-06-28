@@ -977,6 +977,31 @@ addition of small report-input metadata kinds.
   no user-order channel, no order placement imports, no production endpoints,
   no strategy optimization, no investment advice, and no profitability claims.
 
+### Stage 40: Kalshi live read-only recorder
+
+- Status: complete.
+- Commit: pending on the Stage 40 Kalshi read-only recorder branch.
+- Purpose: add a guarded Kalshi Demo read-only orderbook recorder that writes
+  raw live-event JSONL and normalized snapshot JSONL through mocked-testable
+  code paths.
+- Files/modules changed: `src/edmn_trader/adapters/kalshi/readonly_recorder.py`,
+  `src/edmn_trader/scripts/kalshi_readonly_recorder.py`,
+  `scripts/40_kalshi_readonly_recorder.py`,
+  `tests/test_kalshi_readonly_recorder.py`, Stage 39 live-event source-type
+  support, and documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/40_kalshi_readonly_recorder.py --help`,
+  `python scripts/01_replay_orderbook_fixture.py`, and `git diff --check`.
+- Next-stage boundary: Stage 41 may add the Polymarket market-channel recorder
+  only. It must be market channel only, default disabled/offline, require
+  explicit `--live-readonly-opt-in`, use mocked tests, and must not add user
+  channel, wallet, signing, or execution behavior.
+- Safety status: guarded read-only Demo recorder only, no validation-time live
+  connection execution, no credentials, no credential prompts, no authenticated
+  requests, no user-order channel, no order placement imports, no production
+  endpoints, no strategy optimization, no investment advice, and no
+  profitability claims.
+
 ## Stage 0: Repository foundation
 
 Purpose: establish the package, public positioning, tooling, and safety

@@ -973,6 +973,19 @@ writes deterministic JSONL, and gives Stage 40 and Stage 41 a recorder contract
 to target. It does not open sockets, prompt for credentials, subscribe to live
 venues, authenticate, place orders, or describe output as advice.
 
+## Stage 40 guarded Kalshi read-only recorder
+
+Stage 40 adds the first venue-specific live-readonly recorder path, but keeps
+the safety controls in front of the network call. The Kalshi recorder requires
+explicit `--live-readonly-opt-in`, accepts only the Kalshi Demo REST base URL
+and demo environment, and is tested with `httpx.MockTransport`.
+
+One successful mocked capture writes both a raw `LiveMarketDataEvent` JSONL
+record and a normalized `MarketDataSnapshot` JSONL record. The code does not
+accept credentials, prompt for credentials, import order placement, touch user
+channels, use production endpoints, or run a real live connection in
+validation.
+
 ## Interview narrative
 
 A concise way to explain the current project:

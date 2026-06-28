@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added a Stage 40 guarded Kalshi Demo read-only recorder that requires
+  explicit live-readonly opt-in, rejects non-Demo boundaries, writes raw event
+  and normalized snapshot JSONL, and is covered by mocked HTTP tests only.
 - Added a Stage 39 live market-data event schema and local mocked
   WebSocket-style recorder harness with deterministic JSONL output and
   payload secret-key rejection, without real live connections or credentials.

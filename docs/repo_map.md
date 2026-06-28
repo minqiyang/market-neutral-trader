@@ -68,6 +68,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   behavior, error handling, or endpoint path changes.
 - `src/edmn_trader/adapters/kalshi/orderbook.py`: Kalshi fixed-point
   orderbook normalizer. Read for Kalshi orderbook parsing only.
+- `src/edmn_trader/adapters/kalshi/readonly_recorder.py`: Stage 40 guarded
+  Kalshi Demo read-only recorder with explicit opt-in and mocked-testable
+  client injection.
 - `src/edmn_trader/adapters/polymarket_us/client.py`: guarded read-only
   Polymarket US public market-data client.
 - `src/edmn_trader/adapters/polymarket_us/orderbook.py`: Polymarket US
@@ -124,6 +127,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   offline complement scanner CLI entry point.
 - `src/edmn_trader/scripts/mock_live_event_recorder.py`: importable Stage 39
   local mocked WebSocket recorder CLI entry point.
+- `src/edmn_trader/scripts/kalshi_readonly_recorder.py`: importable Stage 40
+  guarded Kalshi Demo read-only recorder CLI entry point.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
@@ -163,6 +168,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   Markdown research reports.
 - `scripts/39_mock_live_event_recorder.py`: runs the local-only Stage 39
   mocked WebSocket recorder fixture harness.
+- `scripts/40_kalshi_readonly_recorder.py`: runs the guarded Kalshi Demo
+  read-only recorder; defaults disabled without `--live-readonly-opt-in`.
 - `scripts/07_research_report.py`: writes a local/offline Markdown attribution
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
 - `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
@@ -202,6 +209,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `tests/test_live_event_recorder.py`: Stage 39 live-event schema and mocked
   recorder coverage for JSONL roundtrip, payload safety, deterministic output,
   local fixture CLI behavior, and timezone validation.
+- `tests/test_kalshi_readonly_recorder.py`: Stage 40 Kalshi Demo read-only
+  recorder guardrail coverage for opt-in, Demo-only config, mocked HTTP
+  recording, raw event JSONL, normalized snapshot JSONL, and non-executable
+  records.
 - `tests/test_snapshots_jsonl.py`: JSONL roundtrip, Decimal precision,
   malformed JSONL, append behavior, and snapshot raw-payload safety coverage.
 - `tests/test_replay_snapshots.py`: replay ordering, replay metrics, and
