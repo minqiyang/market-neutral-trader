@@ -67,6 +67,13 @@ or noisy to invoke, use the equivalent checklist and continue.
 
 For Kalshi-style binary orderbooks, normalize YES-side books from local data by treating YES bids as canonical bids and NO bids as implied YES asks using `1 - no_price`.
 
+For current roadmap work, prioritize same-market YES/NO complement parity
+research over additional report-input metadata kinds. The active roadmap is
+`docs/ARBITRAGE_ROADMAP.md`; the first offline candidate model lives under
+`src/edmn_trader/arb/` and must remain Decimal-only, deterministic, and
+non-executable until later reviewed stages add fee models, scanners, recorders,
+simulation, or execution gates.
+
 For staged project work, read `docs/current_handoff.md` and `docs/repo_map.md` before broad exploration. After a stage-sized change, update `docs/current_handoff.md`, `docs/engineering_log.md`, and `CHANGELOG.md` with concise durable context.
 
 ## Known pitfalls

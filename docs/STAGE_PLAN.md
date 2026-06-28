@@ -2,9 +2,15 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages through Stage 34. They are
-intended as a durable audit map; implementation details remain in the source,
-tests, changelog, engineering log, and handoff archive.
+These records summarize the locally completed stages through the Stage 35
+arbitrage roadmap reset. They are intended as a durable audit map;
+implementation details remain in the source, tests, changelog, engineering
+log, and handoff archive.
+
+Report-input metadata expansion from Stages 11 through 34 remains preserved as
+maintenance-only documentation/report-pack work. The active product direction
+is now narrow same-market YES/NO complement parity research, not continued
+addition of small report-input metadata kinds.
 
 ### Stage 0: Repository foundation
 
@@ -859,6 +865,29 @@ tests, changelog, engineering log, and handoff archive.
   reproducibility/coverage/source/security ranking, no allocation advice, no
   executable advice, no strategy optimization, no production-readiness claim,
   no unsupported redistribution, and no profitability claim.
+
+### Stage 35: Arbitrage roadmap reset and complement candidate schema
+
+- Status: complete.
+- Commit: pending on the complement-arbitrage candidate branch.
+- Purpose: redirect the active product roadmap from report-input metadata
+  expansion to same-market YES/NO complement parity research and add the first
+  deterministic offline candidate model.
+- Files/modules changed: `docs/ARBITRAGE_ROADMAP.md`,
+  `src/edmn_trader/arb/complement.py`, `src/edmn_trader/arb/__init__.py`,
+  `tests/test_complement_arb.py`, and documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/01_replay_orderbook_fixture.py`, and
+  `git diff --check`.
+- Next-stage boundary: later work may add a fee model scaffold or offline
+  scanner only; it must stay deterministic, local/replay-first, and free of
+  live data, WebSockets, credentials, authenticated requests, order placement,
+  wallets, production endpoints, strategy optimization, investment advice, and
+  profitability claims.
+- Safety status: Decimal-only offline candidate metadata, no live API calls,
+  no authenticated requests, no WebSockets, no credentials, no order
+  placement, no production execution, no broker integration, no strategy
+  optimization, no investment advice, and no profitability claims.
 
 ## Stage 0: Repository foundation
 
@@ -3287,16 +3316,18 @@ raw local data reads, remote fetches, new adapters, production endpoints,
 ranking, allocation, optimization, executable advice, or production-readiness
 claims.
 
-## Stage 35: Local delivery-notes report input, local/offline only
+## Maintenance backlog: Local delivery-notes report input, local/offline only
 
-Purpose: clarify the next concrete report-input kind after Stage 34: local
-delivery notes that record reviewer-supplied delivery labels, related artifact
-paths, recipient labels, delivery status labels, delivery notes, and limitation
-notes without transferring files, approving distribution, verifying rights,
-fetching remote data, scoring delivery readiness, or producing executable
-advice.
+Purpose: preserve the previously clarified local delivery-notes report-input
+idea as a maintenance-only backlog item. It is no longer the active next
+product checkpoint. If a later maintenance task resumes it, the scope remains
+local/offline delivery notes that record reviewer-supplied delivery labels,
+related artifact paths, recipient labels, delivery status labels, delivery
+notes, and limitation notes without transferring files, approving
+distribution, verifying rights, fetching remote data, scoring delivery
+readiness, or producing executable advice.
 
-Deliverables: Stage 35 implementation may add a `local_delivery_notes` input
+Deliverables: a future maintenance task may add a `local_delivery_notes` input
 kind to the report-input manifest, parse a local delivery-notes descriptor,
 render a descriptive report section, add offline tests, and update limitation
 notes.
@@ -3373,12 +3404,13 @@ reproducibility scoring, no coverage scoring, no security ranking, no source
 ranking, no allocation advice, no executable advice, no production readiness
 claim, no unsupported data redistribution, and no profitability claims.
 
-Next-stage boundary: implementation may add the local delivery-notes input kind
-only within the local/offline report-pack path and must not add command
-execution, validation execution, follow-up execution, file movement, deletion,
-or transfer, retention-policy decisions, artifact-content reads,
-evidence-content reads, source-content reads, output verification, local
-environment verification, distribution approval, rights verification, decision
-approval, raw local data reads, remote fetches, new adapters, production
-endpoints, ranking, allocation, optimization, executable advice, or
-production-readiness claims.
+Maintenance boundary: a future maintenance task may add the local
+delivery-notes input kind only within the local/offline report-pack path and
+must not add command execution, validation execution, follow-up execution, file
+movement, deletion, or transfer, retention-policy decisions, artifact-content
+reads, evidence-content reads, source-content reads, output verification,
+local environment verification, distribution approval, rights verification,
+decision approval, raw local data reads, remote fetches, new adapters,
+production endpoints, ranking, allocation, optimization, executable advice, or
+production-readiness claims. The active next product checkpoint is a
+complement-arbitrage fee model scaffold or offline scanner.

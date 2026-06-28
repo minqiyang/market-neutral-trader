@@ -6,6 +6,15 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Redirected the active roadmap from continued report-input metadata expansion
+  to same-market YES/NO complement parity research, added
+  `docs/ARBITRAGE_ROADMAP.md`, and marked Stages 11-34 report-input expansion
+  as maintenance-only.
+- Added an offline Decimal-only complement-arbitrage candidate model with
+  explicit fee, slippage, failed-leg reserve, depth, stale-book, missing-fee,
+  locked/crossed-book, and manual-review handling. The model emits audit or
+  paper-candidate metadata only and does not place orders or claim risk-free
+  profit.
 - Completed the compact governance audit after Stage 35 readiness, confirming
   synced `main`, passing `Validate`, branch protection, no open PRs, and no
   drift before continuing to Stage 35 implementation.

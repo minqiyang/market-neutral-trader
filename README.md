@@ -1,9 +1,10 @@
 # event-driven-market-neutral-trader
 
 `event-driven-market-neutral-trader` is a demo-first, risk-controlled trading
-research platform for event-driven prediction markets. The first integration
-target is Kalshi-style binary contracts, with a core architecture intended to
-remain portable across future market-data and research adapters.
+research platform for event-driven prediction markets. The current research
+priority is narrow same-market YES/NO complement parity for Kalshi-style binary
+contracts, with a core architecture intended to remain portable across future
+market-data and research adapters.
 
 The project is designed for simulation, execution safety, and workflow
 engineering. It is not a guaranteed-profit trading bot, and it intentionally
@@ -30,6 +31,20 @@ yes_mid = (best_yes_bid + implied_yes_ask) / 2
 That normalization layer is the first implemented adapter boundary in this
 repo. It is covered by deterministic local-fixture tests and does not require
 credentials or live API access.
+
+## Why complement parity is first
+
+Complement-parity research checks whether the YES and NO sides of one binary
+market imply an inconsistent same-market relationship:
+
+```text
+gross_edge = best_yes_bid + best_no_bid - 1
+```
+
+This is not directional prediction, market making, investment advice, or a
+guaranteed-profit claim. Apparent candidates still require explicit fees,
+slippage, liquidity, stale-book handling, failed-leg reserves, replay evidence,
+and manual risk review before they can become even paper candidates.
 
 ## Why Kalshi Demo is first
 
@@ -125,10 +140,13 @@ Implemented:
   offline research workflows.
 - Baseline fair-value model and inventory-aware dry-run quote engine over
   normalized/replayed books.
+- Offline Decimal-only complement-parity candidate model for same-market YES
+  and NO best bids, with explicit fee/slippage/reserve assumptions and manual
+  review flags.
 - Unit tests for normal conversion, empty sides, multiple levels, precision,
   invalid prices, locked or crossed book detection, client response validation,
   client error handling, snapshot roundtrips, replay ordering, fair value, and
-  dry-run quote generation.
+  dry-run quote generation, plus offline complement-candidate decisions.
 
 Not implemented:
 
@@ -137,5 +155,6 @@ Not implemented:
 - WebSocket ingestion.
 - Strategy optimization.
 - Fill simulation and PnL attribution.
+- Live complement-arbitrage scanning.
 - Executable order intents.
 - Production trading.
