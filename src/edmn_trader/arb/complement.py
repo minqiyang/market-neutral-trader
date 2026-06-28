@@ -7,6 +7,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 from edmn_trader.core.models import ONE, ZERO
+from edmn_trader.fees.base import FeeEstimate, FeeEstimateStatus
 
 
 class ComplementArbDecision(StrEnum):
@@ -31,6 +32,7 @@ class ComplementArbInput:
     estimated_slippage_per_contract: Decimal = ZERO
     failed_leg_reserve_per_contract: Decimal = ZERO
     minimum_net_edge_per_contract: Decimal = ZERO
+    fee_estimate: FeeEstimate | None = None
     stale_book: bool = False
 
     def __post_init__(self) -> None:
@@ -62,6 +64,15 @@ class ComplementArbInput:
                 self.estimated_fee_per_contract,
                 field_name="estimated_fee_per_contract",
             )
+        if self.fee_estimate is not None and not isinstance(self.fee_estimate, FeeEstimate):
+            msg = "fee_estimate must be a FeeEstimate"
+            raise TypeError(msg)
+        if self.fee_estimate is not None and self.estimated_fee_per_contract is not None:
+            msg = "use fee_estimate or estimated_fee_per_contract, not both"
+            raise ValueError(msg)
+        if self.fee_estimate is not None and self.fee_estimate.venue != self.venue:
+            msg = "fee_estimate venue must match input venue"
+            raise ValueError(msg)
 
         _validate_probability_price(self.best_yes_bid, field_name="best_yes_bid")
         _validate_probability_price(self.best_no_bid, field_name="best_no_bid")
@@ -98,6 +109,7 @@ class ComplementArbCandidate:
     gross_edge_per_contract: Decimal
     candidate_size: Decimal
     estimated_fee_per_contract: Decimal | None
+    fee_status: FeeEstimateStatus
     estimated_slippage_per_contract: Decimal
     failed_leg_reserve_per_contract: Decimal
     net_edge_per_contract: Decimal
@@ -117,11 +129,7 @@ def compute_kalshi_complement_candidate(snapshot: ComplementArbInput) -> Complem
     no_ask = ONE - snapshot.best_yes_bid
     gross_edge_per_contract = snapshot.best_yes_bid + snapshot.best_no_bid - ONE
     candidate_size = min(snapshot.yes_bid_size, snapshot.no_bid_size)
-    fee = (
-        snapshot.estimated_fee_per_contract
-        if snapshot.estimated_fee_per_contract is not None
-        else ZERO
-    )
+    fee, fee_status = _resolve_fee(snapshot)
     net_edge_per_contract = (
         gross_edge_per_contract
         - fee
@@ -147,7 +155,8 @@ def compute_kalshi_complement_candidate(snapshot: ComplementArbInput) -> Complem
         no_ask=no_ask,
         gross_edge_per_contract=gross_edge_per_contract,
         candidate_size=candidate_size,
-        estimated_fee_per_contract=snapshot.estimated_fee_per_contract,
+        estimated_fee_per_contract=fee if fee_status is FeeEstimateStatus.SUPPLIED else None,
+        fee_status=fee_status,
         estimated_slippage_per_contract=snapshot.estimated_slippage_per_contract,
         failed_leg_reserve_per_contract=snapshot.failed_leg_reserve_per_contract,
         net_edge_per_contract=net_edge_per_contract,
@@ -169,6 +178,7 @@ def compute_canonical_yes_side_cross_candidate(
     estimated_slippage_per_contract: Decimal = ZERO,
     failed_leg_reserve_per_contract: Decimal = ZERO,
     minimum_net_edge_per_contract: Decimal = ZERO,
+    fee_estimate: FeeEstimate | None = None,
     stale_book: bool = False,
 ) -> ComplementArbCandidate:
     """Compute the equivalent candidate from canonical YES-side best bid/ask."""
@@ -187,6 +197,7 @@ def compute_canonical_yes_side_cross_candidate(
             estimated_slippage_per_contract=estimated_slippage_per_contract,
             failed_leg_reserve_per_contract=failed_leg_reserve_per_contract,
             minimum_net_edge_per_contract=minimum_net_edge_per_contract,
+            fee_estimate=fee_estimate,
             stale_book=stale_book,
         )
     )
@@ -202,8 +213,11 @@ def _candidate_flags(
         flags.append("stale_book")
     if candidate_size <= ZERO:
         flags.append("insufficient_depth")
-    if snapshot.estimated_fee_per_contract is None:
+    fee_status = _fee_status(snapshot)
+    if fee_status is FeeEstimateStatus.MISSING:
         flags.append("missing_fee_model")
+    elif fee_status is FeeEstimateStatus.UNKNOWN:
+        flags.append("unknown_fee_model")
     if gross_edge_per_contract > ZERO:
         flags.append("crossed_book")
     elif gross_edge_per_contract == ZERO:
@@ -222,9 +236,28 @@ def _candidate_decision(
         return ComplementArbDecision.REJECT
     if "stale_book" in flags or "insufficient_depth" in flags or "missing_fee_model" in flags:
         return ComplementArbDecision.AUDIT_ONLY
+    if "unknown_fee_model" in flags:
+        return ComplementArbDecision.AUDIT_ONLY
     if net_edge_per_contract > minimum_net_edge_per_contract:
         return ComplementArbDecision.PAPER_CANDIDATE
     return ComplementArbDecision.REJECT
+
+
+def _resolve_fee(snapshot: ComplementArbInput) -> tuple[Decimal, FeeEstimateStatus]:
+    if snapshot.fee_estimate is not None:
+        if snapshot.fee_estimate.status is FeeEstimateStatus.SUPPLIED:
+            if snapshot.fee_estimate.fee_per_contract is None:
+                msg = "supplied fee estimate requires fee_per_contract"
+                raise ValueError(msg)
+            return snapshot.fee_estimate.fee_per_contract, snapshot.fee_estimate.status
+        return ZERO, snapshot.fee_estimate.status
+    if snapshot.estimated_fee_per_contract is not None:
+        return snapshot.estimated_fee_per_contract, FeeEstimateStatus.SUPPLIED
+    return ZERO, FeeEstimateStatus.MISSING
+
+
+def _fee_status(snapshot: ComplementArbInput) -> FeeEstimateStatus:
+    return _resolve_fee(snapshot)[1]
 
 
 def _require_decimal(value: Decimal, *, field_name: str) -> None:

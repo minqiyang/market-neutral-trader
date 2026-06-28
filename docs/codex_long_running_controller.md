@@ -78,6 +78,31 @@ demo-first, risk-controlled stage plan.
 - If a delivery unit grows too large or mixes unrelated risk domains, split it
   before publish.
 
+## Merge-gated continuation policy
+
+- When a continuation depends on the previous checkpoint PR, do not stop only
+  because the PR is open and unmerged. First evaluate whether it can be safely
+  auto-merged.
+- A previous checkpoint PR may be merged automatically only when all gates
+  below pass:
+  - Local Codex validation passed: `python -m pip install -e ".[dev]"`,
+    `pytest`, `ruff check .`, `git diff --check`, and all checkpoint-required
+    smoke scripts, including the repo `PYTHONPATH=src` fallback when needed.
+  - GitHub checks and CI are all successful.
+  - The PR is cleanly mergeable into `main`.
+  - The local worktree is clean.
+  - Changed files match the checkpoint scope.
+  - The change adds no secrets, credentials, API keys, wallets, production
+    endpoints, live order placement, authenticated trading, LLM trading agent,
+    or profitability claims.
+  - README, risk policy, and handoff boundaries remain consistent with the
+    public repo no-live-trading policy.
+- If every gate passes, merge the PR directly, preferably with squash merge,
+  delete the merged branch when safe, sync latest `origin/main`, start the next
+  checkpoint from a fresh `codex/` branch, and continue.
+- If any gate fails, stop and report exactly which gate failed. Do not start
+  the next checkpoint.
+
 ## Governance audit cadence
 
 - After every three completed checkpoints, run a compact governance audit.
