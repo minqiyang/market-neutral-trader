@@ -38,23 +38,24 @@ Decimal-only complement candidate model under `src/edmn_trader/arb/`.
 
 ## Last completed stage
 
-Stage 35 arbitrage roadmap reset and complement candidate schema.
+Stage 36 complement arbitrage candidate schema.
 
 ## Stage plan status
 
 `docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, and the Stage 35
-arbitrage roadmap reset. The ledger records purpose, known commit hashes,
-files/modules added, validation commands, status, next-stage boundary, and
-safety status for each completed stage.
+21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, Stage 35 arbitrage
+roadmap reset, and Stage 36 complement candidate schema. The ledger records
+purpose, known commit hashes, files/modules added, validation commands, status,
+next-stage boundary, and safety status for each completed stage.
 
 Report-input metadata expansion from Stages 11 through 34 is now
 maintenance-only. The previously clarified local delivery-notes report input is
 preserved as maintenance backlog, not the active next product checkpoint.
 
-`docs/ARBITRAGE_ROADMAP.md` is now the active roadmap for same-market YES/NO
-complement parity research. The first model is deterministic and offline:
+`docs/ARBITRAGE_ROADMAP.md` is now the active long-range roadmap for
+same-market YES/NO complement parity research through the private live gate
+design boundary. The first model is deterministic and offline:
 `ComplementArbInput`, `ComplementArbCandidate`, `ComplementArbDecision`,
 `compute_kalshi_complement_candidate`, and
 `compute_canonical_yes_side_cross_candidate`.
@@ -293,8 +294,8 @@ observed `main` CI run `28270211447` passed `Validate`. The handoff and stage
 plan agree on the next checkpoint, and no risk drift, compliance drift,
 token/context drift, or user-judgment stop gate was found. The next checkpoint
 was Stage 35 implementation only at the time; it has since been superseded by
-the Stage 35 arbitrage roadmap reset, and the active next checkpoint is
-complement-arbitrage fee model scaffold or offline scanner readiness only.
+the Stage 35-36 arbitrage roadmap reset and candidate schema delivery unit,
+and the active next checkpoint is Stage 37 venue fee model scaffold only.
 
 `docs/STAGE_PLAN.md` now contains the clarified Stage 9 specification and
 `docs/stage9_equities_readiness.md` records the readiness review. Stage 9 is
@@ -857,17 +858,16 @@ reproducibility, coverage, sources, or securities, recommend allocations,
 optimize strategies, emit executable advice, imply production readiness, or
 claim profitability.
 
-`docs/STAGE_PLAN.md` now contains the Stage 35 arbitrage roadmap reset and
-complement candidate schema record. The old local delivery-notes report-input
-idea is preserved as maintenance backlog, not the active next checkpoint.
-Complement-parity work must stay deterministic and offline until later
-reviewed stages add fee models, scanners, recorders, simulators, paper
+`docs/STAGE_PLAN.md` now contains separate Stage 35 arbitrage roadmap reset
+and Stage 36 complement candidate schema records. The old local delivery-notes
+report-input idea is preserved as maintenance backlog, not the active next
+checkpoint. Complement-parity work must stay deterministic and offline until
+later reviewed stages add fee models, scanners, recorders, simulators, paper
 ledgers, risk/manual approval, or demo connector boundaries.
 
-Next checkpoint: complement-arbitrage fee model scaffold or offline scanner
-readiness only.
+Next checkpoint: Stage 37 venue fee model scaffold only.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Continue only with complement-arbitrage fee model scaffold or offline scanner readiness. Keep the work deterministic and local/replay-first; do not add live data, WebSockets, authenticated requests, credentials, order placement, wallets, broker integration, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 37 venue fee model scaffold for complement-arbitrage candidates. Keep all fee assumptions explicit and conservative; missing fee models must block paper_candidate. Do not add live data, WebSockets, authenticated requests, credentials, order placement, wallets, broker integration, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
 
 ## Important files
 
@@ -1102,7 +1102,7 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended stage
 
-Complement-arbitrage fee model scaffold or offline scanner readiness only.
+Stage 37 venue fee model scaffold only.
 Start only after reconfirming clean synced `main`, CI, branch protection,
 required `Validate` status, local validation, and whether the owner-direct fast
 path or PR path applies. Do not add live data, WebSockets, authenticated
@@ -1112,13 +1112,14 @@ strategy optimization, investment advice, or profitability claims.
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Continue only with complement-arbitrage fee model
-scaffold or offline scanner readiness. Keep the work deterministic and
-local/replay-first; do not add live data, WebSockets, authenticated requests,
-credentials, order placement, wallets, broker integration, production
-endpoints, strategy optimization, investment advice, executable advice,
-production-readiness claims, or profitability claims.
+the verified current handoff. Implement only Stage 37 venue fee model scaffold
+for complement-arbitrage candidates. Keep all fee assumptions explicit and
+conservative; missing fee models must block paper_candidate. Do not add live
+data, WebSockets, authenticated requests, credentials, order placement,
+wallets, broker integration, production endpoints, strategy optimization,
+investment advice, executable advice, production-readiness claims, or
+profitability claims.
 
 ## Last updated timestamp
 
-2026-06-28 09:46:20 -07:00
+2026-06-28 10:03:42 -07:00

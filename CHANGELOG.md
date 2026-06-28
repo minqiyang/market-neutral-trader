@@ -8,8 +8,8 @@ numbers while the repository is still in early research scaffolding.
 
 - Redirected the active roadmap from continued report-input metadata expansion
   to same-market YES/NO complement parity research, added
-  `docs/ARBITRAGE_ROADMAP.md`, and marked Stages 11-34 report-input expansion
-  as maintenance-only.
+  `docs/ARBITRAGE_ROADMAP.md` as the long-range Stage 35-52 roadmap, and
+  marked Stages 11-34 report-input expansion as maintenance-only.
 - Added an offline Decimal-only complement-arbitrage candidate model with
   explicit fee, slippage, failed-leg reserve, depth, stale-book, missing-fee,
   locked/crossed-book, and manual-review handling. The model emits audit or

@@ -2,8 +2,8 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages through the Stage 35
-arbitrage roadmap reset. They are intended as a durable audit map;
+These records summarize the locally completed stages through Stage 36
+complement candidate schema. They are intended as a durable audit map;
 implementation details remain in the source, tests, changelog, engineering
 log, and handoff archive.
 
@@ -866,24 +866,37 @@ addition of small report-input metadata kinds.
   executable advice, no strategy optimization, no production-readiness claim,
   no unsupported redistribution, and no profitability claim.
 
-### Stage 35: Arbitrage roadmap reset and complement candidate schema
+### Stage 35: Arbitrage roadmap reset
 
 - Status: complete.
 - Commit: pending on the complement-arbitrage candidate branch.
 - Purpose: redirect the active product roadmap from report-input metadata
-  expansion to same-market YES/NO complement parity research and add the first
-  deterministic offline candidate model.
-- Files/modules changed: `docs/ARBITRAGE_ROADMAP.md`,
-  `src/edmn_trader/arb/complement.py`, `src/edmn_trader/arb/__init__.py`,
-  `tests/test_complement_arb.py`, and documentation updates.
+  expansion to same-market YES/NO complement parity research.
+- Files/modules changed: `docs/ARBITRAGE_ROADMAP.md` and documentation
+  updates.
+- Validation commands: `pytest`, `ruff check .`, and `git diff --check`.
+- Next-stage boundary: Stage 36 may add deterministic offline complement
+  candidate schema and tests only.
+- Safety status: roadmap/docs-only reset, no live API calls, no authenticated
+  requests, no WebSockets, no credentials, no order placement, no production
+  execution, no broker integration, no strategy optimization, no investment
+  advice, and no profitability claims.
+
+### Stage 36: Complement arbitrage candidate schema
+
+- Status: complete.
+- Commit: pending on the complement-arbitrage candidate branch.
+- Purpose: add the first deterministic offline candidate model for
+  same-market YES/NO complement parity research.
+- Files/modules changed: `src/edmn_trader/arb/complement.py`,
+  `src/edmn_trader/arb/__init__.py`, `tests/test_complement_arb.py`, and
+  documentation updates.
 - Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
-  `ruff check .`, `python scripts/01_replay_orderbook_fixture.py`, and
-  `git diff --check`.
-- Next-stage boundary: later work may add a fee model scaffold or offline
-  scanner only; it must stay deterministic, local/replay-first, and free of
-  live data, WebSockets, credentials, authenticated requests, order placement,
-  wallets, production endpoints, strategy optimization, investment advice, and
-  profitability claims.
+  `ruff check .`, and `git diff --check`.
+- Next-stage boundary: Stage 37 may add a venue fee model scaffold only; it
+  must not add live data, WebSockets, credentials, authenticated requests,
+  order placement, wallets, production endpoints, strategy optimization,
+  investment advice, or profitability claims.
 - Safety status: Decimal-only offline candidate metadata, no live API calls,
   no authenticated requests, no WebSockets, no credentials, no order
   placement, no production execution, no broker integration, no strategy
@@ -3412,5 +3425,5 @@ reads, evidence-content reads, source-content reads, output verification,
 local environment verification, distribution approval, rights verification,
 decision approval, raw local data reads, remote fetches, new adapters,
 production endpoints, ranking, allocation, optimization, executable advice, or
-production-readiness claims. The active next product checkpoint is a
-complement-arbitrage fee model scaffold or offline scanner.
+production-readiness claims. The active next product checkpoint is Stage 37
+venue fee model scaffold.
