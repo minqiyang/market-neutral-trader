@@ -2,8 +2,8 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages through Stage 36
-complement candidate schema. They are intended as a durable audit map;
+These records summarize the locally completed stages through Stage 37 venue
+fee model scaffold. They are intended as a durable audit map;
 implementation details remain in the source, tests, changelog, engineering
 log, and handoff archive.
 
@@ -901,6 +901,30 @@ addition of small report-input metadata kinds.
   no authenticated requests, no WebSockets, no credentials, no order
   placement, no production execution, no broker integration, no strategy
   optimization, no investment advice, and no profitability claims.
+
+### Stage 37: Venue fee model scaffold
+
+- Status: complete.
+- Commit: pending on the Stage 37 fee model branch.
+- Purpose: make complement-arbitrage fee assumptions explicit,
+  venue-specific, Decimal-only, and conservative before any scanner work.
+- Files/modules changed: `src/edmn_trader/fees/base.py`,
+  `src/edmn_trader/fees/kalshi.py`,
+  `src/edmn_trader/fees/polymarket_us.py`,
+  `src/edmn_trader/fees/__init__.py`,
+  `src/edmn_trader/arb/complement.py`, `tests/test_fee_models.py`, and
+  documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/01_replay_orderbook_fixture.py`, and
+  `git diff --check`.
+- Next-stage boundary: Stage 38 may add an offline complement scanner only; it
+  must not add live data, WebSockets, credentials, authenticated requests,
+  order placement, wallets, production endpoints, strategy optimization,
+  investment advice, executable advice, or profitability claims.
+- Safety status: offline fee estimate metadata only, no live fee lookup, no
+  network calls, no WebSockets, no credentials, no authenticated requests, no
+  wallets, no order placement, no production endpoints, no LLM trading agent,
+  no strategy optimization, no investment advice, and no profitability claims.
 
 ## Stage 0: Repository foundation
 
@@ -3425,5 +3449,5 @@ reads, evidence-content reads, source-content reads, output verification,
 local environment verification, distribution approval, rights verification,
 decision approval, raw local data reads, remote fetches, new adapters,
 production endpoints, ranking, allocation, optimization, executable advice, or
-production-readiness claims. The active next product checkpoint is Stage 37
-venue fee model scaffold.
+production-readiness claims. The active next product checkpoint is Stage 38
+offline complement scanner.

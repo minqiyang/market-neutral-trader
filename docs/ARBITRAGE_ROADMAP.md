@@ -62,8 +62,10 @@ report-input kinds unless a later maintenance task explicitly requires it.
   `ComplementArbInput`, `ComplementArbCandidate`, `ComplementArbDecision`,
   `compute_kalshi_complement_candidate`, and
   `compute_canonical_yes_side_cross_candidate`, with offline tests.
-- Stage 37: venue fee model scaffold. Make fee assumptions explicit and
-  conservative. Missing fee models must block `paper_candidate`.
+- Stage 37: venue fee model scaffold. Make fee assumptions explicit,
+  Decimal-only, venue-specific, and conservative. Missing or unknown fee models
+  must block `paper_candidate`; no fee schedule is hard-coded without an
+  explicit documented assumption.
 - Stage 38: offline complement scanner. Scan fixture or snapshot inputs and
   emit JSONL plus Markdown candidate reports without executable order intents.
 - Stage 39: live event schema and mocked WebSocket harness. Prepare recorder

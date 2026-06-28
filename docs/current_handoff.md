@@ -33,21 +33,23 @@ Stage 33 local handoff-notes report-input metadata is implemented.
 Stage 34 local archive-notes report-input metadata is implemented.
 The active product direction has been redirected from continued report-input
 metadata expansion to narrow same-market YES/NO complement parity research.
-The repository now includes `docs/ARBITRAGE_ROADMAP.md` and the first offline
-Decimal-only complement candidate model under `src/edmn_trader/arb/`.
+The repository now includes `docs/ARBITRAGE_ROADMAP.md`, the first offline
+Decimal-only complement candidate model under `src/edmn_trader/arb/`, and a
+Stage 37 venue fee estimate scaffold under `src/edmn_trader/fees/`.
 
 ## Last completed stage
 
-Stage 36 complement arbitrage candidate schema.
+Stage 37 venue fee model scaffold.
 
 ## Stage plan status
 
 `docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, Stage 35 arbitrage
-roadmap reset, and Stage 36 complement candidate schema. The ledger records
-purpose, known commit hashes, files/modules added, validation commands, status,
-next-stage boundary, and safety status for each completed stage.
+roadmap reset, Stage 36 complement candidate schema, and Stage 37 venue fee
+model scaffold. The ledger records purpose, known commit hashes, files/modules
+added, validation commands, status, next-stage boundary, and safety status for
+each completed stage.
 
 Report-input metadata expansion from Stages 11 through 34 is now
 maintenance-only. The previously clarified local delivery-notes report input is
@@ -59,6 +61,11 @@ design boundary. The first model is deterministic and offline:
 `ComplementArbInput`, `ComplementArbCandidate`, `ComplementArbDecision`,
 `compute_kalshi_complement_candidate`, and
 `compute_canonical_yes_side_cross_candidate`.
+
+Stage 37 adds `FeeEstimateStatus`, `FeeEstimate`, Kalshi fee estimate helpers,
+and Polymarket US fee estimate helpers. Fee assumptions must be explicit,
+Decimal-only, and source-noted. Missing or unknown fee status blocks
+`paper_candidate`.
 
 `docs/STAGE_PLAN.md` now contains the full Stage 3 specification: snapshot
 schema requirements, Decimal-safe JSONL recorder requirements, deterministic
@@ -294,8 +301,9 @@ observed `main` CI run `28270211447` passed `Validate`. The handoff and stage
 plan agree on the next checkpoint, and no risk drift, compliance drift,
 token/context drift, or user-judgment stop gate was found. The next checkpoint
 was Stage 35 implementation only at the time; it has since been superseded by
-the Stage 35-36 arbitrage roadmap reset and candidate schema delivery unit,
-and the active next checkpoint is Stage 37 venue fee model scaffold only.
+the Stage 35-37 arbitrage roadmap, candidate schema, and fee scaffold delivery
+units, and the active next checkpoint is Stage 38 offline complement scanner
+only.
 
 `docs/STAGE_PLAN.md` now contains the clarified Stage 9 specification and
 `docs/stage9_equities_readiness.md` records the readiness review. Stage 9 is
@@ -865,9 +873,9 @@ checkpoint. Complement-parity work must stay deterministic and offline until
 later reviewed stages add fee models, scanners, recorders, simulators, paper
 ledgers, risk/manual approval, or demo connector boundaries.
 
-Next checkpoint: Stage 37 venue fee model scaffold only.
+Next checkpoint: Stage 38 offline complement scanner only.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 37 venue fee model scaffold for complement-arbitrage candidates. Keep all fee assumptions explicit and conservative; missing fee models must block paper_candidate. Do not add live data, WebSockets, authenticated requests, credentials, order placement, wallets, broker integration, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 38 offline complement scanner. Read fixture/snapshot inputs only and emit deterministic JSONL plus Markdown candidate reports. Do not add live data, WebSockets, network calls, authenticated requests, credentials, order placement, wallets, broker integration, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
 
 ## Important files
 
@@ -1077,6 +1085,14 @@ Do not create PRs for every small docs, handoff, or audit edit, and do not creat
 standalone handoff-only or audit-only PRs unless the controller risk/stop rules
 or lack of an active delivery branch require them.
 
+For merge-gated continuation, an open previous checkpoint PR is no longer an
+automatic stop. Codex must first evaluate whether the PR can be safely
+auto-merged: local validation, CI, clean mergeability, clean worktree, scoped
+files, no forbidden trading/secrets/profitability changes, and README/risk/
+handoff no-live-trading consistency must all pass. If they pass, merge the PR,
+sync `origin/main`, create a fresh `codex/` branch, and continue. If any gate
+fails, stop and report the failed gate.
+
 The controller now also has a token-economical optional-skill policy. The
 project Skill and token-budget rules stay default; TDD is for behavior changes;
 Ponytail review is for final publish of implementation diffs; Matt Pocock
@@ -1102,24 +1118,23 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended stage
 
-Stage 37 venue fee model scaffold only.
+Stage 38 offline complement scanner only.
 Start only after reconfirming clean synced `main`, CI, branch protection,
 required `Validate` status, local validation, and whether the owner-direct fast
-path or PR path applies. Do not add live data, WebSockets, authenticated
-requests, credentials, order placement, wallets, production endpoints,
-strategy optimization, investment advice, or profitability claims.
+path or PR path applies. Do not add live data, WebSockets, network calls,
+authenticated requests, credentials, order placement, wallets, production
+endpoints, strategy optimization, investment advice, or profitability claims.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Implement only Stage 37 venue fee model scaffold
-for complement-arbitrage candidates. Keep all fee assumptions explicit and
-conservative; missing fee models must block paper_candidate. Do not add live
-data, WebSockets, authenticated requests, credentials, order placement,
-wallets, broker integration, production endpoints, strategy optimization,
-investment advice, executable advice, production-readiness claims, or
-profitability claims.
+the verified current handoff. Implement only Stage 38 offline complement
+scanner. Read fixture/snapshot inputs only and emit deterministic JSONL plus
+Markdown candidate reports. Do not add live data, WebSockets, network calls,
+authenticated requests, credentials, order placement, wallets, broker
+integration, production endpoints, strategy optimization, investment advice,
+executable advice, production-readiness claims, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-28 10:03:42 -07:00
+2026-06-28 11:11:41 -07:00

@@ -79,6 +79,12 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/arb/complement.py`: offline Decimal-only same-market
   YES/NO complement-parity candidate model. Read for arbitrage roadmap, fee
   model, or offline scanner work.
+- `src/edmn_trader/fees/base.py`: venue-neutral fee estimate status and
+  Decimal fee assumption model. Read for fee-model work.
+- `src/edmn_trader/fees/kalshi.py`: Kalshi fee estimate scaffold with explicit
+  supplied/missing/unknown assumptions only.
+- `src/edmn_trader/fees/polymarket_us.py`: Polymarket US fee estimate scaffold
+  with explicit supplied/missing/unknown assumptions only.
 - `src/edmn_trader/data/snapshots.py`: offline market-data snapshot model and
   snapshot JSONL persistence helpers. Read for recorded data schema changes.
 - `src/edmn_trader/data/jsonl.py`: Decimal-safe JSONL read/write/append helpers.
@@ -171,6 +177,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `tests/test_complement_arb.py`: offline complement-parity candidate coverage
   for gross/net edge, locked/crossed states, fee assumptions, Decimal
   precision, and manual-review flags.
+- `tests/test_fee_models.py`: Stage 37 fee estimate coverage for explicit
+  supplied assumptions, missing/unknown fee status, candidate blocking, and
+  Decimal validation.
 - `tests/test_snapshots_jsonl.py`: JSONL roundtrip, Decimal precision,
   malformed JSONL, append behavior, and snapshot raw-payload safety coverage.
 - `tests/test_replay_snapshots.py`: replay ordering, replay metrics, and
