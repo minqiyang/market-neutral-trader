@@ -75,6 +75,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   Polymarket US public market-data client.
 - `src/edmn_trader/adapters/polymarket_us/orderbook.py`: Polymarket US
   market-book normalizer. Read for Stage 8 parsing only.
+- `src/edmn_trader/adapters/polymarket_us/market_recorder.py`: Stage 41
+  guarded Polymarket US market-channel recorder with explicit opt-in and
+  mocked-testable client injection.
 - `src/edmn_trader/adapters/sec_edgar/client.py`: guarded read-only SEC EDGAR
   public companyfacts client.
 - `src/edmn_trader/adapters/sec_edgar/companyfacts.py`: SEC companyfacts
@@ -129,6 +132,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   local mocked WebSocket recorder CLI entry point.
 - `src/edmn_trader/scripts/kalshi_readonly_recorder.py`: importable Stage 40
   guarded Kalshi Demo read-only recorder CLI entry point.
+- `src/edmn_trader/scripts/polymarket_market_recorder.py`: importable Stage 41
+  guarded Polymarket US market-channel recorder CLI entry point.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
@@ -170,6 +175,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   mocked WebSocket recorder fixture harness.
 - `scripts/40_kalshi_readonly_recorder.py`: runs the guarded Kalshi Demo
   read-only recorder; defaults disabled without `--live-readonly-opt-in`.
+- `scripts/41_polymarket_market_recorder.py`: runs the guarded Polymarket US
+  market-channel recorder; defaults disabled without `--live-readonly-opt-in`.
 - `scripts/07_research_report.py`: writes a local/offline Markdown attribution
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
 - `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
@@ -213,6 +220,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
   recorder guardrail coverage for opt-in, Demo-only config, mocked HTTP
   recording, raw event JSONL, normalized snapshot JSONL, and non-executable
   records.
+- `tests/test_polymarket_market_recorder.py`: Stage 41 Polymarket US
+  market-channel recorder guardrail coverage for opt-in, US-public-only config,
+  mocked HTTP recording, raw event JSONL, normalized snapshot JSONL, and
+  non-executable records.
 - `tests/test_snapshots_jsonl.py`: JSONL roundtrip, Decimal precision,
   malformed JSONL, append behavior, and snapshot raw-payload safety coverage.
 - `tests/test_replay_snapshots.py`: replay ordering, replay metrics, and

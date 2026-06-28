@@ -12,7 +12,11 @@ from edmn_trader.data.jsonl import read_jsonl_records, write_jsonl_records
 from edmn_trader.data.payload_safety import validate_no_secret_payload
 
 LIVE_EVENT_SCHEMA_VERSION = 1
-LiveEventSourceType = Literal["mock_websocket", "kalshi_demo_rest"]
+LiveEventSourceType = Literal[
+    "mock_websocket",
+    "kalshi_demo_rest",
+    "polymarket_us_market_channel",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,8 +48,15 @@ class LiveMarketDataEvent:
             raise ValueError(msg)
         _require_aware_datetime(self.observed_at, field_name="observed_at")
         _require_aware_datetime(self.received_at, field_name="received_at")
-        if self.source_type not in {"mock_websocket", "kalshi_demo_rest"}:
-            msg = "source_type must be mock_websocket or kalshi_demo_rest"
+        if self.source_type not in {
+            "mock_websocket",
+            "kalshi_demo_rest",
+            "polymarket_us_market_channel",
+        }:
+            msg = (
+                "source_type must be mock_websocket, kalshi_demo_rest, "
+                "or polymarket_us_market_channel"
+            )
             raise ValueError(msg)
         validate_no_secret_payload(self.payload)
         object.__setattr__(self, "payload", dict(self.payload))

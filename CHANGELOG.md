@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added a Stage 41 guarded Polymarket US market-channel recorder that requires
+  explicit live-readonly opt-in, rejects non-US-public boundaries, writes raw
+  event and normalized snapshot JSONL, and is covered by mocked HTTP tests
+  only.
 - Added a Stage 40 guarded Kalshi Demo read-only recorder that requires
   explicit live-readonly opt-in, rejects non-Demo boundaries, writes raw event
   and normalized snapshot JSONL, and is covered by mocked HTTP tests only.

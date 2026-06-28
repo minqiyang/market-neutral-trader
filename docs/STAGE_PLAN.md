@@ -980,7 +980,7 @@ addition of small report-input metadata kinds.
 ### Stage 40: Kalshi live read-only recorder
 
 - Status: complete.
-- Commit: pending on the Stage 40 Kalshi read-only recorder branch.
+- Commit: `a195dab` (merged via PR #90).
 - Purpose: add a guarded Kalshi Demo read-only orderbook recorder that writes
   raw live-event JSONL and normalized snapshot JSONL through mocked-testable
   code paths.
@@ -1001,6 +1001,32 @@ addition of small report-input metadata kinds.
   requests, no user-order channel, no order placement imports, no production
   endpoints, no strategy optimization, no investment advice, and no
   profitability claims.
+
+### Stage 41: Polymarket market-channel recorder
+
+- Status: complete.
+- Commit: pending on the Stage 41 Polymarket market-channel recorder branch.
+- Purpose: add a guarded Polymarket US market-channel recorder that writes raw
+  live-event JSONL and normalized snapshot JSONL through mocked-testable code
+  paths.
+- Files/modules changed:
+  `src/edmn_trader/adapters/polymarket_us/market_recorder.py`,
+  `src/edmn_trader/scripts/polymarket_market_recorder.py`,
+  `scripts/41_polymarket_market_recorder.py`,
+  `tests/test_polymarket_market_recorder.py`, Stage 39 live-event source-type
+  support, and documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/41_polymarket_market_recorder.py --help`,
+  `python scripts/01_replay_orderbook_fixture.py`, and `git diff --check`.
+- Next-stage boundary: Stage 42 may add order book rebuild and replay
+  consistency only. It must rebuild from recorded events, hash state, detect
+  gaps/staleness/out-of-order input, and must not add execution, credentials,
+  live venue connections, wallets, or strategy optimization.
+- Safety status: guarded Polymarket US public market-channel recorder only, no
+  validation-time live connection execution, no credentials, no credential
+  prompts, no authenticated requests, no user channel, no wallet, no signing,
+  no order placement imports, no production trading endpoint, no strategy
+  optimization, no investment advice, and no profitability claims.
 
 ## Stage 0: Repository foundation
 

@@ -7,6 +7,12 @@ from edmn_trader.adapters.polymarket_us.client import (
     PolymarketUSHTTPError,
     PolymarketUSMarketDataClient,
 )
+from edmn_trader.adapters.polymarket_us.market_recorder import (
+    PolymarketUSMarketRecorderConfig,
+    PolymarketUSMarketRecorderResult,
+    PolymarketUSReadOnlyOptInRequired,
+    record_polymarket_us_market_channel,
+)
 from edmn_trader.adapters.polymarket_us.orderbook import (
     PolymarketUSEmptyOrderBookError,
     PolymarketUSResponseError,
@@ -20,6 +26,10 @@ __all__ = [
     "PolymarketUSEmptyOrderBookError",
     "PolymarketUSHTTPError",
     "PolymarketUSMarketDataClient",
+    "PolymarketUSMarketRecorderConfig",
+    "PolymarketUSMarketRecorderResult",
+    "PolymarketUSReadOnlyOptInRequired",
     "PolymarketUSResponseError",
     "normalize_polymarket_us_market_book",
+    "record_polymarket_us_market_channel",
 ]

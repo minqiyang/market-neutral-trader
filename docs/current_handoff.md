@@ -39,11 +39,12 @@ Stage 37 venue fee estimate scaffold under `src/edmn_trader/fees/`, plus a
 Stage 38 offline complement scanner that emits deterministic JSONL and
 Markdown research reports from local fixture/snapshot-style inputs, plus a
 Stage 39 live-event schema and local mocked WebSocket-style recorder harness,
-plus a Stage 40 guarded Kalshi Demo read-only recorder.
+plus a Stage 40 guarded Kalshi Demo read-only recorder, plus a Stage 41
+guarded Polymarket US market-channel recorder.
 
 ## Last completed stage
 
-Stage 40 guarded Kalshi Demo read-only recorder.
+Stage 41 guarded Polymarket US market-channel recorder.
 
 ## Stage plan status
 
@@ -53,9 +54,10 @@ Stage 40 guarded Kalshi Demo read-only recorder.
 roadmap reset, Stage 36 complement candidate schema, Stage 37 venue fee model
 scaffold, Stage 38 offline complement scanner, and Stage 39 live event schema
 with mocked WebSocket harness, and Stage 40 guarded Kalshi Demo read-only
-recorder. The ledger records purpose, known commit hashes, files/modules
-added, validation commands, status, next-stage boundary, and safety status for
-each completed stage.
+recorder, and Stage 41 guarded Polymarket US market-channel recorder. The
+ledger records purpose, known commit hashes, files/modules added, validation
+commands, status, next-stage boundary, and safety status for each completed
+stage.
 
 Report-input metadata expansion from Stages 11 through 34 is now
 maintenance-only. The previously clarified local delivery-notes report input is
@@ -89,6 +91,15 @@ Stage 40 adds `src/edmn_trader/adapters/kalshi/readonly_recorder.py` and
 orderbook recording. It requires explicit `--live-readonly-opt-in`, rejects
 non-Demo boundaries, writes raw event JSONL plus normalized snapshot JSONL,
 and is covered by mocked HTTP tests only.
+
+Stage 41 adds `src/edmn_trader/adapters/polymarket_us/market_recorder.py` and
+`scripts/41_polymarket_market_recorder.py` for guarded Polymarket US
+market-channel recording. It requires explicit `--live-readonly-opt-in`,
+rejects non-US-public boundaries, writes raw event JSONL plus normalized
+snapshot JSONL, and is covered by mocked network tests only. It does not add
+user channels, wallets, signing, credentials, authenticated requests, order
+placement imports, executable advice, strategy optimization, production
+readiness claims, or profitability claims.
 
 `docs/STAGE_PLAN.md` now contains the full Stage 3 specification: snapshot
 schema requirements, Decimal-safe JSONL recorder requirements, deterministic
@@ -328,6 +339,15 @@ the Stage 35-37 arbitrage roadmap, candidate schema, and fee scaffold delivery
 units, and the active next checkpoint is Stage 38 offline complement scanner
 only. Stage 38 is now complete, so the active next checkpoint is Stage 39 live
 event schema plus mocked WebSocket recorder harness only.
+
+Audit after three more completed checkpoints: Stage 39 live event schema and
+mocked WebSocket harness, Stage 40 Kalshi live read-only recorder, and Stage
+41 Polymarket market-channel recorder. Local work started from synced
+`origin/main` at `a195dab`, there were no open pull requests before Stage 41
+publish, branch protection still requires strict `Validate`, and the latest
+observed `main` CI run `28338107808` passed `Validate`. The handoff and stage
+plan agree on Stage 42 as the next checkpoint, and no risk drift, compliance
+drift, token/context drift, or user-judgment stop gate was found.
 
 `docs/STAGE_PLAN.md` now contains the clarified Stage 9 specification and
 `docs/stage9_equities_readiness.md` records the readiness review. Stage 9 is
@@ -897,10 +917,9 @@ checkpoint. Complement-parity work must stay deterministic and offline until
 later reviewed stages add fee models, scanners, recorders, simulators, paper
 ledgers, risk/manual approval, or demo connector boundaries.
 
-Next checkpoint: Stage 41 Polymarket market-channel recorder implementation
-only.
+Next checkpoint: Stage 42 order book rebuild and replay consistency only.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 41 Polymarket market-channel recorder implementation. Add code and tests only; do not execute real live venue connections. The live script must default disabled/offline, require explicit --live-readonly-opt-in, use mocked network in tests, and add no user channel, wallets, signing, real credentials, credential prompts, order placement imports, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 42 order book rebuild and replay consistency. Rebuild order books from recorded events, hash book state, and detect gaps, staleness, and out-of-order inputs. Use local fixtures or mocked recorder output only; do not execute real live venue connections, add credentials, authenticated requests, wallets, signing, order placement, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
 
 ## Important files
 
@@ -933,6 +952,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   Polymarket US public market-data client.
 - `src/edmn_trader/adapters/polymarket_us/orderbook.py`: Polymarket US
   market-book normalizer.
+- `src/edmn_trader/adapters/polymarket_us/market_recorder.py`: Stage 41
+  guarded Polymarket US market-channel recorder.
 - `src/edmn_trader/adapters/sec_edgar/client.py`: guarded read-only SEC EDGAR
   public companyfacts client.
 - `src/edmn_trader/adapters/sec_edgar/companyfacts.py`: SEC companyfacts
@@ -976,6 +997,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   local mocked WebSocket recorder harness.
 - `scripts/40_kalshi_readonly_recorder.py`: root wrapper for the Stage 40
   guarded Kalshi Demo read-only recorder.
+- `scripts/41_polymarket_market_recorder.py`: root wrapper for the Stage 41
+  guarded Polymarket US market-channel recorder.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   Markdown report generator for Stage 6 logs and explicit fill assumptions.
 - `scripts/07_research_report.py`: root wrapper for Stage 7 reporting.
@@ -1004,6 +1027,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   recorder coverage.
 - `tests/test_kalshi_readonly_recorder.py`: Stage 40 Kalshi read-only recorder
   guardrail coverage.
+- `tests/test_polymarket_market_recorder.py`: Stage 41 Polymarket US
+  market-channel recorder guardrail coverage.
 - `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33/34 report-pack coverage
   for observed metrics, source inventory, missing optional inputs, local SEC
   facts, manifest metadata, local run-comparison metadata, unsafe
@@ -1095,6 +1120,12 @@ python -m pip install -e ".[dev]"
   boundaries into fake-adapter demo execution requests only after explicit
   opt-in and Stage 5 risk approval; no fill simulation, WebSocket ingestion,
   production trading path, or live market-making loop exists.
+- On the migrated Mac environment, root wrapper scripts may still need the
+  repo fallback `PYTHONPATH=src` despite a passing editable install. The direct
+  `python scripts/01_replay_orderbook_fixture.py` wrapper failed with
+  `ModuleNotFoundError: No module named 'edmn_trader'` during Stage 41
+  validation, while `PYTHONPATH=src python scripts/01_replay_orderbook_fixture.py`
+  passed.
 
 ## PR workflow policy
 
@@ -1167,26 +1198,27 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended stage
 
-Stage 41 Polymarket market-channel recorder implementation only.
+Stage 42 order book rebuild and replay consistency only.
 Start only after reconfirming clean synced `main`, CI, branch protection,
 required `Validate` status, local validation, and whether the owner-direct fast
-path or PR path applies. Do not execute real live venue connections; scripts
-must default disabled/offline, require explicit `--live-readonly-opt-in`, use
-mocked network or fixtures, and must not add user channels, wallets, signing,
-or execution behavior.
+path or PR path applies. Rebuild order books from recorded events, hash book
+state, and detect gaps, staleness, and out-of-order input. Use local fixtures
+or mocked recorder output only and do not add live venue connections,
+credentials, authenticated requests, wallets, signing, order placement,
+production endpoints, strategy optimization, investment advice, executable
+advice, production-readiness claims, or profitability claims.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Implement only Stage 41 Polymarket
-market-channel recorder implementation. Add code and tests only; do not
-execute real live venue connections. The live script must default
-disabled/offline, require explicit --live-readonly-opt-in, use mocked network
-in tests, and add no user channel, wallets, signing, real credentials,
-credential prompts, order placement imports, production endpoints, strategy
-optimization, investment advice, executable advice, production-readiness
-claims, or profitability claims.
+the verified current handoff. Implement only Stage 42 order book rebuild and
+replay consistency. Rebuild order books from recorded events, hash book state,
+and detect gaps, staleness, and out-of-order inputs. Use local fixtures or
+mocked recorder output only; do not execute real live venue connections, add
+credentials, authenticated requests, wallets, signing, order placement,
+production endpoints, strategy optimization, investment advice, executable
+advice, production-readiness claims, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-28 15:24:22 -07:00
+2026-06-28 15:32:31 -07:00

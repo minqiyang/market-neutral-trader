@@ -986,6 +986,21 @@ accept credentials, prompt for credentials, import order placement, touch user
 channels, use production endpoints, or run a real live connection in
 validation.
 
+## Stage 41 guarded Polymarket market-channel recorder
+
+Stage 41 adds the matching Polymarket US market-channel recorder path. It
+requires explicit `--live-readonly-opt-in`, accepts only the guarded
+Polymarket US public market-data boundary, and is tested with
+`httpx.MockTransport`.
+
+One successful mocked capture writes both a raw `LiveMarketDataEvent` JSONL
+record and a normalized `MarketDataSnapshot` JSONL record. The code does not
+accept credentials, prompt for credentials, add user channels, wallets,
+signing, order placement imports, executable advice, strategy optimization,
+production-readiness claims, or profitability claims. The due compact
+governance audit for Stages 39-41 was folded into the Stage 41 delivery
+branch and found no stop gate.
+
 ## Interview narrative
 
 A concise way to explain the current project:
