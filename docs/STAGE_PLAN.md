@@ -1005,7 +1005,7 @@ addition of small report-input metadata kinds.
 ### Stage 41: Polymarket market-channel recorder
 
 - Status: complete.
-- Commit: pending on the Stage 41 Polymarket market-channel recorder branch.
+- Commit: `33b4b5a` (merged via PR #91).
 - Purpose: add a guarded Polymarket US market-channel recorder that writes raw
   live-event JSONL and normalized snapshot JSONL through mocked-testable code
   paths.
@@ -1027,6 +1027,29 @@ addition of small report-input metadata kinds.
   prompts, no authenticated requests, no user channel, no wallet, no signing,
   no order placement imports, no production trading endpoint, no strategy
   optimization, no investment advice, and no profitability claims.
+
+### Stage 42: Order book rebuild and replay consistency
+
+- Status: complete.
+- Commit: pending on the Stage 42 order book rebuild branch.
+- Purpose: rebuild normalized order books from recorded read-only events,
+  compute deterministic book-state hashes, and report replay consistency flags.
+- Files/modules changed: `src/edmn_trader/data/book_rebuild.py`,
+  `src/edmn_trader/scripts/rebuild_orderbooks.py`,
+  `scripts/42_rebuild_orderbooks.py`, `tests/test_book_rebuild.py`, data
+  exports, and documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/42_rebuild_orderbooks.py --help`,
+  `python scripts/01_replay_orderbook_fixture.py`, and `git diff --check`.
+- Next-stage boundary: Stage 43 may add taker fill, slippage, and failed-leg
+  simulation only. It must stress two-leg assumptions offline, keep outputs as
+  audit/paper research records, and must not add order placement, credentials,
+  live venue connections, wallets, user channels, or strategy optimization.
+- Safety status: offline rebuild/replay consistency only, no live venue
+  connection execution, no credentials, no credential prompts, no
+  authenticated requests, no user channel, no wallet, no signing, no order
+  placement imports, no production trading endpoint, no strategy optimization,
+  no investment advice, and no profitability claims.
 
 ## Stage 0: Repository foundation
 

@@ -40,11 +40,12 @@ Stage 38 offline complement scanner that emits deterministic JSONL and
 Markdown research reports from local fixture/snapshot-style inputs, plus a
 Stage 39 live-event schema and local mocked WebSocket-style recorder harness,
 plus a Stage 40 guarded Kalshi Demo read-only recorder, plus a Stage 41
-guarded Polymarket US market-channel recorder.
+guarded Polymarket US market-channel recorder, plus Stage 42 order book
+rebuild and replay consistency.
 
 ## Last completed stage
 
-Stage 41 guarded Polymarket US market-channel recorder.
+Stage 42 order book rebuild and replay consistency.
 
 ## Stage plan status
 
@@ -54,10 +55,10 @@ Stage 41 guarded Polymarket US market-channel recorder.
 roadmap reset, Stage 36 complement candidate schema, Stage 37 venue fee model
 scaffold, Stage 38 offline complement scanner, and Stage 39 live event schema
 with mocked WebSocket harness, and Stage 40 guarded Kalshi Demo read-only
-recorder, and Stage 41 guarded Polymarket US market-channel recorder. The
-ledger records purpose, known commit hashes, files/modules added, validation
-commands, status, next-stage boundary, and safety status for each completed
-stage.
+recorder, Stage 41 guarded Polymarket US market-channel recorder, and Stage
+42 order book rebuild and replay consistency. The ledger records purpose,
+known commit hashes, files/modules added, validation commands, status,
+next-stage boundary, and safety status for each completed stage.
 
 Report-input metadata expansion from Stages 11 through 34 is now
 maintenance-only. The previously clarified local delivery-notes report input is
@@ -100,6 +101,14 @@ snapshot JSONL, and is covered by mocked network tests only. It does not add
 user channels, wallets, signing, credentials, authenticated requests, order
 placement imports, executable advice, strategy optimization, production
 readiness claims, or profitability claims.
+
+Stage 42 adds `src/edmn_trader/data/book_rebuild.py` and
+`scripts/42_rebuild_orderbooks.py` for offline recorded-event order book
+rebuilds. It normalizes Stage 40/41 read-only event payloads into snapshots,
+emits deterministic book-state hashes, and reports sequence-gap, stale-event,
+out-of-order, and one-sided-book flags. It does not add live connections,
+credentials, user channels, wallets, signing, order placement, strategy
+optimization, advice, production-readiness claims, or profitability claims.
 
 `docs/STAGE_PLAN.md` now contains the full Stage 3 specification: snapshot
 schema requirements, Decimal-safe JSONL recorder requirements, deterministic
@@ -917,9 +926,9 @@ checkpoint. Complement-parity work must stay deterministic and offline until
 later reviewed stages add fee models, scanners, recorders, simulators, paper
 ledgers, risk/manual approval, or demo connector boundaries.
 
-Next checkpoint: Stage 42 order book rebuild and replay consistency only.
+Next checkpoint: Stage 43 taker fill, slippage, and failed-leg simulator only.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 42 order book rebuild and replay consistency. Rebuild order books from recorded events, hash book state, and detect gaps, staleness, and out-of-order inputs. Use local fixtures or mocked recorder output only; do not execute real live venue connections, add credentials, authenticated requests, wallets, signing, order placement, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 43 taker fill, slippage, and failed-leg simulator. Stress FOK/IOC-like two-leg assumptions, partial fills, latency shock, and failed-leg reserve offline. Keep outputs audit/paper research records only; do not add order placement, live venue connections, credentials, authenticated requests, wallets, signing, user channels, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
 
 ## Important files
 
@@ -964,6 +973,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
 - `src/edmn_trader/data/replay.py`: deterministic replay session and metrics.
 - `src/edmn_trader/data/live_events.py`: Stage 39 live-event schema and
   mocked recorder harness.
+- `src/edmn_trader/data/book_rebuild.py`: Stage 42 recorded-event order book
+  rebuild, deterministic hash, and consistency flag helpers.
 - `src/edmn_trader/data/payload_safety.py`: shared secret-key rejection helper
   for raw payload persistence.
 - `src/edmn_trader/arb/complement.py`: offline complement-parity candidate
@@ -999,6 +1010,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   guarded Kalshi Demo read-only recorder.
 - `scripts/41_polymarket_market_recorder.py`: root wrapper for the Stage 41
   guarded Polymarket US market-channel recorder.
+- `scripts/42_rebuild_orderbooks.py`: root wrapper for the Stage 42 offline
+  recorded-event order book rebuild.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   Markdown report generator for Stage 6 logs and explicit fill assumptions.
 - `scripts/07_research_report.py`: root wrapper for Stage 7 reporting.
@@ -1029,6 +1042,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   guardrail coverage.
 - `tests/test_polymarket_market_recorder.py`: Stage 41 Polymarket US
   market-channel recorder guardrail coverage.
+- `tests/test_book_rebuild.py`: Stage 42 order book rebuild, deterministic
+  hash, consistency flag, CLI, and unsupported-event coverage.
 - `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33/34 report-pack coverage
   for observed metrics, source inventory, missing optional inputs, local SEC
   facts, manifest metadata, local run-comparison metadata, unsafe
@@ -1198,27 +1213,27 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended stage
 
-Stage 42 order book rebuild and replay consistency only.
+Stage 43 taker fill, slippage, and failed-leg simulator only.
 Start only after reconfirming clean synced `main`, CI, branch protection,
 required `Validate` status, local validation, and whether the owner-direct fast
-path or PR path applies. Rebuild order books from recorded events, hash book
-state, and detect gaps, staleness, and out-of-order input. Use local fixtures
-or mocked recorder output only and do not add live venue connections,
-credentials, authenticated requests, wallets, signing, order placement,
+path or PR path applies. Stress FOK/IOC-like two-leg assumptions, partial
+fills, latency shock, and failed-leg reserve offline. Keep outputs audit/paper
+research records only and do not add live venue connections, credentials,
+authenticated requests, wallets, signing, user channels, order placement,
 production endpoints, strategy optimization, investment advice, executable
 advice, production-readiness claims, or profitability claims.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Implement only Stage 42 order book rebuild and
-replay consistency. Rebuild order books from recorded events, hash book state,
-and detect gaps, staleness, and out-of-order inputs. Use local fixtures or
-mocked recorder output only; do not execute real live venue connections, add
-credentials, authenticated requests, wallets, signing, order placement,
+the verified current handoff. Implement only Stage 43 taker fill, slippage,
+and failed-leg simulator. Stress FOK/IOC-like two-leg assumptions, partial
+fills, latency shock, and failed-leg reserve offline. Keep outputs audit/paper
+research records only; do not add order placement, live venue connections,
+credentials, authenticated requests, wallets, signing, user channels,
 production endpoints, strategy optimization, investment advice, executable
 advice, production-readiness claims, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-28 15:32:31 -07:00
+2026-06-28 15:42:42 -07:00

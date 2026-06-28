@@ -98,6 +98,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   snapshot JSONL persistence helpers. Read for recorded data schema changes.
 - `src/edmn_trader/data/live_events.py`: Stage 39 read-only live market-data
   event schema and mocked WebSocket-style recorder harness.
+- `src/edmn_trader/data/book_rebuild.py`: Stage 42 recorded-event order book
+  rebuild, deterministic book hashing, and replay consistency flags.
 - `src/edmn_trader/data/payload_safety.py`: shared raw-payload secret-key
   rejection helper for recorded market-data payloads.
 - `src/edmn_trader/data/jsonl.py`: Decimal-safe JSONL read/write/append helpers.
@@ -134,6 +136,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   guarded Kalshi Demo read-only recorder CLI entry point.
 - `src/edmn_trader/scripts/polymarket_market_recorder.py`: importable Stage 41
   guarded Polymarket US market-channel recorder CLI entry point.
+- `src/edmn_trader/scripts/rebuild_orderbooks.py`: importable Stage 42
+  recorded-event rebuild CLI entry point.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
@@ -177,6 +181,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   read-only recorder; defaults disabled without `--live-readonly-opt-in`.
 - `scripts/41_polymarket_market_recorder.py`: runs the guarded Polymarket US
   market-channel recorder; defaults disabled without `--live-readonly-opt-in`.
+- `scripts/42_rebuild_orderbooks.py`: rebuilds normalized order books from
+  recorded event JSONL and writes snapshots, frame hashes, and a Markdown
+  consistency summary.
 - `scripts/07_research_report.py`: writes a local/offline Markdown attribution
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
 - `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
@@ -224,6 +231,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   market-channel recorder guardrail coverage for opt-in, US-public-only config,
   mocked HTTP recording, raw event JSONL, normalized snapshot JSONL, and
   non-executable records.
+- `tests/test_book_rebuild.py`: Stage 42 order book rebuild coverage for
+  deterministic hashes, gap/stale/out-of-order flags, JSONL/Markdown output,
+  CLI behavior, and unsupported-event rejection.
 - `tests/test_snapshots_jsonl.py`: JSONL roundtrip, Decimal precision,
   malformed JSONL, append behavior, and snapshot raw-payload safety coverage.
 - `tests/test_replay_snapshots.py`: replay ordering, replay metrics, and

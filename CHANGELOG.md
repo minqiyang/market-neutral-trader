@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 42 offline order book rebuild and replay consistency tooling
+  that reads recorded event JSONL, writes normalized snapshots, emits
+  deterministic book hashes, and reports gap/stale/out-of-order flags without
+  live connections or executable order intents.
 - Added a Stage 41 guarded Polymarket US market-channel recorder that requires
   explicit live-readonly opt-in, rejects non-US-public boundaries, writes raw
   event and normalized snapshot JSONL, and is covered by mocked HTTP tests

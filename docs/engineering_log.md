@@ -1001,6 +1001,19 @@ production-readiness claims, or profitability claims. The due compact
 governance audit for Stages 39-41 was folded into the Stage 41 delivery
 branch and found no stop gate.
 
+## Stage 42 order book rebuild and replay consistency
+
+Stage 42 turns recorded read-only events into replayable normalized book
+records. The rebuild path consumes existing live-event JSONL, normalizes
+Kalshi Demo and Polymarket US full-book payloads, writes snapshot JSONL, and
+emits deterministic SHA-256 book-state hashes for audit comparison.
+
+The consistency layer stays deliberately narrow: it reports sequence gaps,
+stale received-vs-observed lag, out-of-order observations, and one-sided books.
+The output is audit/replay research metadata only. It does not connect to live
+venues, authenticate, place orders, optimize strategy, or present replayed
+state as advice or profitability evidence.
+
 ## Interview narrative
 
 A concise way to explain the current project:
