@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added a Stage 38 offline complement scanner that reads local fixture JSON or
+  existing snapshot JSONL, applies explicit fee assumptions, and emits
+  deterministic JSONL plus Markdown audit/paper research reports without
+  executable order intents.
 - Redirected the active roadmap from continued report-input metadata expansion
   to same-market YES/NO complement parity research, added
   `docs/ARBITRAGE_ROADMAP.md` as the long-range Stage 35-52 roadmap, and

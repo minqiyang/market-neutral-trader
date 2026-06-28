@@ -926,6 +926,33 @@ addition of small report-input metadata kinds.
   wallets, no order placement, no production endpoints, no LLM trading agent,
   no strategy optimization, no investment advice, and no profitability claims.
 
+### Stage 38: Offline complement scanner
+
+- Status: complete.
+- Commit: pending on the Stage 38 offline scanner branch.
+- Purpose: scan safe local fixture or existing snapshot-style orderbook inputs
+  through the Stage 36 complement candidate model and Stage 37 fee estimate
+  scaffold, then emit deterministic JSONL and Markdown research reports.
+- Files/modules changed: `src/edmn_trader/arb/scanner.py`,
+  `src/edmn_trader/scripts/scan_complement_arb.py`,
+  `scripts/23_scan_complement_arb.py`, `tests/test_complement_scanner.py`,
+  `docs/complement_scanner.md`, and documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/23_scan_complement_arb.py --input
+  /tmp/edmn_stage38_fixture.json --jsonl-output
+  /tmp/edmn_stage38_candidates.jsonl --markdown-output
+  /tmp/edmn_stage38_summary.md`, `python
+  scripts/01_replay_orderbook_fixture.py`, and `git diff --check`.
+- Next-stage boundary: Stage 39 may add a live event schema and mocked
+  WebSocket recorder harness only; it must not add real network connections,
+  credentials, authenticated requests, wallets, order placement, production
+  endpoints, strategy optimization, investment advice, or profitability claims.
+- Safety status: offline scanner and report writer only, no live fee lookup,
+  no network calls, no WebSockets, no credentials, no authenticated requests,
+  no wallets, no order placement, no production endpoints, no LLM trading
+  agent, no strategy optimization, no investment advice, no executable order
+  intents, and no profitability claims.
+
 ## Stage 0: Repository foundation
 
 Purpose: establish the package, public positioning, tooling, and safety

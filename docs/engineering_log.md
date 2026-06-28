@@ -946,6 +946,21 @@ models as audit-only, and always requires manual review. It does not fetch live
 data, authenticate, place orders, optimize strategy, or describe candidates as
 risk-free.
 
+## Stage 37-38 fee scaffold and offline scanner
+
+Stage 37 makes fee assumptions explicit before scanner output can be labeled
+as a paper candidate. The fee scaffold supports supplied, missing, and unknown
+statuses with `Decimal` fee values and source notes. Missing or unknown fees
+block `paper_candidate` and keep the record audit-only.
+
+Stage 38 adds a thin offline scanner over local fixture JSON and existing
+snapshot JSONL. It reuses the complement candidate model and fee scaffold,
+preserves Decimal strings in deterministic JSONL output, and writes a Markdown
+summary with candidate, audit, reject, fee-status, rejection-reason, and
+data-quality counts. Scanner records are audit/paper research metadata only:
+there is no live lookup, credential input, network call, order intent,
+strategy optimization, investment advice, or profitability claim.
+
 ## Interview narrative
 
 A concise way to explain the current project:

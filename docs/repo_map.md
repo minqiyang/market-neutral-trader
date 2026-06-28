@@ -79,6 +79,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/arb/complement.py`: offline Decimal-only same-market
   YES/NO complement-parity candidate model. Read for arbitrage roadmap, fee
   model, or offline scanner work.
+- `src/edmn_trader/arb/scanner.py`: Stage 38 offline complement scanner for
+  local fixture JSON and existing snapshot JSONL inputs. Read for scanner
+  output, rejection reason, and data-quality flag behavior.
 - `src/edmn_trader/fees/base.py`: venue-neutral fee estimate status and
   Decimal fee assumption model. Read for fee-model work.
 - `src/edmn_trader/fees/kalshi.py`: Kalshi fee estimate scaffold with explicit
@@ -113,6 +116,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   fake-adapter demo execution smoke script.
 - `src/edmn_trader/scripts/market_maker_replay.py`: importable Stage 6 finite
   replay workflow for quote lifecycle, risk gates, logs, and run summaries.
+- `src/edmn_trader/scripts/scan_complement_arb.py`: importable Stage 38
+  offline complement scanner CLI entry point.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
@@ -147,6 +152,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   for fake-adapter approved-path validation.
 - `scripts/06_market_maker_replay.py`: runs the finite Stage 6 replay workflow
   and writes structured JSONL logs.
+- `scripts/23_scan_complement_arb.py`: runs the offline complement scanner
+  against local fixture JSON or existing snapshot JSONL and writes JSONL plus
+  Markdown research reports.
 - `scripts/07_research_report.py`: writes a local/offline Markdown attribution
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
 - `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
@@ -180,6 +188,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `tests/test_fee_models.py`: Stage 37 fee estimate coverage for explicit
   supplied assumptions, missing/unknown fee status, candidate blocking, and
   Decimal validation.
+- `tests/test_complement_scanner.py`: Stage 38 scanner coverage for
+  deterministic JSONL/Markdown output, audit/reject counts, fee blocking,
+  invalid local input, non-executable records, and Decimal preservation.
 - `tests/test_snapshots_jsonl.py`: JSONL roundtrip, Decimal precision,
   malformed JSONL, append behavior, and snapshot raw-payload safety coverage.
 - `tests/test_replay_snapshots.py`: replay ordering, replay metrics, and

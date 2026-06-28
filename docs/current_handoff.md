@@ -35,19 +35,22 @@ The active product direction has been redirected from continued report-input
 metadata expansion to narrow same-market YES/NO complement parity research.
 The repository now includes `docs/ARBITRAGE_ROADMAP.md`, the first offline
 Decimal-only complement candidate model under `src/edmn_trader/arb/`, and a
-Stage 37 venue fee estimate scaffold under `src/edmn_trader/fees/`.
+Stage 37 venue fee estimate scaffold under `src/edmn_trader/fees/`, plus a
+Stage 38 offline complement scanner that emits deterministic JSONL and
+Markdown research reports from local fixture/snapshot-style inputs.
 
 ## Last completed stage
 
-Stage 37 venue fee model scaffold.
+Stage 38 offline complement scanner.
 
 ## Stage plan status
 
 `docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, Stage 35 arbitrage
-roadmap reset, Stage 36 complement candidate schema, and Stage 37 venue fee
-model scaffold. The ledger records purpose, known commit hashes, files/modules
+roadmap reset, Stage 36 complement candidate schema, Stage 37 venue fee model
+scaffold, and Stage 38 offline complement scanner. The ledger records purpose,
+known commit hashes, files/modules
 added, validation commands, status, next-stage boundary, and safety status for
 each completed stage.
 
@@ -66,6 +69,12 @@ Stage 37 adds `FeeEstimateStatus`, `FeeEstimate`, Kalshi fee estimate helpers,
 and Polymarket US fee estimate helpers. Fee assumptions must be explicit,
 Decimal-only, and source-noted. Missing or unknown fee status blocks
 `paper_candidate`.
+
+Stage 38 adds `src/edmn_trader/arb/scanner.py` and
+`scripts/23_scan_complement_arb.py` for offline-only fixture/snapshot scans.
+The scanner writes deterministic JSONL and Markdown summaries with candidate,
+audit, reject, fee-status, rejection-reason, and data-quality counts. Scanner
+records are research metadata only and never executable order intents.
 
 `docs/STAGE_PLAN.md` now contains the full Stage 3 specification: snapshot
 schema requirements, Decimal-safe JSONL recorder requirements, deterministic
@@ -303,7 +312,8 @@ token/context drift, or user-judgment stop gate was found. The next checkpoint
 was Stage 35 implementation only at the time; it has since been superseded by
 the Stage 35-37 arbitrage roadmap, candidate schema, and fee scaffold delivery
 units, and the active next checkpoint is Stage 38 offline complement scanner
-only.
+only. Stage 38 is now complete, so the active next checkpoint is Stage 39 live
+event schema plus mocked WebSocket recorder harness only.
 
 `docs/STAGE_PLAN.md` now contains the clarified Stage 9 specification and
 `docs/stage9_equities_readiness.md` records the readiness review. Stage 9 is
@@ -873,9 +883,10 @@ checkpoint. Complement-parity work must stay deterministic and offline until
 later reviewed stages add fee models, scanners, recorders, simulators, paper
 ledgers, risk/manual approval, or demo connector boundaries.
 
-Next checkpoint: Stage 38 offline complement scanner only.
+Next checkpoint: Stage 39 live event schema plus mocked WebSocket recorder
+harness only.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 38 offline complement scanner. Read fixture/snapshot inputs only and emit deterministic JSONL plus Markdown candidate reports. Do not add live data, WebSockets, network calls, authenticated requests, credentials, order placement, wallets, broker integration, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 39 live event schema plus mocked WebSocket recorder harness. Add schema and mocked recorder tests only. Do not add real live data connections, REST network calls, credentials, authenticated requests, wallets, order placement, broker integration, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
 
 ## Important files
 
@@ -887,6 +898,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
 - `docs/STAGE_PLAN.md`: staged roadmap and non-goals.
 - `docs/ARBITRAGE_ROADMAP.md`: active complement-parity roadmap and
   maintenance boundary for report-input expansion.
+- `docs/complement_scanner.md`: Stage 38 offline scanner fixture format,
+  CLI, and safety notes.
 - `docs/stage8_polymarket_readiness.md`: Stage 8 readiness note and source
   links for the Polymarket US public market-data boundary.
 - `docs/stage9_equities_readiness.md`: Stage 9 readiness note and source links
@@ -912,6 +925,12 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   persistence helpers.
 - `src/edmn_trader/data/jsonl.py`: Decimal-safe JSONL helpers.
 - `src/edmn_trader/data/replay.py`: deterministic replay session and metrics.
+- `src/edmn_trader/arb/complement.py`: offline complement-parity candidate
+  model.
+- `src/edmn_trader/arb/scanner.py`: offline scanner for local fixture JSON and
+  existing snapshot JSONL reports.
+- `src/edmn_trader/fees/`: explicit supplied/missing/unknown fee estimate
+  scaffolds.
 - `src/edmn_trader/research/fair_value.py`: deterministic baseline fair-value
   model.
 - `src/edmn_trader/research/quotes.py`: non-executable dry-run quote engine and
@@ -931,6 +950,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
 - `src/edmn_trader/scripts/market_maker_replay.py`: importable Stage 6 finite
   replay workflow for quote lifecycle, risk gates, logs, and run summaries.
 - `scripts/06_market_maker_replay.py`: root wrapper for Stage 6 replay.
+- `scripts/23_scan_complement_arb.py`: root wrapper for Stage 38 offline
+  complement scanner.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   Markdown report generator for Stage 6 logs and explicit fill assumptions.
 - `scripts/07_research_report.py`: root wrapper for Stage 7 reporting.
@@ -1118,23 +1139,24 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended stage
 
-Stage 38 offline complement scanner only.
+Stage 39 live event schema plus mocked WebSocket recorder harness only.
 Start only after reconfirming clean synced `main`, CI, branch protection,
 required `Validate` status, local validation, and whether the owner-direct fast
-path or PR path applies. Do not add live data, WebSockets, network calls,
-authenticated requests, credentials, order placement, wallets, production
-endpoints, strategy optimization, investment advice, or profitability claims.
+path or PR path applies. Do not add real live data connections, REST network
+calls, authenticated requests, credentials, order placement, wallets,
+production endpoints, strategy optimization, investment advice, or
+profitability claims.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Implement only Stage 38 offline complement
-scanner. Read fixture/snapshot inputs only and emit deterministic JSONL plus
-Markdown candidate reports. Do not add live data, WebSockets, network calls,
-authenticated requests, credentials, order placement, wallets, broker
-integration, production endpoints, strategy optimization, investment advice,
-executable advice, production-readiness claims, or profitability claims.
+the verified current handoff. Implement only Stage 39 live event schema plus
+mocked WebSocket recorder harness. Add schema and mocked recorder tests only.
+Do not add real live data connections, REST network calls, credentials,
+authenticated requests, wallets, broker integration, production endpoints,
+strategy optimization, investment advice, executable advice,
+production-readiness claims, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-28 11:11:41 -07:00
+2026-06-28 11:28:30 -07:00
