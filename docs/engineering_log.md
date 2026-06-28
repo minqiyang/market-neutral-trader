@@ -929,6 +929,22 @@ compliance drift, token/context drift, or user-judgment stop gate was found, so
 the checkpoint counter resets and the next checkpoint is Stage 35
 implementation only.
 
+## Stage 35 arbitrage roadmap reset
+
+Stage 35 redirects the active roadmap away from adding more local report-input
+metadata and toward narrow same-market YES/NO complement parity research.
+Stages 11 through 34 remain useful as maintenance/report-pack infrastructure,
+but the next product work is no longer another metadata kind.
+
+The first implementation is intentionally offline and deterministic:
+`ComplementArbInput`, `ComplementArbCandidate`, `ComplementArbDecision`,
+`compute_kalshi_complement_candidate`, and
+`compute_canonical_yes_side_cross_candidate`. The model uses `Decimal`, keeps
+fees, slippage, and failed-leg reserves as explicit inputs, treats missing fee
+models as audit-only, and always requires manual review. It does not fetch live
+data, authenticate, place orders, optimize strategy, or describe candidates as
+risk-free.
+
 ## Interview narrative
 
 A concise way to explain the current project:

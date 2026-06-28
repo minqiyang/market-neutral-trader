@@ -31,17 +31,33 @@ register report-input metadata, plus Stage 31 local version-notes report-input
 metadata and Stage 32 local distribution-checklist report-input metadata.
 Stage 33 local handoff-notes report-input metadata is implemented.
 Stage 34 local archive-notes report-input metadata is implemented.
+The active product direction has been redirected from continued report-input
+metadata expansion to narrow same-market YES/NO complement parity research.
+The repository now includes `docs/ARBITRAGE_ROADMAP.md` and the first offline
+Decimal-only complement candidate model under `src/edmn_trader/arb/`.
 
 ## Last completed stage
 
-Compact governance audit after Stage 35 readiness.
+Stage 35 arbitrage roadmap reset and complement candidate schema.
 
 ## Stage plan status
 
 `docs/STAGE_PLAN.md` contains a completed-stage record ledger for Stages 0,
-1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, and 34. The ledger records
-purpose, known commit hashes, files/modules added, validation commands, status,
-next-stage boundary, and safety status for each completed stage.
+1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, and the Stage 35
+arbitrage roadmap reset. The ledger records purpose, known commit hashes,
+files/modules added, validation commands, status, next-stage boundary, and
+safety status for each completed stage.
+
+Report-input metadata expansion from Stages 11 through 34 is now
+maintenance-only. The previously clarified local delivery-notes report input is
+preserved as maintenance backlog, not the active next product checkpoint.
+
+`docs/ARBITRAGE_ROADMAP.md` is now the active roadmap for same-market YES/NO
+complement parity research. The first model is deterministic and offline:
+`ComplementArbInput`, `ComplementArbCandidate`, `ComplementArbDecision`,
+`compute_kalshi_complement_candidate`, and
+`compute_canonical_yes_side_cross_candidate`.
 
 `docs/STAGE_PLAN.md` now contains the full Stage 3 specification: snapshot
 schema requirements, Decimal-safe JSONL recorder requirements, deterministic
@@ -276,7 +292,9 @@ there are no open pull requests, branch protection still requires strict
 observed `main` CI run `28270211447` passed `Validate`. The handoff and stage
 plan agree on the next checkpoint, and no risk drift, compliance drift,
 token/context drift, or user-judgment stop gate was found. The next checkpoint
-is Stage 35 implementation only.
+was Stage 35 implementation only at the time; it has since been superseded by
+the Stage 35 arbitrage roadmap reset, and the active next checkpoint is
+complement-arbitrage fee model scaffold or offline scanner readiness only.
 
 `docs/STAGE_PLAN.md` now contains the clarified Stage 9 specification and
 `docs/stage9_equities_readiness.md` records the readiness review. Stage 9 is
@@ -839,24 +857,17 @@ reproducibility, coverage, sources, or securities, recommend allocations,
 optimize strategies, emit executable advice, imply production readiness, or
 claim profitability.
 
-`docs/STAGE_PLAN.md` now contains the full Stage 35 readiness specification for
-a local/offline `local_delivery_notes` report-input kind. Stage 35 may describe
-only reviewer-supplied delivery labels, related artifact paths, recipient
-labels, delivery status labels, delivery notes, and limitation notes, and it
-must not execute commands, run checks from report inputs, transfer files,
-approve distribution, verify rights or licenses, read artifact/evidence/source
-contents, verify outputs, verify local environments, approve decisions, read
-raw private data contents, fetch remote data, add adapters, use account or
-portfolio data, use live feeds, score or rank delivery readiness, archive
-readiness, handoffs, distribution items, versions, follow-ups, decisions, open
-questions, limitations, appendix entries, artifacts, rights status, risk,
-reproducibility, coverage, sources, or securities, recommend allocations,
-optimize strategies, emit executable advice, imply production readiness, or
-claim profitability.
+`docs/STAGE_PLAN.md` now contains the Stage 35 arbitrage roadmap reset and
+complement candidate schema record. The old local delivery-notes report-input
+idea is preserved as maintenance backlog, not the active next checkpoint.
+Complement-parity work must stay deterministic and offline until later
+reviewed stages add fee models, scanners, recorders, simulators, paper
+ledgers, risk/manual approval, or demo connector boundaries.
 
-Next checkpoint: Stage 35 implementation only.
+Next checkpoint: complement-arbitrage fee model scaffold or offline scanner
+readiness only.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 35 local/offline local_delivery_notes report-input support, and do not add new market-data adapters, broker integration, credentials, account data, portfolio data, live quote feeds, paid-vendor data, WebSockets, remote fetching, production endpoints, command execution from report inputs, validation execution from report inputs, follow-up execution, file movement, deletion, or transfer, retention-policy decisions, artifact/evidence/source-content reads, output verification, local environment verification, distribution approval, rights/license verification, decision approval, rights/risk/reproducibility/coverage/source/security ranking, allocation advice, executable advice, production-readiness claims, unsupported data redistribution, or profitability claims.`
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Continue only with complement-arbitrage fee model scaffold or offline scanner readiness. Keep the work deterministic and local/replay-first; do not add live data, WebSockets, authenticated requests, credentials, order placement, wallets, broker integration, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
 
 ## Important files
 
@@ -866,6 +877,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
 - `docs/repo_map.md`: context-budget map for targeted reads.
 - `docs/codex_long_running_controller.md`: staged continuation rules.
 - `docs/STAGE_PLAN.md`: staged roadmap and non-goals.
+- `docs/ARBITRAGE_ROADMAP.md`: active complement-parity roadmap and
+  maintenance boundary for report-input expansion.
 - `docs/stage8_polymarket_readiness.md`: Stage 8 readiness note and source
   links for the Polymarket US public market-data boundary.
 - `docs/stage9_equities_readiness.md`: Stage 9 readiness note and source links
@@ -1078,33 +1091,34 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 - Do not add credentials or secrets.
 - Do not implement production order placement.
 - Do not implement WebSocket ingestion.
+- Do not add live complement-arbitrage scanning before a dedicated read-only
+  recorder stage.
 - Do not add fill simulation before a dedicated simulation stage.
 - Do not enable live or production trading.
 - Do not make profitability claims.
 - Keep Kalshi-specific code under `src/edmn_trader/adapters/kalshi`.
+- Treat complement-parity outputs as audit/paper-candidate metadata only, not
+  executable order intents or risk-free opportunities.
 
 ## Next recommended stage
 
-Stage 35 implementation only. Start only after reconfirming clean synced
-`main`, CI, branch protection, required `Validate` status, local validation,
-and whether the owner-direct fast path or PR path applies.
+Complement-arbitrage fee model scaffold or offline scanner readiness only.
+Start only after reconfirming clean synced `main`, CI, branch protection,
+required `Validate` status, local validation, and whether the owner-direct fast
+path or PR path applies. Do not add live data, WebSockets, authenticated
+requests, credentials, order placement, wallets, production endpoints,
+strategy optimization, investment advice, or profitability claims.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Implement only Stage 35 local/offline
-`local_delivery_notes` report-input support, and do not add new market-data
-adapters, broker integration, credentials, account data, portfolio data, live
-quote feeds, paid-vendor data, WebSockets, remote fetching, production
-endpoints, command execution from report inputs, validation execution from
-report inputs, follow-up execution, file movement, deletion, or transfer,
-retention-policy decisions, artifact/evidence/source-content reads, output
-verification, local environment verification, distribution approval,
-rights/license verification, decision approval,
-rights/risk/reproducibility/coverage/source/security ranking, allocation
-advice, executable advice, production-readiness claims, unsupported data
-redistribution, or profitability claims.
+the verified current handoff. Continue only with complement-arbitrage fee model
+scaffold or offline scanner readiness. Keep the work deterministic and
+local/replay-first; do not add live data, WebSockets, authenticated requests,
+credentials, order placement, wallets, broker integration, production
+endpoints, strategy optimization, investment advice, executable advice,
+production-readiness claims, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-26 16:07:37 -07:00
+2026-06-28 09:46:20 -07:00

@@ -11,6 +11,10 @@ adapters, but production trading is not enabled by default.
 
 This is not a guaranteed-profit trading bot.
 
+The current product roadmap prioritizes narrow same-market YES/NO complement
+parity research. Report-input metadata expansion from Stages 11-34 is now
+maintenance-only unless a later task explicitly resumes it.
+
 ## Skill-first workflow
 
 Before making non-trivial changes, check whether a relevant Skill exists. Use

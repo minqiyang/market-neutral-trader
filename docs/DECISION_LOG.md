@@ -106,3 +106,15 @@ data, account data, credentials, and order paths.
 Rationale: SEC EDGAR provides public unauthenticated filing and XBRL data with
 published fair-access limits. That keeps Stage 9 useful for equities research
 without crossing trading, proprietary market-data, or credential boundaries.
+
+## 2026-06-28: Prioritize same-market complement parity research
+
+Decision: redirect active product work from continued report-input metadata
+expansion to same-market YES/NO complement parity research, with report-input
+Stages 11 through 34 preserved as maintenance-only infrastructure.
+
+Rationale: complement parity is a narrower and more concrete first
+trading-research target than directional prediction or broad market making. It
+can start with deterministic offline candidate metadata while keeping fees,
+slippage, stale data, failed legs, manual review, and production trading
+boundaries explicit.

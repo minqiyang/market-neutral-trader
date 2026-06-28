@@ -38,6 +38,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   checks, logging, and final report format. Read before long-running stage work.
 - `docs/STAGE_PLAN.md`: staged roadmap from foundation through later research
   adapters. Read when planning or validating stage boundaries.
+- `docs/ARBITRAGE_ROADMAP.md`: active same-market YES/NO complement parity
+  roadmap, six-layer architecture, and report-input maintenance boundary.
 - `docs/stage8_polymarket_readiness.md`: Stage 8 compliance/readiness note.
   Read before any Polymarket US adapter work.
 - `docs/stage9_equities_readiness.md`: Stage 9 SEC EDGAR equities readiness
@@ -74,6 +76,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   public companyfacts client.
 - `src/edmn_trader/adapters/sec_edgar/companyfacts.py`: SEC companyfacts
   normalizer. Read for Stage 9 parsing only.
+- `src/edmn_trader/arb/complement.py`: offline Decimal-only same-market
+  YES/NO complement-parity candidate model. Read for arbitrage roadmap, fee
+  model, or offline scanner work.
 - `src/edmn_trader/data/snapshots.py`: offline market-data snapshot model and
   snapshot JSONL persistence helpers. Read for recorded data schema changes.
 - `src/edmn_trader/data/jsonl.py`: Decimal-safe JSONL read/write/append helpers.
@@ -163,6 +168,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `tests/test_kalshi_client.py`: mocked HTTP tests for the guarded read-only
   Kalshi Demo REST client.
 - `tests/test_kalshi_orderbook.py`: deterministic normalizer coverage.
+- `tests/test_complement_arb.py`: offline complement-parity candidate coverage
+  for gross/net edge, locked/crossed states, fee assumptions, Decimal
+  precision, and manual-review flags.
 - `tests/test_snapshots_jsonl.py`: JSONL roundtrip, Decimal precision,
   malformed JSONL, append behavior, and snapshot raw-payload safety coverage.
 - `tests/test_replay_snapshots.py`: replay ordering, replay metrics, and
