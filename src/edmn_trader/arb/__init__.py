@@ -32,6 +32,14 @@ from edmn_trader.arb.paper_ledger import (
     write_paper_ledger_jsonl,
     write_paper_ledger_markdown,
 )
+from edmn_trader.arb.risk import (
+    ComplementRiskDecision,
+    ComplementRiskInput,
+    evaluate_complement_risk,
+    risk_input_from_record,
+    write_complement_risk_jsonl,
+    write_complement_risk_markdown,
+)
 from edmn_trader.arb.scanner import (
     ComplementScanRecord,
     ComplementScanReport,
@@ -46,6 +54,8 @@ __all__ = [
     "ComplementArbCandidate",
     "ComplementArbDecision",
     "ComplementArbInput",
+    "ComplementRiskDecision",
+    "ComplementRiskInput",
     "ComplementScanRecord",
     "ComplementScanReport",
     "FillPolicy",
@@ -60,7 +70,9 @@ __all__ = [
     "PaperLedgerState",
     "compute_canonical_yes_side_cross_candidate",
     "compute_kalshi_complement_candidate",
+    "evaluate_complement_risk",
     "propose_paper_order",
+    "risk_input_from_record",
     "replay_paper_ledger",
     "render_markdown_summary",
     "scan_fixture_file",
@@ -68,6 +80,8 @@ __all__ = [
     "simulate_taker_fill",
     "write_fill_simulation_jsonl",
     "write_fill_simulation_markdown",
+    "write_complement_risk_jsonl",
+    "write_complement_risk_markdown",
     "write_jsonl_report",
     "write_markdown_summary",
     "write_paper_order_markdown",

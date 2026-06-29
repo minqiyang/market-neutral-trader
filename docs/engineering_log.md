@@ -1054,6 +1054,20 @@ and emits paper-only JSONL plus Markdown summaries. It does not create order
 intents, connect to venues, authenticate, submit orders, optimize strategy,
 offer investment advice, or claim profitability.
 
+## Stage 46 risk engine v2
+
+Stage 46 adds a paper-only complement risk-decision layer. It evaluates local
+risk-check fixtures for stale data, sequence/data gaps, missing or unknown fee
+status, insufficient net edge, exposure limit breaches, open-order limit
+breaches, daily-loss limit breaches, reconciliation mismatches, and active
+kill switch.
+
+The engine never approves execution. If no blocker is present, it returns a
+manual-review-required paper risk record. If any blocker is present, it returns
+a reject record with deterministic reasons. It does not create order intents,
+connect to venues, authenticate, submit orders, optimize strategy, offer
+investment advice, or claim profitability.
+
 ## Interview narrative
 
 A concise way to explain the current project:
