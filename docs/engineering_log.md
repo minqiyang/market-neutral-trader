@@ -1068,6 +1068,19 @@ a reject record with deterministic reasons. It does not create order intents,
 connect to venues, authenticate, submit orders, optimize strategy, offer
 investment advice, or claim profitability.
 
+## Stage 47 manual approval workflow
+
+Stage 47 adds a local manual-review workflow on top of the Stage 46
+manual-review-required risk state. It creates deterministic pending approval
+files, verifies approval records against proposal and candidate hashes, checks
+expiration, and rejects already-used approvals so approvals cannot be reused.
+
+The workflow emits paper manual-review records only. A verified approval is
+single-use paper metadata, not an executable order, adapter call, live venue
+submission, strategy recommendation, or profitability claim. The compact
+governance audit for Stages 45-47 was folded into this delivery branch and
+found no stop gate.
+
 ## Interview narrative
 
 A concise way to explain the current project:

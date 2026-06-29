@@ -1,5 +1,14 @@
 """Offline complement-arbitrage candidate models."""
 
+from edmn_trader.arb.approval import (
+    ManualApprovalDecision,
+    PendingManualApproval,
+    create_pending_approval,
+    verify_manual_approval,
+    write_approval_markdown,
+    write_approval_records_jsonl,
+    write_pending_approval_file,
+)
 from edmn_trader.arb.complement import (
     ComplementArbCandidate,
     ComplementArbDecision,
@@ -61,15 +70,18 @@ __all__ = [
     "FillPolicy",
     "FillSimulationInput",
     "FillSimulationResult",
+    "ManualApprovalDecision",
     "PaperOrderLeg",
     "PaperOrderProposal",
     "PaperRiskPreview",
+    "PendingManualApproval",
     "PaperLedgerMismatch",
     "PaperLedgerPosition",
     "PaperLedgerSourceHash",
     "PaperLedgerState",
     "compute_canonical_yes_side_cross_candidate",
     "compute_kalshi_complement_candidate",
+    "create_pending_approval",
     "evaluate_complement_risk",
     "propose_paper_order",
     "risk_input_from_record",
@@ -78,6 +90,9 @@ __all__ = [
     "scan_fixture_file",
     "scan_snapshot_jsonl_file",
     "simulate_taker_fill",
+    "verify_manual_approval",
+    "write_approval_markdown",
+    "write_approval_records_jsonl",
     "write_fill_simulation_jsonl",
     "write_fill_simulation_markdown",
     "write_complement_risk_jsonl",
@@ -88,4 +103,5 @@ __all__ = [
     "write_paper_order_proposals",
     "write_paper_ledger_jsonl",
     "write_paper_ledger_markdown",
+    "write_pending_approval_file",
 ]

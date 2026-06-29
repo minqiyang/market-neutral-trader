@@ -1124,7 +1124,7 @@ addition of small report-input metadata kinds.
 ### Stage 46: Risk engine v2
 
 - Status: complete.
-- Commit: pending on the Stage 46 risk engine branch.
+- Commit: `352fffc` (merged via PR #96).
 - Purpose: evaluate paper complement risk blockers for stale data, data gaps,
   missing or unknown fees, insufficient net edge, exposure/open-order/daily-loss
   breaches, reconciliation mismatch, and active kill switch while still
@@ -1140,6 +1140,30 @@ addition of small report-input metadata kinds.
   It must use pending approval files, expiring approvals, candidate hash
   verification, and no reusable approvals.
 - Safety status: paper risk-decision records only, no live venue connection
+  execution, no credentials, no credential prompts, no authenticated requests,
+  no user channel, no wallet, no signing, no order placement imports, no
+  venue submission, no production trading endpoint, no strategy optimization,
+  no investment advice, no executable advice, and no profitability claims.
+
+### Stage 47: Manual approval workflow
+
+- Status: complete.
+- Commit: pending on the Stage 47 manual approval branch.
+- Purpose: create deterministic local pending approval files and verify
+  expiring, single-use manual approval records against proposal/candidate
+  hashes.
+- Files/modules changed: `src/edmn_trader/arb/approval.py`,
+  `src/edmn_trader/scripts/manual_approval.py`,
+  `scripts/47_manual_approval.py`, `tests/test_manual_approval.py`,
+  arbitrage exports, and documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/47_manual_approval.py --help`,
+  `python scripts/01_replay_orderbook_fixture.py`, and `git diff --check`.
+- Next-stage boundary: Stage 48 may add monitoring and daily validation
+  reports only. It must report recorder uptime, data lag, gap count,
+  candidate counts, rejection reasons, paper/demo outcomes, fees, slippage,
+  failed-leg incidents, reconciliation health, and kill-switch events.
+- Safety status: paper manual-review records only, no live venue connection
   execution, no credentials, no credential prompts, no authenticated requests,
   no user channel, no wallet, no signing, no order placement imports, no
   venue submission, no production trading endpoint, no strategy optimization,

@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 47 local manual approval workflow with deterministic pending
+  approval files, expiring approvals, proposal/candidate hash verification,
+  and single-use approval enforcement.
 - Added Stage 46 complement risk engine v2 that blocks stale data, data gaps,
   missing/unknown fees, insufficient net edge, exposure/open-order/daily-loss
   breaches, reconciliation mismatch, and active kill switch while still
