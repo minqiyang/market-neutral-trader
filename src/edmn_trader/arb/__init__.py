@@ -24,6 +24,12 @@ from edmn_trader.arb.fill_simulation import (
     write_fill_simulation_jsonl,
     write_fill_simulation_markdown,
 )
+from edmn_trader.arb.monitoring import (
+    DailyValidationReport,
+    build_daily_validation_report,
+    write_daily_validation_jsonl,
+    write_daily_validation_markdown,
+)
 from edmn_trader.arb.paper_engine import (
     PaperOrderLeg,
     PaperOrderProposal,
@@ -67,6 +73,7 @@ __all__ = [
     "ComplementRiskInput",
     "ComplementScanRecord",
     "ComplementScanReport",
+    "DailyValidationReport",
     "FillPolicy",
     "FillSimulationInput",
     "FillSimulationResult",
@@ -82,6 +89,7 @@ __all__ = [
     "compute_canonical_yes_side_cross_candidate",
     "compute_kalshi_complement_candidate",
     "create_pending_approval",
+    "build_daily_validation_report",
     "evaluate_complement_risk",
     "propose_paper_order",
     "risk_input_from_record",
@@ -93,6 +101,8 @@ __all__ = [
     "verify_manual_approval",
     "write_approval_markdown",
     "write_approval_records_jsonl",
+    "write_daily_validation_jsonl",
+    "write_daily_validation_markdown",
     "write_fill_simulation_jsonl",
     "write_fill_simulation_markdown",
     "write_complement_risk_jsonl",
