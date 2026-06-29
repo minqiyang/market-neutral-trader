@@ -1041,6 +1041,19 @@ The engine does not create executable order intents, connect to venues,
 authenticate, submit orders, optimize strategy, offer investment advice, or
 claim profitability.
 
+## Stage 45 paper ledger state machine
+
+Stage 45 adds a deterministic event-sourced paper ledger. It replays local
+paper proposal, fill, and settlement records from zero, preserves candidate
+and simulation source hashes, and computes paper positions, average prices,
+fees, realized gross PnL, realized net PnL, and reconciliation mismatch states.
+
+The ledger remains an accounting and reconciliation research surface only.
+It rejects malformed records, records hash and proposal mismatches explicitly,
+and emits paper-only JSONL plus Markdown summaries. It does not create order
+intents, connect to venues, authenticate, submit orders, optimize strategy,
+offer investment advice, or claim profitability.
+
 ## Interview narrative
 
 A concise way to explain the current project:

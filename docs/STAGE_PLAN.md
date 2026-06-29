@@ -1077,7 +1077,7 @@ addition of small report-input metadata kinds.
 ### Stage 44: Paper complement arbitrage engine
 
 - Status: complete.
-- Commit: pending on the Stage 44 paper complement engine branch.
+- Commit: `1d191a5` (merged via PR #94).
 - Purpose: convert offline candidate and fill-simulation records into
   deterministic paper-only two-leg proposal records with locked candidate and
   simulation hashes plus conservative risk-preview reasons.
@@ -1092,6 +1092,30 @@ addition of small report-input metadata kinds.
   machine only. It must replay paper orders, paper fills, positions, fees,
   PnL, settlements, and reconciliation mismatch states from local records.
 - Safety status: paper proposal records only, no live venue connection
+  execution, no credentials, no credential prompts, no authenticated requests,
+  no user channel, no wallet, no signing, no order placement imports, no
+  venue submission, no production trading endpoint, no strategy optimization,
+  no investment advice, no executable advice, and no profitability claims.
+
+### Stage 45: Paper ledger state machine
+
+- Status: complete.
+- Commit: pending on the Stage 45 paper ledger branch.
+- Purpose: replay paper proposal, fill, and settlement records from zero into
+  deterministic paper ledger state with positions, fees, PnL, source hashes,
+  and reconciliation mismatch states.
+- Files/modules changed: `src/edmn_trader/arb/paper_ledger.py`,
+  `src/edmn_trader/scripts/paper_ledger.py`,
+  `scripts/45_replay_paper_ledger.py`, `tests/test_paper_ledger.py`,
+  arbitrage exports, and documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/45_replay_paper_ledger.py --help`,
+  `python scripts/01_replay_orderbook_fixture.py`, and `git diff --check`.
+- Next-stage boundary: Stage 46 may add risk engine v2 only. It must reject
+  stale data, data gaps, missing fees, insufficient net edge, exposure/open
+  order/daily-loss breaches, reconciliation mismatch, and active kill switch
+  while still requiring manual approval.
+- Safety status: paper ledger research records only, no live venue connection
   execution, no credentials, no credential prompts, no authenticated requests,
   no user channel, no wallet, no signing, no order placement imports, no
   venue submission, no production trading endpoint, no strategy optimization,

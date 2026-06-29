@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 45 paper ledger replay that consumes local paper proposal, fill,
+  and settlement records, preserves source hashes, tracks positions, fees,
+  PnL, and reconciliation mismatches, and emits paper-only JSONL/Markdown
+  state.
 - Added Stage 44 paper-only complement proposal generation that locks scanner
   candidate and fill-simulation source hashes, emits deterministic JSONL and
   Markdown research records, and keeps manual approval required without

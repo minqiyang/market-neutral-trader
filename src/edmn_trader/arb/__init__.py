@@ -23,6 +23,15 @@ from edmn_trader.arb.paper_engine import (
     write_paper_order_markdown,
     write_paper_order_proposals,
 )
+from edmn_trader.arb.paper_ledger import (
+    PaperLedgerMismatch,
+    PaperLedgerPosition,
+    PaperLedgerSourceHash,
+    PaperLedgerState,
+    replay_paper_ledger,
+    write_paper_ledger_jsonl,
+    write_paper_ledger_markdown,
+)
 from edmn_trader.arb.scanner import (
     ComplementScanRecord,
     ComplementScanReport,
@@ -45,9 +54,14 @@ __all__ = [
     "PaperOrderLeg",
     "PaperOrderProposal",
     "PaperRiskPreview",
+    "PaperLedgerMismatch",
+    "PaperLedgerPosition",
+    "PaperLedgerSourceHash",
+    "PaperLedgerState",
     "compute_canonical_yes_side_cross_candidate",
     "compute_kalshi_complement_candidate",
     "propose_paper_order",
+    "replay_paper_ledger",
     "render_markdown_summary",
     "scan_fixture_file",
     "scan_snapshot_jsonl_file",
@@ -58,4 +72,6 @@ __all__ = [
     "write_markdown_summary",
     "write_paper_order_markdown",
     "write_paper_order_proposals",
+    "write_paper_ledger_jsonl",
+    "write_paper_ledger_markdown",
 ]

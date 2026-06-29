@@ -92,6 +92,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   slippage, latency shock, and failed-leg reserve simulator.
 - `src/edmn_trader/arb/paper_engine.py`: Stage 44 paper-only complement
   proposal engine with locked candidate/simulation source hashes.
+- `src/edmn_trader/arb/paper_ledger.py`: Stage 45 paper ledger state machine
+  for local proposal, fill, settlement, position, fee, PnL, and mismatch replay.
 - `src/edmn_trader/fees/base.py`: venue-neutral fee estimate status and
   Decimal fee assumption model. Read for fee-model work.
 - `src/edmn_trader/fees/kalshi.py`: Kalshi fee estimate scaffold with explicit
@@ -146,6 +148,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   offline taker fill simulation CLI entry point.
 - `src/edmn_trader/scripts/paper_complement_engine.py`: importable Stage 44
   paper-only complement proposal CLI entry point.
+- `src/edmn_trader/scripts/paper_ledger.py`: importable Stage 45 paper ledger
+  replay CLI entry point.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
@@ -196,6 +200,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   simulations from explicit fixture assumptions.
 - `scripts/44_paper_complement_engine.py`: writes paper-only complement
   proposal JSONL/Markdown from scanner candidate and fill simulation JSONL.
+- `scripts/45_replay_paper_ledger.py`: replays local paper proposal, fill,
+  and settlement records into paper ledger JSONL/Markdown state.
 - `scripts/07_research_report.py`: writes a local/offline Markdown attribution
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
 - `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
@@ -251,6 +257,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   failed-leg reserve, deterministic output, and local fixture CLI behavior.
 - `tests/test_paper_engine.py`: Stage 44 paper proposal coverage for source
   hashes, conservative risk preview, deterministic output, and CLI behavior.
+- `tests/test_paper_ledger.py`: Stage 45 paper ledger coverage for local
+  replay, positions, fees, PnL, mismatches, deterministic output, and CLI
+  behavior.
 - `tests/test_snapshots_jsonl.py`: JSONL roundtrip, Decimal precision,
   malformed JSONL, append behavior, and snapshot raw-payload safety coverage.
 - `tests/test_replay_snapshots.py`: replay ordering, replay metrics, and
