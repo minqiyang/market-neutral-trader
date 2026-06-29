@@ -42,11 +42,11 @@ Stage 39 live-event schema and local mocked WebSocket-style recorder harness,
 plus a Stage 40 guarded Kalshi Demo read-only recorder, plus a Stage 41
 guarded Polymarket US market-channel recorder, plus Stage 42 order book
 rebuild and replay consistency, plus Stage 43 taker fill, slippage, and
-failed-leg simulation.
+failed-leg simulation, plus Stage 44 paper complement proposal engine.
 
 ## Last completed stage
 
-Stage 43 taker fill, slippage, and failed-leg simulator.
+Stage 44 paper complement arbitrage engine.
 
 ## Stage plan status
 
@@ -58,9 +58,10 @@ scaffold, Stage 38 offline complement scanner, and Stage 39 live event schema
 with mocked WebSocket harness, and Stage 40 guarded Kalshi Demo read-only
 recorder, Stage 41 guarded Polymarket US market-channel recorder, and Stage
 42 order book rebuild and replay consistency, and Stage 43 taker fill,
-slippage, and failed-leg simulator. The ledger records purpose, known commit
-hashes, files/modules added, validation commands, status, next-stage boundary,
-and safety status for each completed stage.
+slippage, and failed-leg simulator, and Stage 44 paper complement arbitrage
+engine. The ledger records purpose, known commit hashes, files/modules added,
+validation commands, status, next-stage boundary, and safety status for each
+completed stage.
 
 Report-input metadata expansion from Stages 11 through 34 is now
 maintenance-only. The previously clarified local delivery-notes report input is
@@ -120,6 +121,16 @@ failed-leg reserve, and emits deterministic JSONL/Markdown audit records. It
 does not add live connections, credentials, user channels, wallets, signing,
 order placement, strategy optimization, executable advice, production-readiness
 claims, or profitability claims.
+
+Stage 44 adds `src/edmn_trader/arb/paper_engine.py` and
+`scripts/44_paper_complement_engine.py` for paper-only two-leg proposal
+records. It consumes Stage 38 candidate JSONL and Stage 43 simulation JSONL,
+preserves locked SHA-256 hashes of both source records, emits YES/NO paper
+legs from simulated fill prices and completed size, and records conservative
+risk-preview reasons. It does not add live connections, credentials, user
+channels, wallets, signing, order placement, venue submission, strategy
+optimization, executable advice, production-readiness claims, or profitability
+claims.
 
 `docs/STAGE_PLAN.md` now contains the full Stage 3 specification: snapshot
 schema requirements, Decimal-safe JSONL recorder requirements, deterministic
@@ -368,6 +379,15 @@ publish, branch protection still requires strict `Validate`, and the latest
 observed `main` CI run `28338107808` passed `Validate`. The handoff and stage
 plan agree on Stage 42 as the next checkpoint, and no risk drift, compliance
 drift, token/context drift, or user-judgment stop gate was found.
+
+Audit after three more completed checkpoints: Stage 42 order book rebuild,
+Stage 43 taker fill simulation, and Stage 44 paper complement proposal engine.
+Local work started from synced `origin/main` at `05fb58e`, there were no open
+pull requests before Stage 44 publish, branch protection still requires strict
+`Validate`, and the latest observed `main` CI run `28338842369` passed
+`Validate`. The handoff and stage plan agree on Stage 45 as the next
+checkpoint, and no risk drift, compliance drift, token/context drift, or
+user-judgment stop gate was found.
 
 `docs/STAGE_PLAN.md` now contains the clarified Stage 9 specification and
 `docs/stage9_equities_readiness.md` records the readiness review. Stage 9 is
@@ -937,10 +957,9 @@ checkpoint. Complement-parity work must stay deterministic and offline until
 later reviewed stages add fee models, scanners, recorders, simulators, paper
 ledgers, risk/manual approval, or demo connector boundaries.
 
-Next checkpoint: human architecture review before Stage 44 paper complement
-arbitrage engine work.
+Next checkpoint: Stage 45 paper ledger state machine only.
 
-Exact next prompt: `Use Codex Long Session Governance. Stop for human architecture review of the completed Stage 39-43 live-data/replay/simulation foundation before any Stage 44 paper complement arbitrage engine work. Review event schema, guarded venue recorders, order book rebuild hashes/consistency flags, and taker fill/slippage/failed-leg simulator assumptions. Do not implement Stage 44 until review approves the paper-engine boundary.`
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 45 paper ledger state machine. Replay paper orders, paper fills, positions, fees, PnL, settlements, and reconciliation mismatch states from local event records. Preserve proposal/candidate hashes and keep outputs paper research records only; do not add order placement, live venue connections, credentials, authenticated requests, wallets, signing, user channels, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
 
 ## Important files
 
@@ -995,6 +1014,8 @@ Exact next prompt: `Use Codex Long Session Governance. Stop for human architectu
   existing snapshot JSONL reports.
 - `src/edmn_trader/arb/fill_simulation.py`: Stage 43 offline taker fill,
   slippage, latency shock, and failed-leg reserve simulator.
+- `src/edmn_trader/arb/paper_engine.py`: Stage 44 paper-only complement
+  proposal engine with locked candidate/simulation hashes.
 - `src/edmn_trader/fees/`: explicit supplied/missing/unknown fee estimate
   scaffolds.
 - `src/edmn_trader/research/fair_value.py`: deterministic baseline fair-value
@@ -1028,6 +1049,8 @@ Exact next prompt: `Use Codex Long Session Governance. Stop for human architectu
   recorded-event order book rebuild.
 - `scripts/43_simulate_taker_fill.py`: root wrapper for the Stage 43 offline
   taker fill simulator.
+- `scripts/44_paper_complement_engine.py`: root wrapper for the Stage 44
+  paper-only complement proposal engine.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   Markdown report generator for Stage 6 logs and explicit fill assumptions.
 - `scripts/07_research_report.py`: root wrapper for Stage 7 reporting.
@@ -1063,6 +1086,8 @@ Exact next prompt: `Use Codex Long Session Governance. Stop for human architectu
 - `tests/test_fill_simulation.py`: Stage 43 FOK/IOC-like fill policy,
   partial-fill, slippage, latency shock, failed-leg reserve, output, and CLI
   coverage.
+- `tests/test_paper_engine.py`: Stage 44 paper proposal, source-hash,
+  risk-preview, deterministic output, and CLI coverage.
 - `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33/34 report-pack coverage
   for observed metrics, source inventory, missing optional inputs, local SEC
   facts, manifest metadata, local run-comparison metadata, unsafe
@@ -1232,22 +1257,29 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended stage
 
-Human architecture review before Stage 44 paper complement arbitrage engine
-work. Review the Stage 39-43 foundation: event schema, guarded venue
-recorders, order book rebuild hashes and consistency flags, and taker
-fill/slippage/failed-leg simulator assumptions. Do not implement Stage 44 until
-review approves the paper-engine boundary.
+Stage 45 paper ledger state machine only.
+Start only after reconfirming clean synced `main`, CI, branch protection,
+required `Validate` status, local validation, and whether the PR path applies.
+Replay paper orders, paper fills, positions, fees, PnL, settlements, and
+reconciliation mismatch states from local event records. Preserve
+proposal/candidate hashes and keep outputs paper research records only. Do not
+add order placement, live venue connections, credentials, authenticated
+requests, wallets, signing, user channels, production endpoints, strategy
+optimization, investment advice, executable advice, production-readiness
+claims, or profitability claims.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Stop for human architecture review of the
-completed Stage 39-43 live-data/replay/simulation foundation before any Stage
-44 paper complement arbitrage engine work. Review event schema, guarded venue
-recorders, order book rebuild hashes/consistency flags, and taker
-fill/slippage/failed-leg simulator assumptions. Do not implement Stage 44 until
-review approves the paper-engine boundary.
+the verified current handoff. Implement only Stage 45 paper ledger state
+machine. Replay paper orders, paper fills, positions, fees, PnL, settlements,
+and reconciliation mismatch states from local event records. Preserve
+proposal/candidate hashes and keep outputs paper research records only; do not
+add order placement, live venue connections, credentials, authenticated
+requests, wallets, signing, user channels, production endpoints, strategy
+optimization, investment advice, executable advice, production-readiness
+claims, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-28 15:52:36 -07:00
+2026-06-29 10:16:23 -07:00

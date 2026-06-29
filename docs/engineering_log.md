@@ -1027,6 +1027,20 @@ simulated net edge under the supplied assumptions. It does not create order
 intents, connect to a venue, authenticate, optimize strategy, recommend trades,
 or claim the simulated results are executable or profitable.
 
+## Stage 44 paper complement proposal engine
+
+Stage 44 converts offline scanner candidates and taker-fill simulation records
+into paper-only complement proposal records. Each proposal preserves locked
+SHA-256 hashes of the raw candidate and simulation inputs, carries YES/NO paper
+legs derived from simulated fill prices and completed pair size, and emits
+deterministic JSONL plus Markdown summaries.
+
+The risk preview is deliberately conservative: manual approval is always
+required and Stage 44 does not mark any proposal as approved for paper use.
+The engine does not create executable order intents, connect to venues,
+authenticate, submit orders, optimize strategy, offer investment advice, or
+claim profitability.
+
 ## Interview narrative
 
 A concise way to explain the current project:

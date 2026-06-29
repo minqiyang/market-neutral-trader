@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 44 paper-only complement proposal generation that locks scanner
+  candidate and fill-simulation source hashes, emits deterministic JSONL and
+  Markdown research records, and keeps manual approval required without
+  executable order intents.
 - Added Stage 43 offline taker fill/slippage/failed-leg simulation that
   stresses FOK/IOC-like two-leg assumptions, partial fills, latency shock, and
   failed-leg reserve from explicit local fixtures without executable order

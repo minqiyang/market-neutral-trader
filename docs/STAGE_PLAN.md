@@ -1054,7 +1054,7 @@ addition of small report-input metadata kinds.
 ### Stage 43: Taker fill, slippage, and failed-leg simulator
 
 - Status: complete.
-- Commit: pending on the Stage 43 fill simulator branch.
+- Commit: `05fb58e` (merged via PR #93).
 - Purpose: simulate offline two-leg taker-fill assumptions for complement
   candidates, including FOK/IOC-like policies, partial fills, slippage,
   latency shock, and failed-leg reserve.
@@ -1073,6 +1073,29 @@ addition of small report-input metadata kinds.
   no user channel, no wallet, no signing, no order placement imports, no
   production trading endpoint, no strategy optimization, no investment advice,
   no executable advice, and no profitability claims.
+
+### Stage 44: Paper complement arbitrage engine
+
+- Status: complete.
+- Commit: pending on the Stage 44 paper complement engine branch.
+- Purpose: convert offline candidate and fill-simulation records into
+  deterministic paper-only two-leg proposal records with locked candidate and
+  simulation hashes plus conservative risk-preview reasons.
+- Files/modules changed: `src/edmn_trader/arb/paper_engine.py`,
+  `src/edmn_trader/scripts/paper_complement_engine.py`,
+  `scripts/44_paper_complement_engine.py`, `tests/test_paper_engine.py`,
+  arbitrage exports, and documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/44_paper_complement_engine.py --help`,
+  `python scripts/01_replay_orderbook_fixture.py`, and `git diff --check`.
+- Next-stage boundary: Stage 45 may add an event-sourced paper ledger state
+  machine only. It must replay paper orders, paper fills, positions, fees,
+  PnL, settlements, and reconciliation mismatch states from local records.
+- Safety status: paper proposal records only, no live venue connection
+  execution, no credentials, no credential prompts, no authenticated requests,
+  no user channel, no wallet, no signing, no order placement imports, no
+  venue submission, no production trading endpoint, no strategy optimization,
+  no investment advice, no executable advice, and no profitability claims.
 
 ## Stage 0: Repository foundation
 
