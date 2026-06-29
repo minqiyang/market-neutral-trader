@@ -44,11 +44,12 @@ guarded Polymarket US market-channel recorder, plus Stage 42 order book
 rebuild and replay consistency, plus Stage 43 taker fill, slippage, and
 failed-leg simulation, plus Stage 44 paper complement proposal engine, plus
 Stage 45 paper ledger state machine, plus Stage 46 risk engine v2, plus Stage
-47 manual approval workflow.
+47 manual approval workflow, plus Stage 48 monitoring and daily validation
+report.
 
 ## Last completed stage
 
-Stage 47 manual approval workflow.
+Stage 48 monitoring and daily validation report.
 
 ## Stage plan status
 
@@ -64,7 +65,8 @@ slippage, and failed-leg simulator, and Stage 44 paper complement arbitrage
 engine, Stage 45 paper ledger state machine, Stage 46 risk engine v2, and
 Stage 47 manual approval workflow. The ledger records purpose, known commit
 hashes, files/modules added, validation commands, status, next-stage boundary,
-and safety status for each completed stage.
+and safety status for each completed stage. Stage 48 is complete, and Stage 49
+is a human architecture review boundary before any implementation.
 
 Report-input metadata expansion from Stages 11 through 34 is now
 maintenance-only. The previously clarified local delivery-notes report input is
@@ -159,6 +161,15 @@ Stage 47 adds `src/edmn_trader/arb/approval.py` and
 deterministic pending approval files, verifies expiring approval records
 against proposal and candidate hashes, rejects already-used approvals, and
 marks verified approvals as single-use paper manual-review metadata. It does
+not add live connections, credentials, user channels, wallets, signing, order
+placement, venue submission, strategy optimization, executable advice,
+production-readiness claims, or profitability claims.
+
+Stage 48 adds `src/edmn_trader/arb/monitoring.py` and
+`scripts/48_daily_validation_report.py` for offline daily validation reports.
+It aggregates local records for recorder uptime, data lag, gap count,
+candidate counts, rejection reasons, paper/demo outcomes, fees, slippage,
+failed-leg incidents, reconciliation health, and kill-switch events. It does
 not add live connections, credentials, user channels, wallets, signing, order
 placement, venue submission, strategy optimization, executable advice,
 production-readiness claims, or profitability claims.
@@ -997,9 +1008,9 @@ checkpoint. Complement-parity work must stay deterministic and offline until
 later reviewed stages add fee models, scanners, recorders, simulators, paper
 ledgers, risk/manual approval, or demo connector boundaries.
 
-Next checkpoint: Stage 48 monitoring and daily validation report only.
+Next checkpoint: human architecture review before Stage 49 only.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Implement only Stage 48 monitoring and daily validation report. Report recorder uptime, data lag, gap count, candidate counts, rejection reasons, paper/demo outcomes, fees, slippage, failed-leg incidents, reconciliation health, and kill-switch events from local records only. Keep outputs monitoring/research records only; do not add order placement, live venue connections, credentials, authenticated requests, wallets, signing, user channels, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
+Exact next prompt: `Use Codex Long Session Governance. Continue continuous staged autopilot from the verified current handoff. Do not implement Stage 49 yet. Perform only the human-review preparation for the Stage 49 Kalshi Demo authenticated connector architecture boundary: summarize completed Stages 35-48, identify required design questions, risk gates, manual approval constraints, reconciliation prerequisites, demo-only connector boundaries, validation expectations, and stop conditions. Do not add order placement, live venue connections, credentials, authenticated requests, wallets, signing, user channels, production endpoints, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims.`
 
 ## Important files
 
@@ -1062,6 +1073,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   v2 for blocker checks and manual-review-required decisions.
 - `src/edmn_trader/arb/approval.py`: Stage 47 local manual approval workflow
   for pending files, expiring approvals, hash checks, and single-use records.
+- `src/edmn_trader/arb/monitoring.py`: Stage 48 offline daily validation
+  report aggregation for local monitoring/research records.
 - `src/edmn_trader/fees/`: explicit supplied/missing/unknown fee estimate
   scaffolds.
 - `src/edmn_trader/research/fair_value.py`: deterministic baseline fair-value
@@ -1103,6 +1116,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   risk v2 checks.
 - `scripts/47_manual_approval.py`: root wrapper for the Stage 47 local manual
   approval workflow.
+- `scripts/48_daily_validation_report.py`: root wrapper for the Stage 48
+  offline daily validation report.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   Markdown report generator for Stage 6 logs and explicit fill assumptions.
 - `scripts/07_research_report.py`: root wrapper for Stage 7 reporting.
@@ -1146,6 +1161,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue continuous stage
   manual-review-required, output, and CLI coverage.
 - `tests/test_manual_approval.py`: Stage 47 pending approval, expiry,
   hash-check, single-use, output, and CLI coverage.
+- `tests/test_daily_validation_report.py`: Stage 48 daily validation report
+  metrics aggregation, output, and CLI coverage.
 - `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33/34 report-pack coverage
   for observed metrics, source inventory, missing optional inputs, local SEC
   facts, manifest metadata, local run-comparison metadata, unsafe
@@ -1315,30 +1332,31 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended stage
 
-Stage 48 monitoring and daily validation report only.
+Human architecture review before Stage 49 only.
 Start only after reconfirming clean synced `main`, CI, branch protection,
 required `Validate` status, local validation, and whether the PR path applies.
-Report recorder uptime, data lag, gap count, candidate counts, rejection
-reasons, paper/demo outcomes, fees, slippage, failed-leg incidents,
-reconciliation health, and kill-switch events from local records only. Keep
-outputs monitoring/research records only. Do not add order placement, live
-venue connections, credentials, authenticated requests, wallets, signing, user
+Do not implement Stage 49 yet. Prepare the Stage 49 Kalshi Demo authenticated
+connector architecture review by summarizing completed Stages 35-48,
+identifying required design questions, risk gates, manual approval constraints,
+reconciliation prerequisites, demo-only connector boundaries, validation
+expectations, and stop conditions. Do not add order placement, live venue
+connections, credentials, authenticated requests, wallets, signing, user
 channels, production endpoints, strategy optimization, investment advice,
 executable advice, production-readiness claims, or profitability claims.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue continuous staged autopilot from
-the verified current handoff. Implement only Stage 48 monitoring and daily
-validation report. Report recorder uptime, data lag, gap count, candidate
-counts, rejection reasons, paper/demo outcomes, fees, slippage, failed-leg
-incidents, reconciliation health, and kill-switch events from local records
-only. Keep outputs monitoring/research records only; do not add order
-placement, live venue connections, credentials, authenticated requests,
-wallets, signing, user channels, production endpoints, strategy optimization,
-investment advice, executable advice, production-readiness claims, or
-profitability claims.
+the verified current handoff. Do not implement Stage 49 yet. Perform only the
+human-review preparation for the Stage 49 Kalshi Demo authenticated connector
+architecture boundary: summarize completed Stages 35-48, identify required
+design questions, risk gates, manual approval constraints, reconciliation
+prerequisites, demo-only connector boundaries, validation expectations, and
+stop conditions. Do not add order placement, live venue connections,
+credentials, authenticated requests, wallets, signing, user channels,
+production endpoints, strategy optimization, investment advice, executable
+advice, production-readiness claims, or profitability claims.
 
 ## Last updated timestamp
 
-2026-06-29 10:40:25 -07:00
+2026-06-29 10:47:06 -07:00

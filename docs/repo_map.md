@@ -98,6 +98,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   v2 for blocker checks and manual-review-required decisions.
 - `src/edmn_trader/arb/approval.py`: Stage 47 local manual approval workflow
   for pending files, expiring approvals, hash checks, and single-use records.
+- `src/edmn_trader/arb/monitoring.py`: Stage 48 offline daily validation
+  report aggregation for local monitoring/research records.
 - `src/edmn_trader/fees/base.py`: venue-neutral fee estimate status and
   Decimal fee assumption model. Read for fee-model work.
 - `src/edmn_trader/fees/kalshi.py`: Kalshi fee estimate scaffold with explicit
@@ -158,6 +160,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   complement risk v2 CLI entry point.
 - `src/edmn_trader/scripts/manual_approval.py`: importable Stage 47 local
   manual approval CLI entry point.
+- `src/edmn_trader/scripts/daily_validation_report.py`: importable Stage 48
+  daily validation report CLI entry point.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
@@ -214,6 +218,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   fixtures into paper risk-decision JSONL/Markdown records.
 - `scripts/47_manual_approval.py`: creates pending approval JSON and verifies
   local single-use manual approval records.
+- `scripts/48_daily_validation_report.py`: builds offline daily validation
+  report JSONL/Markdown from local monitoring records.
 - `scripts/07_research_report.py`: writes a local/offline Markdown attribution
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
 - `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
@@ -276,6 +282,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   manual-review-required decisions, deterministic output, and CLI behavior.
 - `tests/test_manual_approval.py`: Stage 47 manual approval coverage for
   pending files, expiry, hash checks, single-use enforcement, output, and CLI
+  behavior.
+- `tests/test_daily_validation_report.py`: Stage 48 daily validation report
+  coverage for local metrics aggregation, deterministic output, and CLI
   behavior.
 - `tests/test_snapshots_jsonl.py`: JSONL roundtrip, Decimal precision,
   malformed JSONL, append behavior, and snapshot raw-payload safety coverage.
