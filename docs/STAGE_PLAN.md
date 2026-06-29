@@ -1148,7 +1148,7 @@ addition of small report-input metadata kinds.
 ### Stage 47: Manual approval workflow
 
 - Status: complete.
-- Commit: pending on the Stage 47 manual approval branch.
+- Commit: `63383aa` (merged via PR #97).
 - Purpose: create deterministic local pending approval files and verify
   expiring, single-use manual approval records against proposal/candidate
   hashes.
@@ -1164,6 +1164,31 @@ addition of small report-input metadata kinds.
   candidate counts, rejection reasons, paper/demo outcomes, fees, slippage,
   failed-leg incidents, reconciliation health, and kill-switch events.
 - Safety status: paper manual-review records only, no live venue connection
+  execution, no credentials, no credential prompts, no authenticated requests,
+  no user channel, no wallet, no signing, no order placement imports, no
+  venue submission, no production trading endpoint, no strategy optimization,
+  no investment advice, no executable advice, and no profitability claims.
+
+### Stage 48: Monitoring and daily validation report
+
+- Status: complete.
+- Commit: pending on the Stage 48 daily validation report branch.
+- Purpose: aggregate local monitoring records into deterministic daily
+  validation reports covering recorder uptime, data lag, gap count, candidate
+  counts, rejection reasons, paper/demo outcomes, fees, slippage, failed-leg
+  incidents, reconciliation health, and kill-switch events.
+- Files/modules changed: `src/edmn_trader/arb/monitoring.py`,
+  `src/edmn_trader/scripts/daily_validation_report.py`,
+  `scripts/48_daily_validation_report.py`,
+  `tests/test_daily_validation_report.py`, arbitrage exports, and
+  documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/48_daily_validation_report.py --help`,
+  `python scripts/01_replay_orderbook_fixture.py`, and `git diff --check`.
+- Next-stage boundary: stop for human architecture review before Stage 49.
+  Stage 49 would be Kalshi Demo authenticated connector work and must not start
+  without explicit review.
+- Safety status: monitoring/research records only, no live venue connection
   execution, no credentials, no credential prompts, no authenticated requests,
   no user channel, no wallet, no signing, no order placement imports, no
   venue submission, no production trading endpoint, no strategy optimization,

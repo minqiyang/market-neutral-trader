@@ -1081,6 +1081,20 @@ submission, strategy recommendation, or profitability claim. The compact
 governance audit for Stages 45-47 was folded into this delivery branch and
 found no stop gate.
 
+## Stage 48 monitoring and daily validation report
+
+Stage 48 adds an offline daily validation report over local monitoring records.
+It summarizes recorder uptime and downtime, maximum data lag, gap counts,
+candidate counts, rejection reasons, paper/demo outcome counts, fees, slippage
+incidents, failed-leg incidents, reconciliation mismatches, and kill-switch
+events.
+
+The report is intentionally local and observational. It does not open venue
+connections, authenticate, place orders, optimize strategy, recommend action,
+claim production readiness, or make profitability claims. With Stage 48
+complete, the next roadmap item is Stage 49 Kalshi Demo authenticated connector
+work, which is a human architecture review boundary before implementation.
+
 ## Interview narrative
 
 A concise way to explain the current project:

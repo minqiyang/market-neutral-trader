@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 48 offline daily validation reporting for recorder uptime, data
+  lag, gap count, candidate counts, rejection reasons, paper/demo outcomes,
+  fees, slippage, failed-leg incidents, reconciliation health, and kill-switch
+  events.
 - Added Stage 47 local manual approval workflow with deterministic pending
   approval files, expiring approvals, proposal/candidate hash verification,
   and single-use approval enforcement.
