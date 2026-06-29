@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 46 complement risk engine v2 that blocks stale data, data gaps,
+  missing/unknown fees, insufficient net edge, exposure/open-order/daily-loss
+  breaches, reconciliation mismatch, and active kill switch while still
+  requiring manual approval.
 - Added Stage 45 paper ledger replay that consumes local paper proposal, fill,
   and settlement records, preserves source hashes, tracks positions, fees,
   PnL, and reconciliation mismatches, and emits paper-only JSONL/Markdown

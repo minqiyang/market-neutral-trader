@@ -1100,7 +1100,7 @@ addition of small report-input metadata kinds.
 ### Stage 45: Paper ledger state machine
 
 - Status: complete.
-- Commit: pending on the Stage 45 paper ledger branch.
+- Commit: `a06bdf5` (merged via PR #95).
 - Purpose: replay paper proposal, fill, and settlement records from zero into
   deterministic paper ledger state with positions, fees, PnL, source hashes,
   and reconciliation mismatch states.
@@ -1116,6 +1116,30 @@ addition of small report-input metadata kinds.
   order/daily-loss breaches, reconciliation mismatch, and active kill switch
   while still requiring manual approval.
 - Safety status: paper ledger research records only, no live venue connection
+  execution, no credentials, no credential prompts, no authenticated requests,
+  no user channel, no wallet, no signing, no order placement imports, no
+  venue submission, no production trading endpoint, no strategy optimization,
+  no investment advice, no executable advice, and no profitability claims.
+
+### Stage 46: Risk engine v2
+
+- Status: complete.
+- Commit: pending on the Stage 46 risk engine branch.
+- Purpose: evaluate paper complement risk blockers for stale data, data gaps,
+  missing or unknown fees, insufficient net edge, exposure/open-order/daily-loss
+  breaches, reconciliation mismatch, and active kill switch while still
+  requiring manual approval.
+- Files/modules changed: `src/edmn_trader/arb/risk.py`,
+  `src/edmn_trader/scripts/complement_risk.py`,
+  `scripts/46_complement_risk.py`, `tests/test_complement_risk.py`,
+  arbitrage exports, and documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/46_complement_risk.py --help`,
+  `python scripts/01_replay_orderbook_fixture.py`, and `git diff --check`.
+- Next-stage boundary: Stage 47 may add a manual approval workflow only.
+  It must use pending approval files, expiring approvals, candidate hash
+  verification, and no reusable approvals.
+- Safety status: paper risk-decision records only, no live venue connection
   execution, no credentials, no credential prompts, no authenticated requests,
   no user channel, no wallet, no signing, no order placement imports, no
   venue submission, no production trading endpoint, no strategy optimization,
