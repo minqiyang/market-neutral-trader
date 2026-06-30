@@ -46,11 +46,11 @@ failed-leg simulation, plus Stage 44 paper complement proposal engine, plus
 Stage 45 paper ledger state machine, plus Stage 46 risk engine v2, plus Stage
 47 manual approval workflow, plus Stage 48 monitoring and daily validation
 report, plus Stage 49 guarded Kalshi Demo connector previews and mocked
-submit-path coverage.
+submit-path coverage, plus Stage 50 local Kalshi Demo reconciliation replay.
 
 ## Last completed stage
 
-Stage 49 Kalshi Demo authenticated connector.
+Stage 50 demo reconciliation.
 
 ## Stage plan status
 
@@ -64,10 +64,12 @@ recorder, Stage 41 guarded Polymarket US market-channel recorder, and Stage
 42 order book rebuild and replay consistency, and Stage 43 taker fill,
 slippage, and failed-leg simulator, and Stage 44 paper complement arbitrage
 engine, Stage 45 paper ledger state machine, Stage 46 risk engine v2, and
-Stage 47 manual approval workflow. The ledger records purpose, known commit
-hashes, files/modules added, validation commands, status, next-stage boundary,
-and safety status for each completed stage. Stage 49 is complete, and Stage 50
-is the next human-review checkpoint for demo reconciliation only.
+Stage 47 manual approval workflow, Stage 48 monitoring and daily validation
+report, Stage 49 Kalshi Demo authenticated connector, and Stage 50 demo
+reconciliation. The ledger records purpose, known commit hashes, files/modules
+added, validation commands, status, next-stage boundary, and safety status for
+each completed stage. Stage 50 is complete, and Stage 51 is the next
+human-review checkpoint for long-term paper/demo validation framework only.
 
 Report-input metadata expansion from Stages 11 through 34 is now
 maintenance-only. The previously clarified local delivery-notes report input is
@@ -188,6 +190,23 @@ execute a real order during validation, add production endpoints, store
 credentials, add wallets, add Polymarket execution, add an LLM trading agent,
 optimize strategy, provide investment advice, emit executable advice, claim
 production readiness, or claim profitability.
+
+Stage 50 adds `src/edmn_trader/adapters/kalshi/demo_reconciliation.py` and
+`scripts/50_kalshi_demo_reconciliation.py` for local Kalshi Demo reconciliation
+replay. It reads one Stage 49 connector audit record plus local/mock event
+JSONL, rebuilds accepted, rejected, partial fill, full fill, cancel, error,
+timeout, and backfill-style state, and appends reconciliation records linked
+to the connector audit hash. Duplicate events are idempotent when their
+contents match. Missing events, conflicting duplicate ids, source-hash
+mismatches, fill-before-acceptance, overfill, and terminal-state conflicts
+produce mismatches. Any mismatch sets `submit_eligible` false and the Stage 49
+connector now rejects an optional mismatched reconciliation state before later
+Demo preview/submit attempts. Stage 50 uses local/mock records only and does
+not add venue connections, production endpoints, real Demo order execution
+during Codex validation, credentials, wallets, Polymarket execution, live
+user-order channels, broker integration, LLM trading agents, strategy
+optimization, investment advice, executable advice, production-readiness
+claims, or profitability claims.
 
 `docs/STAGE_PLAN.md` now contains the full Stage 3 specification: snapshot
 schema requirements, Decimal-safe JSONL recorder requirements, deterministic
@@ -454,6 +473,15 @@ pull requests before Stage 47 publish, branch protection still requires strict
 `Validate`. The handoff and stage plan agree on Stage 48 as the next
 checkpoint, and no risk drift, compliance drift, token/context drift, or
 user-judgment stop gate was found.
+
+Audit after three more completed checkpoints: Stage 48 monitoring and daily
+validation report, Stage 49 Kalshi Demo authenticated connector, and Stage 50
+demo reconciliation. Stage 50 work started from synced `origin/main` at
+`eab1d7d`, there were no open pull requests before Stage 50 publish, branch
+protection still requires strict `Validate`, and the latest observed `main` CI
+run `28413491937` passed `Validate`. The handoff and stage plan agree on Stage
+51 as the next checkpoint, and no risk drift, compliance drift, token/context
+drift, or user-judgment stop gate was found.
 
 `docs/STAGE_PLAN.md` now contains the clarified Stage 9 specification and
 `docs/stage9_equities_readiness.md` records the readiness review. Stage 9 is
@@ -1023,9 +1051,9 @@ checkpoint. Complement-parity work must stay deterministic and offline until
 later reviewed stages add fee models, scanners, recorders, simulators, paper
 ledgers, risk/manual approval, or demo connector boundaries.
 
-Next checkpoint: Stage 50 demo reconciliation only.
+Next checkpoint: Stage 51 long-term paper/demo validation framework only.
 
-Exact next prompt: `Use Codex Long Session Governance. Continue the EDMN narrow complement-arbitrage roadmap from latest verified origin/main. Implement Stage 50 as one coherent PR: demo reconciliation only. Reconcile Kalshi Demo accepted, rejected, fill, cancel, and backfill-style local/mock records against Stage 49 preview/submission audit records, and hard-stop later submissions on any mismatch. Use deterministic local fixtures and mocked clients only. Do not add production endpoints, real-money execution, wallets, Polymarket execution, live order execution during Codex validation, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims. Auto-merge only if the full delivery-unit gate passes; otherwise stop and report the failed gate.`
+Exact next prompt: `Use Codex Long Session Governance. Continue the EDMN narrow complement-arbitrage roadmap from latest verified origin/main. Implement Stage 51 as one coherent PR: long-term paper/demo validation framework only. Summarize 30+ days of paper trading and 30-90 days of read-only/live-recorded data windows from local recorded outputs, with explicit coverage, gaps, reconciliation health, and limitations. Do not add private live gates, production endpoints, real-money execution, wallets, Polymarket execution, live order execution during Codex validation, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims. Auto-merge only if the full delivery-unit gate passes; otherwise stop and report the failed gate.`
 
 ## Important files
 
@@ -1056,6 +1084,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue the EDMN narrow 
   Kalshi Demo read-only recorder.
 - `src/edmn_trader/adapters/kalshi/demo_connector.py`: Stage 49 guarded
   Kalshi Demo request preview and mocked submit-path connector.
+- `src/edmn_trader/adapters/kalshi/demo_reconciliation.py`: Stage 50 local
+  Kalshi Demo reconciliation replay and submit-eligibility blocker.
 - `src/edmn_trader/adapters/polymarket_us/client.py`: guarded read-only
   Polymarket US public market-data client.
 - `src/edmn_trader/adapters/polymarket_us/orderbook.py`: Polymarket US
@@ -1139,6 +1169,10 @@ Exact next prompt: `Use Codex Long Session Governance. Continue the EDMN narrow 
   guarded Kalshi Demo connector preview CLI entry point.
 - `scripts/49_kalshi_demo_connector.py`: root wrapper for the Stage 49 guarded
   Kalshi Demo connector preview.
+- `src/edmn_trader/scripts/kalshi_demo_reconciliation.py`: importable Stage 50
+  local Kalshi Demo reconciliation replay CLI entry point.
+- `scripts/50_kalshi_demo_reconciliation.py`: root wrapper for the Stage 50
+  local Kalshi Demo reconciliation replay.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   Markdown report generator for Stage 6 logs and explicit fill assumptions.
 - `scripts/07_research_report.py`: root wrapper for Stage 7 reporting.
@@ -1186,6 +1220,8 @@ Exact next prompt: `Use Codex Long Session Governance. Continue the EDMN narrow 
   metrics aggregation, output, and CLI coverage.
 - `tests/test_kalshi_demo_connector.py`: Stage 49 connector preview, guardrail,
   mocked submit, and audit-redaction coverage.
+- `tests/test_kalshi_demo_reconciliation.py`: Stage 50 reconciliation replay,
+  duplicate, mismatch, submit-blocking, append-only output, and CLI coverage.
 - `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33/34 report-pack coverage
   for observed metrics, source inventory, missing optional inputs, local SEC
   facts, manifest metadata, local run-comparison metadata, unsafe
@@ -1355,25 +1391,25 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended stage
 
-Stage 50 demo reconciliation only.
+Stage 51 long-term paper/demo validation framework only.
 Start only after reconfirming clean synced `main`, CI, branch protection,
 required `Validate` status, local validation, and whether the PR path applies.
-Do not implement beyond Stage 50. Add demo reconciliation records only:
-accepted, rejected, fill, cancel, and backfill event reconciliation, with
-mismatches hard-stopping later submissions. Do not add production endpoints,
-real-money execution, wallets, Polymarket execution, live order execution
-during Codex validation, strategy optimization, investment advice, executable
-advice, production-readiness claims, or profitability claims.
+Do not implement beyond Stage 51. Add a long-term paper/demo validation
+framework only, using local recorded outputs and read-only data windows. Do
+not add private live gates, production endpoints, real-money execution,
+wallets, Polymarket execution, live order execution during Codex validation,
+strategy optimization, investment advice, executable advice,
+production-readiness claims, or profitability claims.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue the EDMN narrow
 complement-arbitrage roadmap from latest verified `origin/main`. Implement
-Stage 50 as one coherent PR: demo reconciliation only. Reconcile Kalshi Demo
-accepted, rejected, fill, cancel, and backfill-style local/mock records against
-Stage 49 preview/submission audit records, and hard-stop later submissions on
-any mismatch. Use deterministic local fixtures and mocked clients only. Do not
-add production endpoints, real-money execution, wallets, Polymarket execution,
+Stage 51 as one coherent PR: long-term paper/demo validation framework only.
+Summarize 30+ days of paper trading and 30-90 days of read-only/live-recorded
+data windows from local recorded outputs, with explicit coverage, gaps,
+reconciliation health, and limitations. Do not add private live gates,
+production endpoints, real-money execution, wallets, Polymarket execution,
 live order execution during Codex validation, strategy optimization,
 investment advice, executable advice, production-readiness claims, or
 profitability claims. Auto-merge only if the full delivery-unit gate passes;
@@ -1381,4 +1417,4 @@ otherwise stop and report the failed gate.
 
 ## Last updated timestamp
 
-2026-06-29 18:07:00 -07:00
+2026-06-29 18:45:00 -07:00

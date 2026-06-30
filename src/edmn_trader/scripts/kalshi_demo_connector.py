@@ -39,6 +39,7 @@ def run(
             max_total_notional=Decimal("1"),
         ),
         audit_log_path=audit_log_path,
+        demo_reconciliation_state_record=_optional_dict(payload, "demo_reconciliation_state"),
         now=_datetime_or_none(payload.get("now")),
     )
     write_kalshi_demo_result_jsonl(jsonl_output_path, result)
@@ -96,6 +97,16 @@ def _read_payload(path: Path) -> dict[str, Any]:
 
 def _dict(payload: dict[str, Any], field_name: str) -> dict[str, object]:
     value = payload.get(field_name)
+    if not isinstance(value, dict):
+        msg = f"{field_name} must be an object"
+        raise ValueError(msg)
+    return value
+
+
+def _optional_dict(payload: dict[str, Any], field_name: str) -> dict[str, object] | None:
+    value = payload.get(field_name)
+    if value is None:
+        return None
     if not isinstance(value, dict):
         msg = f"{field_name} must be an object"
         raise ValueError(msg)

@@ -1196,7 +1196,7 @@ addition of small report-input metadata kinds.
 ### Stage 49: Kalshi Demo authenticated connector
 
 - Status: complete.
-- Commit: pending on the Stage 49 Kalshi Demo connector branch.
+- Commit: `eab1d7d` (merged via PR #99).
 - Purpose: bridge the paper workflow to a guarded Kalshi Demo request preview
   and mocked submit path after manual approval, clear risk decision, and
   healthy paper ledger state.
@@ -1216,6 +1216,33 @@ addition of small report-input metadata kinds.
   endpoints, no real order execution during Codex validation, no credentials in
   repo files, no wallet, no Polymarket execution, no LLM trading agent, no
   strategy optimization, no investment advice, no executable advice, and no
+  profitability claims.
+
+### Stage 50: Demo reconciliation
+
+- Status: complete.
+- Commit: pending on the Stage 50 demo reconciliation branch.
+- Purpose: reconcile local/mock Kalshi Demo connector outcomes into append-only
+  research state that links back to Stage 49 audit records and blocks later
+  Demo submissions when mismatches exist.
+- Files/modules changed:
+  `src/edmn_trader/adapters/kalshi/demo_reconciliation.py`,
+  `src/edmn_trader/scripts/kalshi_demo_reconciliation.py`,
+  `scripts/50_kalshi_demo_reconciliation.py`, Stage 49 connector eligibility
+  hook, Kalshi adapter exports, `tests/test_kalshi_demo_reconciliation.py`,
+  and documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/50_kalshi_demo_reconciliation.py --help`,
+  local reconciliation smoke on generated audit/event JSONL,
+  `python scripts/01_replay_orderbook_fixture.py`, and `git diff --check`.
+- Next-stage boundary: stop for human review before Stage 51. Stage 51 may add
+  a long-term paper/demo validation framework only, using local recorded
+  outputs and read-only data windows without private live gates.
+- Safety status: local/mock reconciliation records only, no venue connection,
+  no real Demo order execution during Codex validation, no credentials, no
+  wallets, no Polymarket execution, no live user-order channel, no broker
+  integration, no production endpoint, no LLM trading agent, no strategy
+  optimization, no investment advice, no executable advice, and no
   profitability claims.
 
 ## Stage 0: Repository foundation
