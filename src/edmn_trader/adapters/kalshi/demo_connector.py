@@ -16,6 +16,9 @@ from edmn_trader.adapters.kalshi.client import (
     KALSHI_DEMO_REST_BASE_URL,
     KalshiConfigurationError,
 )
+from edmn_trader.adapters.kalshi.demo_reconciliation import (
+    require_demo_reconciliation_submit_eligible,
+)
 from edmn_trader.core.models import ONE, ZERO
 from edmn_trader.data.jsonl import append_jsonl_record, write_jsonl_records
 
@@ -129,6 +132,7 @@ def preview_or_submit_kalshi_demo(
     paper_ledger_state_record: Mapping[str, object],
     config: KalshiDemoConnectorConfig,
     audit_log_path: Path,
+    demo_reconciliation_state_record: Mapping[str, object] | None = None,
     now: datetime | None = None,
     credential_loader: CredentialLoader | None = None,
     http_client: httpx.Client | None = None,
@@ -155,6 +159,8 @@ def preview_or_submit_kalshi_demo(
         proposal_id=proposal_id,
         candidate_hash=candidate_hash,
     )
+    if demo_reconciliation_state_record is not None:
+        require_demo_reconciliation_submit_eligible(demo_reconciliation_state_record)
     previews = _build_request_previews(proposal_record, market_id=market_id, config=config)
 
     if not config.submit_opt_in:

@@ -6,6 +6,11 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 50 local Kalshi Demo reconciliation replay for accepted,
+  rejected, fill, cancel, error, timeout, and backfill-style mock events. The
+  replay links Stage 49 connector audit records to append-only reconciliation
+  state, treats duplicate events idempotently, reports mismatches, and blocks
+  later Demo submit eligibility when mismatches exist.
 - Added Stage 49 guarded Kalshi Demo connector previews and mocked submit
   coverage. The connector consumes hash-bound manual approval, passing risk,
   and healthy paper ledger records, defaults to dry-run, rejects production

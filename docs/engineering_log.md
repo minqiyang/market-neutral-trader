@@ -1110,6 +1110,23 @@ records with auth-like fields redacted. This stage does not place real orders
 during validation, add production endpoints, implement wallets, optimize
 strategy, offer trading advice, or make profitability claims.
 
+## Stage 50 demo reconciliation
+
+Stage 50 adds local Kalshi Demo reconciliation replay for connector outcomes.
+It reads Stage 49 connector audit records plus local/mock Demo events, rebuilds
+accepted, rejected, partial fill, full fill, cancel, error, timeout, and
+backfill-style state, and appends reconciliation records that link back to the
+connector audit hash.
+
+Duplicate events are idempotent when their contents match. Missing events,
+conflicting duplicate event ids, source-hash mismatches, fill-before-acceptance
+cases, and terminal-state conflicts produce reconciliation mismatches. Any
+mismatch marks the state as not eligible for later Demo submission. This stage
+uses local fixtures and mocked records only; it does not connect to venues,
+place orders, store credentials, optimize strategy, offer trading advice, or
+make profitability claims. The compact governance audit for Stages 48-50 was
+folded into this delivery branch and found no stop gate.
+
 ## Interview narrative
 
 A concise way to explain the current project:

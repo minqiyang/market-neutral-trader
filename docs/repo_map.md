@@ -75,6 +75,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
   Kalshi Demo request preview and mocked submit-path connector. Read for
   manual approval, risk, paper ledger, Demo allowlist, and audit-redaction
   behavior.
+- `src/edmn_trader/adapters/kalshi/demo_reconciliation.py`: Stage 50 local
+  Kalshi Demo reconciliation replay. Read for accepted/rejected/fill/cancel/
+  error/timeout/backfill event replay, duplicate handling, mismatch detection,
+  and Demo submit eligibility blocking.
 - `src/edmn_trader/adapters/polymarket_us/client.py`: guarded read-only
   Polymarket US public market-data client.
 - `src/edmn_trader/adapters/polymarket_us/orderbook.py`: Polymarket US
@@ -168,6 +172,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   daily validation report CLI entry point.
 - `src/edmn_trader/scripts/kalshi_demo_connector.py`: importable Stage 49
   guarded Kalshi Demo connector preview CLI entry point.
+- `src/edmn_trader/scripts/kalshi_demo_reconciliation.py`: importable Stage 50
+  local Kalshi Demo reconciliation replay CLI entry point.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
@@ -228,6 +234,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   report JSONL/Markdown from local monitoring records.
 - `scripts/49_kalshi_demo_connector.py`: builds guarded Kalshi Demo dry-run
   request previews from local paper, risk, approval, and ledger records.
+- `scripts/50_kalshi_demo_reconciliation.py`: replays local/mock Kalshi Demo
+  event JSONL against one Stage 49 connector audit record and appends
+  reconciliation state.
 - `scripts/07_research_report.py`: writes a local/offline Markdown attribution
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
 - `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
@@ -297,6 +306,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `tests/test_kalshi_demo_connector.py`: Stage 49 connector coverage for
   dry-run previews, Demo URL rejection, risk/manual approval/ledger gates,
   mocked submit success/reject/error paths, and audit redaction.
+- `tests/test_kalshi_demo_reconciliation.py`: Stage 50 reconciliation coverage
+  for accepted/rejected/fill/cancel/error/timeout/backfill events, duplicate
+  idempotency, mismatches, submit blocking, append-only output, and CLI
+  behavior.
 - `tests/test_snapshots_jsonl.py`: JSONL roundtrip, Decimal precision,
   malformed JSONL, append behavior, and snapshot raw-payload safety coverage.
 - `tests/test_replay_snapshots.py`: replay ordering, replay metrics, and
