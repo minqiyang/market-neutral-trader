@@ -33,6 +33,9 @@ rules can erase or reverse the apparent edge.
 
 ## Six-layer architecture
 
+See [visual_overview.md](visual_overview.md) for the GitHub-rendered Mermaid
+diagram of this architecture.
+
 1. Live data recorder: read-only market-data capture with timestamps,
    raw-to-normalized traceability, and no trading credentials.
 2. Replay/simulator: deterministic offline replay of recorded books, explicit

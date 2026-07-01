@@ -1175,6 +1175,11 @@ trading is disabled, private-live prerequisites are still unmet, and the repo
 does not claim positive expectancy, production readiness, investment advice, or
 profitability.
 
+The visual documentation pass keeps that same boundary and adds Mermaid
+diagrams for the workflow, architecture layers, safety gate, and public/private
+split. No SVGs, generated images, hosted assets, behavior changes, or diagram
+service dependencies were added.
+
 ## Interview narrative
 
 A concise way to explain the current project:

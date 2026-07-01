@@ -14,6 +14,8 @@ The public repository has no production endpoint configuration, credential
 loader, wallet, broker integration, live user-order channel, or production
 order submission path. Calling the public placeholder returns a disabled
 decision record instead of an order payload.
+The public/private boundary diagram in `docs/visual_overview.md` shows this
+same separation without adding any executable path.
 
 ## Private-Live Prerequisites Still Unmet
 

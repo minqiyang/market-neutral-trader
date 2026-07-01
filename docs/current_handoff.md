@@ -251,6 +251,13 @@ page. It now summarizes the current workflow, architecture layers, local
 commands, validation status, safety boundary, disabled private-live gate, and
 unmet private-live prerequisites without changing code behavior.
 
+The public visual documentation pass adds GitHub-rendered Mermaid diagrams to
+`README.md` and `docs/visual_overview.md` for the Stage 52 system workflow,
+six-layer architecture, safety gate flow, and public/private boundary. It adds
+no SVG assets, generated images, hosted assets, source behavior changes,
+credentials, production endpoints, live execution paths, strategy
+optimization, production-readiness claims, or profitability claims.
+
 `docs/STAGE_PLAN.md` now contains the full Stage 3 specification: snapshot
 schema requirements, Decimal-safe JSONL recorder requirements, deterministic
 replay behavior, fixture recording and replay scripts, offline tests,
@@ -1450,4 +1457,4 @@ compliance review before requesting any separately reviewed private work.
 
 ## Last updated timestamp
 
-2026-07-01 00:00:00 -07:00
+2026-07-01 16:34:42 -07:00

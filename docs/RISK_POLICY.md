@@ -30,6 +30,8 @@ explicitly changes the policy and adds full risk checks, logging, and tests.
 The Stage 52 private live gate design is documented in
 `docs/private_live_execution_gate.md`; the public repository gate remains
 disabled and does not add production order code.
+The safety-gate diagram in `docs/visual_overview.md` is a visual summary of
+the same disabled-live policy.
 
 ## Risk engine expectations
 
