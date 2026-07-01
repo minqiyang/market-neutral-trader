@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 52 private live gate design and disabled public guard. The public
+  placeholder always returns disabled status, exposes no endpoint, credential,
+  wallet, broker, live user-order channel, or order payload, and keeps all
+  private-live prerequisites marked unmet.
 - Added Stage 51 offline rolling paper/demo validation framework. It aggregates
   local research JSONL artifacts into deterministic 7/30/90-day JSONL, JSON,
   and Markdown reports, tracks paper/demo validation metrics where available,

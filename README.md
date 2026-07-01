@@ -69,6 +69,8 @@ The only live-related execution mode in the core model is `LIVE_DISABLED`.
 There is no production order-placement path in this stage. Any future execution
 work must be separately reviewed, must pass through a risk engine, must be
 covered by tests, and must comply with venue rules and applicable regulations.
+The Stage 52 private live gate is documented in
+`docs/private_live_execution_gate.md` and remains disabled in the public repo.
 
 ## Extensibility
 

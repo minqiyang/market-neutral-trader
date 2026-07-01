@@ -27,6 +27,9 @@ The core execution modes are:
 There is no enabled live mode. Future execution code must reject or avoid any
 path that would place a live order unless a later, separately reviewed stage
 explicitly changes the policy and adds full risk checks, logging, and tests.
+The Stage 52 private live gate design is documented in
+`docs/private_live_execution_gate.md`; the public repository gate remains
+disabled and does not add production order code.
 
 ## Risk engine expectations
 

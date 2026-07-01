@@ -47,11 +47,12 @@ Stage 45 paper ledger state machine, plus Stage 46 risk engine v2, plus Stage
 47 manual approval workflow, plus Stage 48 monitoring and daily validation
 report, plus Stage 49 guarded Kalshi Demo connector previews and mocked
 submit-path coverage, plus Stage 50 local Kalshi Demo reconciliation replay,
-plus Stage 51 offline rolling paper/demo validation framework.
+plus Stage 51 offline rolling paper/demo validation framework, plus Stage 52
+private live gate design and disabled public guard.
 
 ## Last completed stage
 
-Stage 51 long-term paper/demo validation framework.
+Stage 52 private live gate design and disabled public guard.
 
 ## Stage plan status
 
@@ -67,12 +68,13 @@ slippage, and failed-leg simulator, and Stage 44 paper complement arbitrage
 engine, Stage 45 paper ledger state machine, Stage 46 risk engine v2, and
 Stage 47 manual approval workflow, Stage 48 monitoring and daily validation
 report, Stage 49 Kalshi Demo authenticated connector, and Stage 50 demo
-reconciliation, and Stage 51 long-term paper/demo validation framework. The
+reconciliation, Stage 51 long-term paper/demo validation framework, and Stage
+52 private live gate design and disabled public guard. The
 ledger records purpose, known commit hashes, files/modules
 added, validation commands, status, next-stage boundary, and safety status for
-each completed stage. Stage 51 is complete as a framework implementation, not
-completed validation. Stage 52 is the next human-review checkpoint for private
-live gate design only.
+each completed stage. Stage 35-52 is complete. The recommended next action is
+human review of the private live gate design and private evidence collection
+outside the public repo before any separately reviewed private implementation.
 
 Report-input metadata expansion from Stages 11 through 34 is now
 maintenance-only. The previously clarified local delivery-notes report input is
@@ -227,6 +229,20 @@ assumptions, and missing legal/platform review. Stage 51 uses local/mock inputs
 only and does not add venue connections, production endpoints, real Demo order
 execution during Codex validation, credentials, wallets, Polymarket execution,
 live user-order channels, broker integration, LLM trading agents, strategy
+optimization, investment advice, executable advice, production-readiness
+claims, or profitability claims.
+
+Stage 52 adds `docs/private_live_execution_gate.md` and
+`src/edmn_trader/execution/private_live_gate.py` for a disabled private live
+gate design and public placeholder. The placeholder returns status `disabled`,
+sets `production_trading_enabled` and `executable_order_intent` to false, and
+lists the private-live prerequisites still unmet: 30-90 days live read-only
+data, 30+ days paper trading history, zero unresolved reconciliation
+mismatches, validated fee/slippage assumptions, successful demo lifecycle
+coverage, kill-switch and manual approval drills, and legal/platform
+compliance review. Stage 52 does not add production endpoints, production
+order code, real-money execution, credentials, wallets, broker integration,
+live user-order channels, Polymarket execution, LLM trading agents, strategy
 optimization, investment advice, executable advice, production-readiness
 claims, or profitability claims.
 
@@ -1411,28 +1427,21 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 - Treat complement-parity outputs as audit/paper-candidate metadata only, not
   executable order intents or risk-free opportunities.
 
-## Next recommended stage
+## Next recommended action
 
-Stage 52 private live gate design only.
-Start only after reconfirming clean synced `main`, CI, branch protection,
-required `Validate` status, local validation, and whether the PR path applies.
-Do not implement beyond Stage 52. Add design-only documentation for the private
-live gate boundary if authorized. Do not add production endpoints, real-money
-execution, wallets, Polymarket execution, live order execution during Codex
-validation, strategy optimization, investment advice, executable advice,
-production-readiness claims, or profitability claims.
+Stage 35-52 is complete. Stop for human review of
+`docs/private_live_execution_gate.md`. Any future private implementation must
+be separately reviewed outside the public repo and must be backed by private
+evidence for every listed prerequisite.
 
 ## Exact next prompt suggestion
 
-Use Codex Long Session Governance. Continue the EDMN narrow
-complement-arbitrage roadmap from latest verified `origin/main`. Implement
-Stage 52 as one coherent PR: private live gate design only. Document the
-disabled private-live gate boundary, prerequisites, review gates, and stop
-conditions without adding production endpoints, real-money execution, wallets,
-Polymarket execution, live order execution during Codex validation, strategy
-optimization, investment advice, executable advice, production-readiness
-claims, or profitability claims. Auto-merge only if the full delivery-unit
-gate passes; otherwise stop and report the failed gate.
+Human review: inspect `docs/private_live_execution_gate.md`, decide whether the
+private-live gate design is acceptable, and collect private evidence for
+30-90 days live read-only data, 30+ days paper trading history, zero unresolved
+reconciliation mismatches, validated fee/slippage assumptions, successful demo
+lifecycle coverage, kill-switch and manual approval drills, and legal/platform
+compliance review before requesting any separately reviewed private work.
 
 ## Last updated timestamp
 

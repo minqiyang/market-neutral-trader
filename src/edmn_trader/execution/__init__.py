@@ -9,6 +9,11 @@ from edmn_trader.execution.demo import (
     decide_execution_risk,
     execute_demo_request,
 )
+from edmn_trader.execution.private_live_gate import (
+    PRIVATE_LIVE_PREREQUISITES_UNMET,
+    PrivateLiveGateDecision,
+    attempt_private_live_execution,
+)
 
 __all__ = [
     "DemoExecutionConfig",
@@ -16,6 +21,9 @@ __all__ = [
     "DemoExecutionResult",
     "ExecutionAuditLogger",
     "FakeDemoExecutionAdapter",
+    "PRIVATE_LIVE_PREREQUISITES_UNMET",
+    "PrivateLiveGateDecision",
+    "attempt_private_live_execution",
     "decide_execution_risk",
     "execute_demo_request",
 ]

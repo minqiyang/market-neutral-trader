@@ -56,6 +56,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `docs/ROADMAP.md`: compact roadmap. Use `docs/STAGE_PLAN.md` for detailed
   staged acceptance checks.
 - `docs/RISK_POLICY.md`: non-negotiable safety and execution constraints.
+- `docs/private_live_execution_gate.md`: Stage 52 disabled private live gate
+  design and unmet private-live prerequisites.
 - `docs/RESUME_NARRATIVE.md`: portfolio framing and concise project story.
 - `docs/handoff_archive/README.md`: process for archiving old handoffs.
 
@@ -138,6 +140,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/execution/demo.py`: Stage 5 risk-gated fake/demo execution
   boundary, risk decisions, fake adapter, and JSONL audit logging. Read for
   execution smoke behavior.
+- `src/edmn_trader/execution/private_live_gate.py`: Stage 52 disabled public
+  live execution gate placeholder. Read before any private-live gate work.
 - `src/edmn_trader/scripts/replay_orderbook_fixture.py`: importable fixture
   replay entry point.
 - `src/edmn_trader/scripts/record_fixture_snapshots.py`: importable Stage 3
@@ -330,6 +334,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   coverage.
 - `tests/test_demo_execution.py`: Stage 5 risk gate, blocked path, fake
   adapter, and execution audit log coverage.
+- `tests/test_private_live_gate.py`: Stage 52 disabled live gate coverage for
+  unmet prerequisites, fail-closed status, and no endpoint/credential/order
+  payload exposure.
 - `tests/test_demo_execution_smoke.py`: Stage 5 smoke script coverage.
 - `tests/test_market_maker_replay.py`: Stage 6 dry-run/demo, lifecycle,
   run-control, adapter-error, and script-summary coverage.

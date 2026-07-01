@@ -1147,6 +1147,21 @@ legal/platform review. It does not connect to venues, place orders, store
 credentials, optimize strategy, offer trading advice, claim production
 readiness, or make profitability claims.
 
+## Stage 52 private live gate design
+
+Stage 52 adds the private live execution gate document and a disabled public
+placeholder. The placeholder returns a `disabled` gate decision, marks
+production trading and executable order intent false, and lists the private
+evidence still missing before any future private work could be considered.
+
+The public repo still has no production endpoint, production order code,
+credential loader, wallet, broker integration, live user-order channel, or
+order payload. The Stage 35-52 complement-arbitrage roadmap is complete, and
+the next action is human review of the private gate design plus private
+evidence collection outside this repository. This stage does not connect to
+venues, place orders, store credentials, optimize strategy, offer trading
+advice, claim production readiness, or make profitability claims.
+
 ## Interview narrative
 
 A concise way to explain the current project:

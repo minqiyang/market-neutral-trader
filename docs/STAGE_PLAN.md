@@ -2,8 +2,8 @@
 
 ## Completed stage record
 
-These records summarize the locally completed stages through Stage 37 venue
-fee model scaffold. They are intended as a durable audit map;
+These records summarize the locally completed stages through Stage 52 private
+live gate design. They are intended as a durable audit map;
 implementation details remain in the source, tests, changelog, engineering
 log, and handoff archive.
 
@@ -1270,6 +1270,32 @@ addition of small report-input metadata kinds.
   live user-order channel, no broker integration, no LLM trading agent, no
   strategy optimization, no investment advice, no executable advice, no
   production-readiness claims, and no profitability claims.
+
+### Stage 52: Private live gate design and disabled public guard
+
+- Status: complete.
+- Commit: pending on the Stage 52 private live gate branch.
+- Purpose: document the private live execution gate and add a disabled public
+  placeholder proving public live execution remains unavailable.
+- Files/modules changed: `docs/private_live_execution_gate.md`,
+  `src/edmn_trader/execution/private_live_gate.py`, execution exports,
+  `tests/test_private_live_gate.py`, README/Risk Policy consistency updates,
+  and minimal roadmap, repo-map, handoff, changelog, and engineering-log
+  updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, private-live gate import smoke, `python scripts/01_replay_orderbook_fixture.py`
+  with the repo fallback when needed, and `git diff --check`.
+- Next-stage boundary: Stage 35-52 roadmap is complete. Stop for human review;
+  the recommended next human action is to review the private live gate design
+  and collect private evidence outside the public repo before any separately
+  reviewed private implementation.
+- Safety status: public live execution disabled, production trading disabled,
+  all private-live prerequisites still unmet, no production endpoints, no
+  production order code, no real-money execution, no credentials, no wallets,
+  no broker integration, no live user-order channel, no Polymarket execution,
+  no LLM trading agent, no strategy optimization, no investment advice, no
+  executable advice, no production-readiness claims, and no profitability
+  claims.
 
 ## Stage 0: Repository foundation
 

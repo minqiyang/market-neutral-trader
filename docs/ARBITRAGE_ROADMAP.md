@@ -104,8 +104,9 @@ report-input kinds unless a later maintenance task explicitly requires it.
   local 7/30/90-day rolling reports and keep validation marked incomplete
   until 30+ days of paper trading, 30-90 days of live read-only data, fee/
   slippage review, reconciliation health, and legal/platform review exist.
-- Stage 52: private live gate design only. Public repo may document a disabled
-  live gate, but must not add production order code.
+- Stage 52: private live gate design only. Public repo documents a disabled
+  live gate and disabled public placeholder, but does not add production order
+  code. Stage 35-52 is complete after this checkpoint.
 
 ## Governance
 
