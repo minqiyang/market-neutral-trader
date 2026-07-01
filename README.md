@@ -13,19 +13,19 @@ intentionally disabled.
 
 ## System Workflow
 
-```text
-market data / fixture input
-  -> normalized order book
-  -> complement-parity scanner
-  -> fee/slippage/failed-leg simulation
-  -> paper proposal
-  -> replayable paper ledger
-  -> risk decision
-  -> hash-bound manual approval
-  -> Kalshi Demo dry-run connector
-  -> demo reconciliation replay
-  -> rolling validation reports
-  -> disabled private-live gate
+```mermaid
+flowchart LR
+  A["Market data / fixtures"] --> B["Normalized order book"]
+  B --> C["Complement scanner"]
+  C --> D["Fee / slippage / failed-leg simulator"]
+  D --> E["Paper proposal"]
+  E --> F["Paper ledger"]
+  F --> G["Risk decision"]
+  G --> H["Manual approval"]
+  H --> I["Kalshi Demo dry-run connector"]
+  I --> J["Demo reconciliation"]
+  J --> K["Rolling validation"]
+  K --> L["Disabled private-live gate"]
 ```
 
 The first venue shape is Kalshi-style binary markets. Kalshi exposes YES bids
@@ -42,6 +42,15 @@ paper replay, risk review, manual approval, demo reconciliation, and long-term
 validation before any private-live discussion.
 
 ## Architecture Layers
+
+```mermaid
+flowchart TB
+  L1["Layer 1: recorder"] --> L2["Layer 2: replay / simulator"]
+  L2 --> L3["Layer 3: paper ledger / reconciliation"]
+  L3 --> L4["Layer 4: risk / manual approval / monitoring"]
+  L4 --> L5["Layer 5: Kalshi Demo dry-run / reconciliation"]
+  L5 --> L6["Layer 6: disabled private-live gate"]
+```
 
 | Layer | Purpose | Public status |
 | --- | --- | --- |
@@ -132,6 +141,18 @@ PYTHONPATH=src python scripts/51_long_term_validation.py --help
 
 ## Safety Model
 
+```mermaid
+flowchart LR
+  A["Candidate"] --> B["Fee / slippage checks"]
+  B --> C["Stale / data-gap checks"]
+  C --> D["Exposure / loss checks"]
+  D --> E["Reconciliation health"]
+  E --> F["Kill switch"]
+  F --> G["Manual approval"]
+  G --> H["Demo dry-run preview only"]
+  H --> I["Private live remains disabled"]
+```
+
 - Public live execution is disabled.
 - `LIVE_DISABLED` is the only live-related core execution mode.
 - The public private-live placeholder returns `status="disabled"`.
@@ -145,6 +166,8 @@ PYTHONPATH=src python scripts/51_long_term_validation.py --help
 
 See [docs/RISK_POLICY.md](docs/RISK_POLICY.md) and
 [docs/private_live_execution_gate.md](docs/private_live_execution_gate.md).
+For the compact diagram set, see
+[docs/visual_overview.md](docs/visual_overview.md).
 
 ## Validation Status
 
@@ -167,6 +190,8 @@ Private-live prerequisites still unmet:
 
 - [docs/ARBITRAGE_ROADMAP.md](docs/ARBITRAGE_ROADMAP.md): Stage 35-52
   complement-parity roadmap.
+- [docs/visual_overview.md](docs/visual_overview.md): Mermaid diagrams for the
+  workflow, architecture, safety gate, and public/private boundary.
 - [docs/STAGE_PLAN.md](docs/STAGE_PLAN.md): completed stage ledger and
   validation commands.
 - [docs/current_handoff.md](docs/current_handoff.md): latest continuation state.

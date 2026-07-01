@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added GitHub-rendered Mermaid diagrams to the README and
+  `docs/visual_overview.md` for the Stage 52 workflow, six-layer architecture,
+  safety gate, and public/private boundary.
 - Upgraded the public README into a Stage 52 landing page with system workflow,
   architecture layers, local commands, validation status, safety boundaries,
   and private-live gate prerequisites.
