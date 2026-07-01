@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 51 offline rolling paper/demo validation framework. It aggregates
+  local research JSONL artifacts into deterministic 7/30/90-day JSONL, JSON,
+  and Markdown reports, tracks paper/demo validation metrics where available,
+  marks validation as not completed, and lists unmet private-live prerequisites.
 - Added Stage 50 local Kalshi Demo reconciliation replay for accepted,
   rejected, fill, cancel, error, timeout, and backfill-style mock events. The
   replay links Stage 49 connector audit records to append-only reconciliation

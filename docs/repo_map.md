@@ -108,6 +108,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   for pending files, expiring approvals, hash checks, and single-use records.
 - `src/edmn_trader/arb/monitoring.py`: Stage 48 offline daily validation
   report aggregation for local monitoring/research records.
+- `src/edmn_trader/arb/long_term_validation.py`: Stage 51 offline rolling
+  paper/demo validation reports over local research artifacts.
 - `src/edmn_trader/fees/base.py`: venue-neutral fee estimate status and
   Decimal fee assumption model. Read for fee-model work.
 - `src/edmn_trader/fees/kalshi.py`: Kalshi fee estimate scaffold with explicit
@@ -174,6 +176,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   guarded Kalshi Demo connector preview CLI entry point.
 - `src/edmn_trader/scripts/kalshi_demo_reconciliation.py`: importable Stage 50
   local Kalshi Demo reconciliation replay CLI entry point.
+- `src/edmn_trader/scripts/long_term_validation.py`: importable Stage 51
+  rolling paper/demo validation report CLI entry point.
 - `src/edmn_trader/scripts/research_report.py`: importable Stage 7 offline
   report generator for Stage 6 logs and explicit fill assumptions.
 - `src/edmn_trader/scripts/paper_report_pack.py`: importable Stage
@@ -237,6 +241,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `scripts/50_kalshi_demo_reconciliation.py`: replays local/mock Kalshi Demo
   event JSONL against one Stage 49 connector audit record and appends
   reconciliation state.
+- `scripts/51_long_term_validation.py`: builds offline rolling 7/30/90-day
+  validation reports from local paper/demo research JSONL artifacts.
 - `scripts/07_research_report.py`: writes a local/offline Markdown attribution
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
 - `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
@@ -310,6 +316,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
   for accepted/rejected/fill/cancel/error/timeout/backfill events, duplicate
   idempotency, mismatches, submit blocking, append-only output, and CLI
   behavior.
+- `tests/test_long_term_validation.py`: Stage 51 rolling validation coverage
+  for 7/30/90-day summaries, deterministic JSONL/JSON/Markdown output,
+  unmet private-live prerequisites, invalid input rejection, and Decimal
+  precision.
 - `tests/test_snapshots_jsonl.py`: JSONL roundtrip, Decimal precision,
   malformed JSONL, append behavior, and snapshot raw-payload safety coverage.
 - `tests/test_replay_snapshots.py`: replay ordering, replay metrics, and

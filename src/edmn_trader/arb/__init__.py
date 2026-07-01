@@ -24,6 +24,15 @@ from edmn_trader.arb.fill_simulation import (
     write_fill_simulation_jsonl,
     write_fill_simulation_markdown,
 )
+from edmn_trader.arb.long_term_validation import (
+    RollingValidationReport,
+    RollingValidationWindow,
+    build_rolling_validation_report,
+    render_rolling_validation_markdown,
+    write_rolling_validation_json,
+    write_rolling_validation_jsonl,
+    write_rolling_validation_markdown,
+)
 from edmn_trader.arb.monitoring import (
     DailyValidationReport,
     build_daily_validation_report,
@@ -86,15 +95,19 @@ __all__ = [
     "PaperLedgerPosition",
     "PaperLedgerSourceHash",
     "PaperLedgerState",
+    "RollingValidationReport",
+    "RollingValidationWindow",
     "compute_canonical_yes_side_cross_candidate",
     "compute_kalshi_complement_candidate",
     "create_pending_approval",
     "build_daily_validation_report",
+    "build_rolling_validation_report",
     "evaluate_complement_risk",
     "propose_paper_order",
     "risk_input_from_record",
     "replay_paper_ledger",
     "render_markdown_summary",
+    "render_rolling_validation_markdown",
     "scan_fixture_file",
     "scan_snapshot_jsonl_file",
     "simulate_taker_fill",
@@ -114,4 +127,7 @@ __all__ = [
     "write_paper_ledger_jsonl",
     "write_paper_ledger_markdown",
     "write_pending_approval_file",
+    "write_rolling_validation_json",
+    "write_rolling_validation_jsonl",
+    "write_rolling_validation_markdown",
 ]
