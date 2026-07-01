@@ -1162,6 +1162,19 @@ evidence collection outside this repository. This stage does not connect to
 venues, place orders, store credentials, optimize strategy, offer trading
 advice, claim production readiness, or make profitability claims.
 
+## Public repository presentation refresh
+
+After Stage 52, the README was rewritten as a public landing page for technical
+reviewers and future maintainers. It now presents the same-market YES/NO
+complement-parity workflow from fixture/read-only market data through
+normalization, scanning, simulation, paper ledger, risk, manual approval, Demo
+dry-run/reconciliation, rolling validation, and the disabled private-live gate.
+
+The public positioning remains intentionally conservative: production/live
+trading is disabled, private-live prerequisites are still unmet, and the repo
+does not claim positive expectancy, production readiness, investment advice, or
+profitability.
+
 ## Interview narrative
 
 A concise way to explain the current project:

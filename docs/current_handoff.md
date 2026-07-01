@@ -246,6 +246,11 @@ live user-order channels, Polymarket execution, LLM trading agents, strategy
 optimization, investment advice, executable advice, production-readiness
 claims, or profitability claims.
 
+After Stage 52, the public README was refreshed as the main repository landing
+page. It now summarizes the current workflow, architecture layers, local
+commands, validation status, safety boundary, disabled private-live gate, and
+unmet private-live prerequisites without changing code behavior.
+
 `docs/STAGE_PLAN.md` now contains the full Stage 3 specification: snapshot
 schema requirements, Decimal-safe JSONL recorder requirements, deterministic
 replay behavior, fixture recording and replay scripts, offline tests,
@@ -1089,9 +1094,9 @@ checkpoint. Complement-parity work must stay deterministic and offline until
 later reviewed stages add fee models, scanners, recorders, simulators, paper
 ledgers, risk/manual approval, or demo connector boundaries.
 
-Next checkpoint: Stage 51 long-term paper/demo validation framework only.
-
-Exact next prompt: `Use Codex Long Session Governance. Continue the EDMN narrow complement-arbitrage roadmap from latest verified origin/main. Implement Stage 51 as one coherent PR: long-term paper/demo validation framework only. Summarize 30+ days of paper trading and 30-90 days of read-only/live-recorded data windows from local recorded outputs, with explicit coverage, gaps, reconciliation health, and limitations. Do not add private live gates, production endpoints, real-money execution, wallets, Polymarket execution, live order execution during Codex validation, strategy optimization, investment advice, executable advice, production-readiness claims, or profitability claims. Auto-merge only if the full delivery-unit gate passes; otherwise stop and report the failed gate.`
+Roadmap note: Stage 35-52 is now complete. The active next action is human
+review of the disabled private-live gate design and private evidence
+collection outside the public repo.
 
 ## Important files
 

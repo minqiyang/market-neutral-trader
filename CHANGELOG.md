@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Upgraded the public README into a Stage 52 landing page with system workflow,
+  architecture layers, local commands, validation status, safety boundaries,
+  and private-live gate prerequisites.
 - Added Stage 52 private live gate design and disabled public guard. The public
   placeholder always returns disabled status, exposes no endpoint, credential,
   wallet, broker, live user-order channel, or order payload, and keeps all
