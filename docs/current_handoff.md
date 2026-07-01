@@ -46,11 +46,12 @@ failed-leg simulation, plus Stage 44 paper complement proposal engine, plus
 Stage 45 paper ledger state machine, plus Stage 46 risk engine v2, plus Stage
 47 manual approval workflow, plus Stage 48 monitoring and daily validation
 report, plus Stage 49 guarded Kalshi Demo connector previews and mocked
-submit-path coverage, plus Stage 50 local Kalshi Demo reconciliation replay.
+submit-path coverage, plus Stage 50 local Kalshi Demo reconciliation replay,
+plus Stage 51 offline rolling paper/demo validation framework.
 
 ## Last completed stage
 
-Stage 50 demo reconciliation.
+Stage 51 long-term paper/demo validation framework.
 
 ## Stage plan status
 
@@ -66,10 +67,12 @@ slippage, and failed-leg simulator, and Stage 44 paper complement arbitrage
 engine, Stage 45 paper ledger state machine, Stage 46 risk engine v2, and
 Stage 47 manual approval workflow, Stage 48 monitoring and daily validation
 report, Stage 49 Kalshi Demo authenticated connector, and Stage 50 demo
-reconciliation. The ledger records purpose, known commit hashes, files/modules
+reconciliation, and Stage 51 long-term paper/demo validation framework. The
+ledger records purpose, known commit hashes, files/modules
 added, validation commands, status, next-stage boundary, and safety status for
-each completed stage. Stage 50 is complete, and Stage 51 is the next
-human-review checkpoint for long-term paper/demo validation framework only.
+each completed stage. Stage 51 is complete as a framework implementation, not
+completed validation. Stage 52 is the next human-review checkpoint for private
+live gate design only.
 
 Report-input metadata expansion from Stages 11 through 34 is now
 maintenance-only. The previously clarified local delivery-notes report input is
@@ -205,6 +208,25 @@ Demo preview/submit attempts. Stage 50 uses local/mock records only and does
 not add venue connections, production endpoints, real Demo order execution
 during Codex validation, credentials, wallets, Polymarket execution, live
 user-order channels, broker integration, LLM trading agents, strategy
+optimization, investment advice, executable advice, production-readiness
+claims, or profitability claims.
+
+Stage 51 adds `src/edmn_trader/arb/long_term_validation.py` and
+`scripts/51_long_term_validation.py` for offline rolling paper/demo validation
+summaries. It reads local JSONL research artifacts from scanner/candidate,
+simulation, paper proposal, paper ledger, risk, manual approval, Demo connector
+audit, Demo reconciliation, and daily validation stages, then emits
+deterministic JSONL, JSON, and Markdown reports for 7/30/90-day windows. It
+tracks candidate, paper-candidate, Demo order, fill-rate, failed-leg, edge,
+paper/demo PnL, drawdown, mismatch, data-gap, kill-switch, and
+false-positive-style rejection metrics where local records provide them. It
+marks validation as not completed and lists unmet private-live prerequisites:
+missing real 30-90 day live-readonly data, missing 30+ day paper trading
+history, unresolved mismatch status when present, unvalidated fee/slippage
+assumptions, and missing legal/platform review. Stage 51 uses local/mock inputs
+only and does not add venue connections, production endpoints, real Demo order
+execution during Codex validation, credentials, wallets, Polymarket execution,
+live user-order channels, broker integration, LLM trading agents, strategy
 optimization, investment advice, executable advice, production-readiness
 claims, or profitability claims.
 
@@ -1391,30 +1413,27 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended stage
 
-Stage 51 long-term paper/demo validation framework only.
+Stage 52 private live gate design only.
 Start only after reconfirming clean synced `main`, CI, branch protection,
 required `Validate` status, local validation, and whether the PR path applies.
-Do not implement beyond Stage 51. Add a long-term paper/demo validation
-framework only, using local recorded outputs and read-only data windows. Do
-not add private live gates, production endpoints, real-money execution,
-wallets, Polymarket execution, live order execution during Codex validation,
-strategy optimization, investment advice, executable advice,
+Do not implement beyond Stage 52. Add design-only documentation for the private
+live gate boundary if authorized. Do not add production endpoints, real-money
+execution, wallets, Polymarket execution, live order execution during Codex
+validation, strategy optimization, investment advice, executable advice,
 production-readiness claims, or profitability claims.
 
 ## Exact next prompt suggestion
 
 Use Codex Long Session Governance. Continue the EDMN narrow
 complement-arbitrage roadmap from latest verified `origin/main`. Implement
-Stage 51 as one coherent PR: long-term paper/demo validation framework only.
-Summarize 30+ days of paper trading and 30-90 days of read-only/live-recorded
-data windows from local recorded outputs, with explicit coverage, gaps,
-reconciliation health, and limitations. Do not add private live gates,
-production endpoints, real-money execution, wallets, Polymarket execution,
-live order execution during Codex validation, strategy optimization,
-investment advice, executable advice, production-readiness claims, or
-profitability claims. Auto-merge only if the full delivery-unit gate passes;
-otherwise stop and report the failed gate.
+Stage 52 as one coherent PR: private live gate design only. Document the
+disabled private-live gate boundary, prerequisites, review gates, and stop
+conditions without adding production endpoints, real-money execution, wallets,
+Polymarket execution, live order execution during Codex validation, strategy
+optimization, investment advice, executable advice, production-readiness
+claims, or profitability claims. Auto-merge only if the full delivery-unit
+gate passes; otherwise stop and report the failed gate.
 
 ## Last updated timestamp
 
-2026-06-29 18:45:00 -07:00
+2026-07-01 00:00:00 -07:00

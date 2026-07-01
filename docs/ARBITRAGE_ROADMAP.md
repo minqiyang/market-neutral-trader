@@ -100,8 +100,10 @@ report-input kinds unless a later maintenance task explicitly requires it.
   and full audit logging.
 - Stage 50: demo reconciliation. Reconcile accepted, rejected, fill, cancel,
   and backfill events; mismatch hard-stops new submissions.
-- Stage 51: long-term paper/demo validation. Use 30+ days of paper trading and
-  30-90 days of live read-only data before any private live gate discussion.
+- Stage 51: long-term paper/demo validation framework. Produce deterministic
+  local 7/30/90-day rolling reports and keep validation marked incomplete
+  until 30+ days of paper trading, 30-90 days of live read-only data, fee/
+  slippage review, reconciliation health, and legal/platform review exist.
 - Stage 52: private live gate design only. Public repo may document a disabled
   live gate, but must not add production order code.
 

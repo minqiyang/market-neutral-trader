@@ -1127,6 +1127,26 @@ place orders, store credentials, optimize strategy, offer trading advice, or
 make profitability claims. The compact governance audit for Stages 48-50 was
 folded into this delivery branch and found no stop gate.
 
+## Stage 51 long-term paper/demo validation framework
+
+Stage 51 adds an offline rolling validation framework over existing local
+paper/demo research artifacts. It consumes JSONL records from scanner,
+simulation, paper proposal, paper ledger, risk decision, manual approval, Demo
+connector audit, Demo reconciliation, and daily validation stages, then emits
+deterministic JSONL, JSON, and Markdown summaries for 7/30/90-day windows.
+
+The report tracks candidate counts, paper-candidate counts, Demo order counts,
+fill rates, partial fill rates, failed-leg incidents, gross edge, net edge
+after cost, paper/demo PnL, max drawdown, reconciliation mismatches, data gaps,
+kill-switch events, and false-positive-style rejection outcomes where records
+provide those fields. It deliberately marks validation as not completed and
+lists unmet private-live prerequisites, including missing real 30-90 day
+live-readonly data, missing 30+ day paper trading history, unresolved mismatch
+status when present, unvalidated fee/slippage assumptions, and missing
+legal/platform review. It does not connect to venues, place orders, store
+credentials, optimize strategy, offer trading advice, claim production
+readiness, or make profitability claims.
+
 ## Interview narrative
 
 A concise way to explain the current project:

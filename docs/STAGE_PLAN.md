@@ -1245,6 +1245,32 @@ addition of small report-input metadata kinds.
   optimization, no investment advice, no executable advice, and no
   profitability claims.
 
+### Stage 51: Long-term paper/demo validation framework
+
+- Status: complete.
+- Commit: pending on the Stage 51 validation framework branch.
+- Purpose: aggregate existing local paper/demo research artifacts into rolling
+  validation reports while clearly separating framework implementation from
+  completed long-term validation.
+- Files/modules changed: `src/edmn_trader/arb/long_term_validation.py`,
+  `src/edmn_trader/scripts/long_term_validation.py`,
+  `scripts/51_long_term_validation.py`, arbitrage exports,
+  `tests/test_long_term_validation.py`, and documentation updates.
+- Validation commands: `python -m pip install -e ".[dev]"`, `pytest`,
+  `ruff check .`, `python scripts/51_long_term_validation.py --help`, local
+  rolling-validation smoke on generated JSONL fixtures,
+  `python scripts/01_replay_orderbook_fixture.py`, and `git diff --check`.
+- Next-stage boundary: stop for human review before Stage 52. Stage 52 may add
+  private live gate design only; it must not add production endpoints or
+  production/live order code.
+- Safety status: local/mock paper/demo validation framework only, validation
+  marked not completed, private-live prerequisites explicitly unmet, no venue
+  connections, no production endpoints, no real Demo order execution during
+  Codex validation, no credentials, no wallets, no Polymarket execution, no
+  live user-order channel, no broker integration, no LLM trading agent, no
+  strategy optimization, no investment advice, no executable advice, no
+  production-readiness claims, and no profitability claims.
+
 ## Stage 0: Repository foundation
 
 Purpose: establish the package, public positioning, tooling, and safety
