@@ -42,6 +42,12 @@ context, then read only the files needed for the requested stage. Use `rg` and
   roadmap, six-layer architecture, and report-input maintenance boundary.
 - `docs/visual_overview.md`: GitHub-rendered Mermaid diagrams for the Stage 52
   workflow, six-layer architecture, safety gate, and public/private boundary.
+- `docs/portfolio_summary.md`: concise reviewer-facing project summary,
+  architecture, safety boundary, validation status, and takeaway.
+- `docs/release_notes_stage_52.md`: draft GitHub Release title/body and
+  Stage 52 public release scope.
+- `docs/resume_bullets_stage_52.md`: resume-ready bullets for the completed
+  Stage 52 public research platform.
 - `docs/stage8_polymarket_readiness.md`: Stage 8 compliance/readiness note.
   Read before any Polymarket US adapter work.
 - `docs/stage9_equities_readiness.md`: Stage 9 SEC EDGAR equities readiness

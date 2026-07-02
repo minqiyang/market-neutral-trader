@@ -258,6 +258,15 @@ no SVG assets, generated images, hosted assets, source behavior changes,
 credentials, production endpoints, live execution paths, strategy
 optimization, production-readiness claims, or profitability claims.
 
+The release and portfolio packaging pass adds `docs/release_notes_stage_52.md`,
+`docs/portfolio_summary.md`, and `docs/resume_bullets_stage_52.md`. These docs
+provide GitHub Release title/body copy, reviewer-facing portfolio framing, and
+resume-ready bullets for the completed Stage 52 public state. They add no
+source behavior changes, credentials, endpoints, wallets, live execution paths,
+strategy optimization, investment advice, executable advice,
+production-readiness claims, positive-expectancy claims, or profitability
+claims.
+
 `docs/STAGE_PLAN.md` now contains the full Stage 3 specification: snapshot
 schema requirements, Decimal-safe JSONL recorder requirements, deterministic
 replay behavior, fixture recording and replay scripts, offline tests,
@@ -1457,4 +1466,4 @@ compliance review before requesting any separately reviewed private work.
 
 ## Last updated timestamp
 
-2026-07-01 16:34:42 -07:00
+2026-07-01 21:57:04 -07:00
