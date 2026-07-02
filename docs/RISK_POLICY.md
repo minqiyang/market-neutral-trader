@@ -9,7 +9,7 @@ execution-safety work. It does not authorize live trading.
 
 - No production trading by default.
 - No credentials, tokens, private keys, API keys, or wallet keys in the repo.
-- No order placement in the current stage.
+- No production or private-live order placement in the public repository.
 - No manipulative trading behavior, including spoofing, wash trading,
   self-trading, quote stuffing, or misleading liquidity.
 - No attempts to bypass platform rules, KYC, regional restrictions, rate
@@ -27,6 +27,10 @@ The core execution modes are:
 There is no enabled live mode. Future execution code must reject or avoid any
 path that would place a live order unless a later, separately reviewed stage
 explicitly changes the policy and adds full risk checks, logging, and tests.
+Stage 49's guarded Kalshi Demo connector is allowed only as demo/paper research
+infrastructure: dry-run by default, explicit opt-in for its guarded mocked
+submit path, Demo-only base URL, no production endpoint, and no real-money
+execution.
 The Stage 52 private live gate design is documented in
 `docs/private_live_execution_gate.md`; the public repository gate remains
 disabled and does not add production order code.

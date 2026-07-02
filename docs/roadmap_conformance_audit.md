@@ -19,9 +19,11 @@ profitability, investment-advice, or production-readiness claims.
 | High-severity findings | 0 | 0 | 0 | 0 | 0 | 0 |
 
 Final judgment: roadmap/code conformance is partially aligned because the source,
-tests, scripts, and safety boundary match the Stage 35-52 intent, but
+tests, scripts, and safety boundary match the Stage 35-52 intent, while
 `docs/STAGE_PLAN.md` still has stale "pending on branch" commit metadata for
-Stages 35-39, 48, and 50-52.
+Stages 35-39, 48, and 50-52. A follow-up resolved the old `docs/RISK_POLICY.md`
+"No order placement in the current stage" wording because it was ambiguous
+after Stage 49's guarded Kalshi Demo connector.
 
 ## Status Key
 
@@ -74,12 +76,18 @@ Stages 35-39, 48, and 50-52.
 | --- | --- | --- | --- | --- |
 | Implemented behavior not described in docs | No high-severity drift found. Stage 35-52 behavior is mapped in `docs/repo_map.md`, `docs/current_handoff.md`, `docs/engineering_log.md`, and `CHANGELOG.md`. | Source/test/script evidence above. | None | No runtime change. |
 | Documented claims not backed by code/tests | No high-severity drift found. Each completed implementation stage has matching source and test evidence. | Stage and layer audit tables above. | None | No runtime change. |
-| Stale README or roadmap text | README, risk docs, roadmap, and private gate docs match the disabled-live boundary. `docs/STAGE_PLAN.md` has stale "pending on branch" commit metadata for Stages 35-39, 48, and 50-52. | `README.md`, `docs/ARBITRAGE_ROADMAP.md`, `docs/RISK_POLICY.md`, `docs/private_live_execution_gate.md`, `docs/STAGE_PLAN.md`. | Low | Follow up with a docs-only metadata refresh. |
-| Public/private boundary ambiguity | No high-severity ambiguity found. Public repo text consistently says private-live prerequisites remain unmet and live execution is disabled. | `README.md`, `docs/private_live_execution_gate.md`, `docs/RISK_POLICY.md`, `docs/current_handoff.md`. | None | No runtime change. |
+| Stale README, roadmap, or risk text | README, roadmap, risk docs, and private gate docs now match the disabled-live boundary. `docs/STAGE_PLAN.md` still has stale "pending on branch" commit metadata for Stages 35-39, 48, and 50-52. | `README.md`, `docs/ARBITRAGE_ROADMAP.md`, `docs/RISK_POLICY.md`, `docs/private_live_execution_gate.md`, `docs/STAGE_PLAN.md`. | Low | Follow up with a docs-only metadata refresh. |
+| Public/private boundary ambiguity | No high-severity ambiguity found. A follow-up clarified that production/private-live order placement remains prohibited, while the Stage 49 Kalshi Demo connector is demo/paper research infrastructure, dry-run by default, explicit opt-in, Demo-only, and not real-money execution. | `README.md`, `docs/private_live_execution_gate.md`, `docs/RISK_POLICY.md`, `docs/current_handoff.md`. | Resolved low | No runtime change. |
 | Production/live trading leakage | No high-severity leakage found. Public gate is disabled and live flags remain false. | `src/edmn_trader/execution/private_live_gate.py`, `tests/test_private_live_gate.py`, `docs/private_live_execution_gate.md`. | None | No runtime change. |
 | Credential, wallet, broker, production endpoint, or order-placement leakage | No high-severity leakage found in the audited Stage 35-52 surfaces. The Demo connector remains guarded and tested with mocked/local paths. | `src/edmn_trader/adapters/kalshi/demo_connector.py`, `tests/test_kalshi_demo_connector.py`, `docs/RISK_POLICY.md`. | None | No runtime change. |
 | Profitability, investment-advice, or production-readiness overclaim | No high-severity overclaim found. Public docs repeat that this is not a guaranteed-profit system, investment-advice product, or production trading system. | `README.md`, `docs/ARBITRAGE_ROADMAP.md`, `docs/RISK_POLICY.md`, `docs/private_live_execution_gate.md`. | None | No runtime change. |
 | Naming that implies executable trading where the system is paper/demo/dry-run | Non-blocking wording risk remains around "Kalshi Demo authenticated connector" in historical stage labels. Current README already says "Kalshi Demo dry-run connector." | `docs/ARBITRAGE_ROADMAP.md`, `docs/STAGE_PLAN.md`, `README.md`. | Low | Prefer "Kalshi Demo dry-run connector" in future public-facing summaries. |
+
+Resolved stale/ambiguous boundary note: the old `docs/RISK_POLICY.md` sentence
+"No order placement in the current stage" could be read as conflicting with
+Stage 49's guarded Kalshi Demo connector. The policy now distinguishes
+prohibited production/private-live order placement from the allowed Stage 49
+demo/paper research connector path.
 
 ## Recommended Follow-Up PRs
 
