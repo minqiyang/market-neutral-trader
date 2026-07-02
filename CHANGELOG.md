@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added Stage 52 release and portfolio packaging docs with GitHub Release copy,
+  reviewer-facing project summary, and resume-ready bullets while preserving
+  the disabled-live public boundary.
 - Added GitHub-rendered Mermaid diagrams to the README and
   `docs/visual_overview.md` for the Stage 52 workflow, six-layer architecture,
   safety gate, and public/private boundary.

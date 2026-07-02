@@ -192,6 +192,12 @@ Private-live prerequisites still unmet:
   complement-parity roadmap.
 - [docs/visual_overview.md](docs/visual_overview.md): Mermaid diagrams for the
   workflow, architecture, safety gate, and public/private boundary.
+- [docs/portfolio_summary.md](docs/portfolio_summary.md): concise portfolio
+  framing for reviewers.
+- [docs/release_notes_stage_52.md](docs/release_notes_stage_52.md): draft
+  GitHub Release title, description, scope, and validation copy.
+- [docs/resume_bullets_stage_52.md](docs/resume_bullets_stage_52.md):
+  resume-ready bullets for the completed public Stage 52 state.
 - [docs/STAGE_PLAN.md](docs/STAGE_PLAN.md): completed stage ledger and
   validation commands.
 - [docs/current_handoff.md](docs/current_handoff.md): latest continuation state.

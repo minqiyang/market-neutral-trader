@@ -1180,6 +1180,10 @@ diagrams for the workflow, architecture layers, safety gate, and public/private
 split. No SVGs, generated images, hosted assets, behavior changes, or diagram
 service dependencies were added.
 
+The release and portfolio packaging pass adds reviewer-facing release notes,
+portfolio framing, and resume bullets for the Stage 52 public repo state. It
+does not change source behavior or relax the disabled-live boundary.
+
 ## Interview narrative
 
 A concise way to explain the current project:
