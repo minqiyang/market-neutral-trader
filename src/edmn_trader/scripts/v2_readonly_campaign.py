@@ -22,7 +22,8 @@ from edmn_trader.data.jsonl import read_jsonl_records, write_jsonl_records
 from edmn_trader.scripts.daily_validation_report import run as run_daily_validation_report
 from edmn_trader.scripts.rebuild_orderbooks import run as run_rebuild_orderbooks
 
-MAX_SMOKE_SECONDS = 600
+MAX_SMOKE_SECONDS = 1_800
+EXTENDED_WS_SMOKE_SECONDS = 900
 SEVEN_DAY_SECONDS = 604_800
 SCHEMA_VERSION = "v2.readonly_campaign.v1"
 SOURCE_TYPES = {"SYNTHETIC", "REST", "WEBSOCKET_SNAPSHOT", "WEBSOCKET_DELTA"}
@@ -758,6 +759,8 @@ def _classify_campaign(
         if delta_count > 0:
             return "LAYER1_WS_DELTA_SMOKE_PASS"
         if snapshot_count > 0 and summary.get("subscription_acknowledged") is True:
+            if _as_int(summary.get("duration_seconds")) >= EXTENDED_WS_SMOKE_SECONDS:
+                return "LAYER1_WS_SNAPSHOT_ONLY_EXTENDED"
             return "LAYER1_WS_SNAPSHOT_SMOKE_PASS"
         return "LAYER1_WS_CAMPAIGN_INCOMPLETE"
     return "LAYER1_WS_CAMPAIGN_INCOMPLETE"

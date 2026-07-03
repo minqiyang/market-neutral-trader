@@ -44,7 +44,7 @@ class KalshiWsAuthConfig:
 def load_kalshi_ws_auth_config_from_env(
     environ: Mapping[str, str] | None = None,
 ) -> KalshiWsAuthConfig:
-    env = environ or os.environ
+    env = os.environ if environ is None else environ
     key_id = env.get(KALSHI_DEMO_API_KEY_ID_ENV)
     key_path = env.get(KALSHI_DEMO_PRIVATE_KEY_PATH_ENV)
     if not key_id or not key_path:

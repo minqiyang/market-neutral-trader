@@ -108,18 +108,24 @@ def test_campaign_validator_fails_secret_like_fields(tmp_path: Path) -> None:
 
 
 def test_campaign_duration_is_bounded(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="between 1 and 600"):
+    with pytest.raises(ValueError, match="between 1 and 1800"):
         plan_campaign(
             root=tmp_path,
             campaign_id="c1",
             venue="kalshi_demo",
             market="DEMO-MARKET",
-            duration_seconds=601,
+            duration_seconds=1801,
             interval_seconds=10,
         )
 
 
-def test_kalshi_ws_smoke_truthfully_blocks_without_reviewed_ws_adapter(tmp_path: Path) -> None:
+def test_kalshi_ws_smoke_truthfully_blocks_without_credentials(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KALSHI_DEMO_API_KEY_ID", raising=False)
+    monkeypatch.delenv("KALSHI_DEMO_PRIVATE_KEY_PATH", raising=False)
+
     result = run_kalshi_ws_smoke(
         output_dir=tmp_path,
         campaign_id="round6_kalshi_ws_smoke",
@@ -195,6 +201,55 @@ def test_validator_classifies_websocket_smoke_only_when_ws_events_exist(
 
     assert result["status"] == "pass"
     assert result["evidence_classification"] == "LAYER1_WS_DELTA_SMOKE_PASS"
+
+
+def test_validator_classifies_extended_snapshot_without_delta(tmp_path: Path) -> None:
+    plan_campaign(
+        root=tmp_path,
+        campaign_id="ws1",
+        venue="kalshi_demo",
+        market="DEMO-MARKET",
+        duration_seconds=1800,
+        interval_seconds=10,
+        source_type="WEBSOCKET_SNAPSHOT",
+        now=datetime(2026, 7, 3, 18, 0, tzinfo=UTC),
+    )
+    summary = json.loads((tmp_path / "campaign_summary.json").read_text(encoding="utf-8"))
+    summary.update(
+        {
+            "status": "websocket_smoke_complete",
+            "event_count": 1,
+            "snapshot_count": 1,
+            "connection_established": True,
+            "subscription_acknowledged": True,
+        }
+    )
+    (tmp_path / "campaign_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    (tmp_path / "campaign_heartbeat.jsonl").write_text(
+        json.dumps(
+            {
+                "record_type": "campaign_heartbeat",
+                "campaign_id": "ws1",
+                "venue": "kalshi_demo",
+                "market": "DEMO-MARKET",
+                "sequence": 1,
+                "observed_at": "2026-07-03T18:00:00+00:00",
+                "received_at": "2026-07-03T18:00:00+00:00",
+                "source_type": "WEBSOCKET_SNAPSHOT",
+                "live_gate_status": "disabled",
+                "submit_attempt": False,
+                "production_endpoint_used": False,
+                "status": "ok",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = validate_campaign(input_dir=tmp_path)
+
+    assert result["status"] == "pass"
+    assert result["evidence_classification"] == "LAYER1_WS_SNAPSHOT_ONLY_EXTENDED"
 
 
 def test_monitor_shows_campaign_view(tmp_path: Path) -> None:

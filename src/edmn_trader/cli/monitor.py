@@ -616,6 +616,8 @@ def _campaign_monitor_status(
             return "WEBSOCKET_CAMPAIGN_RUNNING"
         if classification == "LAYER1_WS_DELTA_SMOKE_PASS":
             return "WEBSOCKET_DELTA_SMOKE"
+        if classification == "LAYER1_WS_SNAPSHOT_ONLY_EXTENDED":
+            return "WEBSOCKET_SNAPSHOT_EXTENDED"
         if classification == "LAYER1_WS_SNAPSHOT_SMOKE_PASS":
             return "WEBSOCKET_SNAPSHOT_SMOKE"
         return "NO_DATA"
