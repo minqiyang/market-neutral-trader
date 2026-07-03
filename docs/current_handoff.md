@@ -254,12 +254,14 @@ page. It now summarizes the current workflow, architecture layers, local
 commands, validation status, safety boundary, disabled private-live gate, and
 unmet private-live prerequisites without changing code behavior.
 
-The public visual documentation pass adds GitHub-rendered Mermaid diagrams to
-`README.md` and `docs/visual_overview.md` for the Stage 52 system workflow,
-six-layer architecture, safety gate flow, and public/private boundary. It adds
-no SVG assets, generated images, hosted assets, source behavior changes,
-credentials, production endpoints, live execution paths, strategy
-optimization, production-readiness claims, or profitability claims.
+The post-PR #109 visual documentation refresh keeps GitHub-rendered Mermaid
+diagrams in `README.md` and `docs/visual_overview.md` aligned with the current
+public boundary: scanner/simulation, paper proposal, paper ledger, risk
+decision, manual approval, Kalshi Demo dry-run/guarded Demo submit boundary,
+Demo reconciliation, rolling validation, and the disabled private-live gate. It
+adds no SVG assets, generated images, hosted assets, source behavior changes,
+credentials, production endpoints, live execution paths, strategy optimization,
+production-readiness claims, or profitability claims.
 
 The release and portfolio packaging pass adds `docs/release_notes_stage_52.md`,
 `docs/portfolio_summary.md`, and `docs/resume_bullets_stage_52.md`. These docs
@@ -269,6 +271,13 @@ source behavior changes, credentials, endpoints, wallets, live execution paths,
 strategy optimization, investment advice, executable advice,
 production-readiness claims, positive-expectancy claims, or profitability
 claims.
+
+The roadmap and end-to-end conformance audits are complete in
+`docs/roadmap_conformance_audit.md` and
+`docs/end_to_end_conformance_audit.md`. PR #109 tightened the Stage 49/50 Demo
+boundary so dry-run preview remains available without credentials or
+reconciliation state, while Demo submit opt-in requires a provided clean Demo
+reconciliation state and remains covered by mocked HTTP tests.
 
 `docs/STAGE_PLAN.md` now contains the full Stage 3 specification: snapshot
 schema requirements, Decimal-safe JSONL recorder requirements, deterministic
@@ -1470,4 +1479,4 @@ compliance review before requesting any separately reviewed private work.
 
 ## Last updated timestamp
 
-2026-07-01 21:57:04 -07:00
+2026-07-02 17:24:15 -07:00

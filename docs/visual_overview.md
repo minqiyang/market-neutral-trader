@@ -1,8 +1,8 @@
 # Visual Overview
 
-This page collects the public diagrams for the Stage 52 repository state. The
-diagrams describe research, replay, paper, demo dry-run, and disabled-live
-boundaries only.
+This page collects the public diagrams for the post-PR #109 repository state.
+The diagrams describe research, replay, paper, demo dry-run, guarded Demo
+boundaries, and disabled-live boundaries only.
 
 ## System Workflow
 
@@ -15,7 +15,7 @@ flowchart LR
   E --> F["Paper ledger"]
   F --> G["Risk decision"]
   G --> H["Manual approval"]
-  H --> I["Kalshi Demo dry-run connector"]
+  H --> I["Kalshi Demo dry-run / guarded Demo submit boundary"]
   I --> J["Demo reconciliation"]
   J --> K["Rolling validation"]
   K --> L["Disabled private-live gate"]
@@ -28,7 +28,7 @@ flowchart TB
   L1["Layer 1: recorder"] --> L2["Layer 2: replay / simulator"]
   L2 --> L3["Layer 3: paper ledger / reconciliation"]
   L3 --> L4["Layer 4: risk / manual approval / monitoring"]
-  L4 --> L5["Layer 5: Kalshi Demo dry-run / reconciliation"]
+  L4 --> L5["Layer 5: Kalshi Demo dry-run / guarded boundary / reconciliation"]
   L5 --> L6["Layer 6: disabled private-live gate"]
 ```
 
@@ -42,8 +42,9 @@ flowchart LR
   D --> E["Reconciliation health"]
   E --> F["Kill switch"]
   F --> G["Manual approval"]
-  G --> H["Demo dry-run preview only"]
-  H --> I["Private live remains disabled"]
+  G --> H["Demo dry-run / guarded Demo boundary"]
+  H --> I["Demo reconciliation health"]
+  I --> J["Private live remains disabled"]
 ```
 
 ## Public / Private Boundary
@@ -54,7 +55,7 @@ flowchart TB
     P1["Research"]
     P2["Replay"]
     P3["Paper workflow"]
-    P4["Demo dry-run"]
+    P4["Demo dry-run / guarded Demo boundary"]
     P5["Disabled live gate"]
   end
 

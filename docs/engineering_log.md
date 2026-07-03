@@ -1184,6 +1184,32 @@ The release and portfolio packaging pass adds reviewer-facing release notes,
 portfolio framing, and resume bullets for the Stage 52 public repo state. It
 does not change source behavior or relax the disabled-live boundary.
 
+## Conformance audits and Demo boundary fix
+
+The roadmap conformance audit and end-to-end conformance audit verify the
+Stage 35-52 implementation against the public roadmap, README, risk policy,
+private-live gate, handoff, repo map, changelog, engineering log, scripts,
+tests, and source layout. The audits found no high-severity drift from the
+disabled-live research boundary.
+
+The PR #109 follow-up tightened the Stage 49/50 Demo boundary: dry-run previews
+remain available without credentials or reconciliation state, while Demo submit
+opt-in requires a provided clean Demo reconciliation state and remains covered
+by mocked HTTP tests.
+
+## Post-PR #109 visual documentation refresh
+
+This docs-only pass updates the README and visual overview Mermaid diagrams to
+show the current Kalshi Demo dry-run/guarded Demo submit boundary, Demo
+reconciliation, rolling validation, and disabled private-live gate. The README
+now includes a compact public/private boundary diagram in addition to the
+workflow, architecture, and safety diagrams.
+
+The refresh adds no SVGs, hosted assets, generated images, source behavior
+changes, production endpoints, credentials, wallets, broker integration, live
+order placement, strategy optimization, investment advice, production-readiness
+claims, or profitability claims.
+
 ## Interview narrative
 
 A concise way to explain the current project:

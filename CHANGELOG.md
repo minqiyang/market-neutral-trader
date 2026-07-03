@@ -6,6 +6,9 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Refreshed README and `docs/visual_overview.md` Mermaid diagrams for the
+  post-PR #109 Demo dry-run/guarded submit boundary and public/private
+  separation while preserving the disabled-live public boundary.
 - Tightened the Stage 49/50 Demo boundary: dry-run previews remain available
   without credentials or reconciliation state, while Demo submit opt-in now
   requires a provided clean Demo reconciliation state and remains covered by

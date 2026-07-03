@@ -22,7 +22,7 @@ flowchart LR
   E --> F["Paper ledger"]
   F --> G["Risk decision"]
   G --> H["Manual approval"]
-  H --> I["Kalshi Demo dry-run connector"]
+  H --> I["Kalshi Demo dry-run / guarded Demo submit boundary"]
   I --> J["Demo reconciliation"]
   J --> K["Rolling validation"]
   K --> L["Disabled private-live gate"]
@@ -48,7 +48,7 @@ flowchart TB
   L1["Layer 1: recorder"] --> L2["Layer 2: replay / simulator"]
   L2 --> L3["Layer 3: paper ledger / reconciliation"]
   L3 --> L4["Layer 4: risk / manual approval / monitoring"]
-  L4 --> L5["Layer 5: Kalshi Demo dry-run / reconciliation"]
+  L4 --> L5["Layer 5: Kalshi Demo dry-run / guarded boundary / reconciliation"]
   L5 --> L6["Layer 6: disabled private-live gate"]
 ```
 
@@ -150,8 +150,9 @@ flowchart LR
   D --> E["Reconciliation health"]
   E --> F["Kill switch"]
   F --> G["Manual approval"]
-  G --> H["Demo dry-run preview only"]
-  H --> I["Private live remains disabled"]
+  G --> H["Demo dry-run / guarded Demo boundary"]
+  H --> I["Demo reconciliation health"]
+  I --> J["Private live remains disabled"]
 ```
 
 - Public live execution is disabled.
@@ -169,6 +170,34 @@ See [docs/RISK_POLICY.md](docs/RISK_POLICY.md) and
 [docs/private_live_execution_gate.md](docs/private_live_execution_gate.md).
 For the compact diagram set, see
 [docs/visual_overview.md](docs/visual_overview.md).
+
+## Public / Private Boundary
+
+```mermaid
+flowchart TB
+  subgraph Public["Public repo"]
+    P1["Research / replay"]
+    P2["Paper workflow"]
+    P3["Demo dry-run / guarded Demo boundary"]
+    P4["Disabled live gate"]
+  end
+
+  subgraph Evidence["Private evidence"]
+    E1["30-90 days read-only data"]
+    E2["30+ days paper history"]
+    E3["Validated fees / slippage"]
+    E4["Zero unresolved mismatches"]
+    E5["Compliance review"]
+  end
+
+  subgraph Excluded["Not in public repo"]
+    X1["Production credentials"]
+    X2["Production endpoints"]
+    X3["Wallets / brokers"]
+    X4["Real-money execution"]
+    X5["Auto-trading loop"]
+  end
+```
 
 ## Validation Status
 

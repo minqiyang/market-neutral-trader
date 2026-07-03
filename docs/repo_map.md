@@ -40,8 +40,13 @@ context, then read only the files needed for the requested stage. Use `rg` and
   adapters. Read when planning or validating stage boundaries.
 - `docs/ARBITRAGE_ROADMAP.md`: active same-market YES/NO complement parity
   roadmap, six-layer architecture, and report-input maintenance boundary.
-- `docs/visual_overview.md`: GitHub-rendered Mermaid diagrams for the Stage 52
-  workflow, six-layer architecture, safety gate, and public/private boundary.
+- `docs/visual_overview.md`: GitHub-rendered Mermaid diagrams for the post-PR
+  #109 workflow, six-layer architecture, safety gate, and public/private
+  boundary.
+- `docs/roadmap_conformance_audit.md`: Stage 35-52 roadmap-to-implementation
+  audit and follow-up notes for stale documentation.
+- `docs/end_to_end_conformance_audit.md`: end-to-end trace audit from
+  fixture/live-readonly data through the disabled private-live gate.
 - `docs/portfolio_summary.md`: concise reviewer-facing project summary,
   architecture, safety boundary, validation status, and takeaway.
 - `docs/release_notes_stage_52.md`: draft GitHub Release title/body and
