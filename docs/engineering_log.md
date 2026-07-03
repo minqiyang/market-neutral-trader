@@ -1210,6 +1210,16 @@ changes, production endpoints, credentials, wallets, broker integration, live
 order placement, strategy optimization, investment advice, production-readiness
 claims, or profitability claims.
 
+## PR #110 hidden Unicode follow-up
+
+GitHub's PR #110 files page included hidden/bidirectional Unicode warning
+templates for each touched Markdown file: `CHANGELOG.md`, `README.md`,
+`docs/current_handoff.md`, `docs/engineering_log.md`, `docs/repo_map.md`, and
+`docs/visual_overview.md`. A local scan of those files and the PR #110 diff
+found no bidi controls, zero-width characters, non-breaking spaces, or unusual
+invisible whitespace, so no content replacement was needed. The Mermaid fences
+remain unchanged.
+
 ## Interview narrative
 
 A concise way to explain the current project:
