@@ -98,11 +98,12 @@ report-input kinds unless a later maintenance task explicitly requires it.
   data lag, gap count, candidate counts, rejection reasons, paper/demo
   outcomes, fees, slippage, failed-leg incidents, reconciliation health, and
   kill-switch events.
-- Stage 49: Kalshi Demo authenticated connector. Demo-only tiny FOK/IOC orders
-  after manual approval, risk approval, reconciliation health, dry-run preview,
-  and full audit logging.
+- Stage 49: Kalshi Demo authenticated connector. Dry-run previews by default;
+  Demo-only tiny FOK/IOC submit path after manual approval, risk approval,
+  clean reconciliation state, explicit opt-in, and full audit logging.
 - Stage 50: demo reconciliation. Reconcile accepted, rejected, fill, cancel,
-  and backfill events; mismatch hard-stops new submissions.
+  and backfill events; missing or mismatched reconciliation hard-stops Demo
+  submit opt-in.
 - Stage 51: long-term paper/demo validation framework. Produce deterministic
   local 7/30/90-day rolling reports and keep validation marked incomplete
   until 30+ days of paper trading, 30-90 days of live read-only data, fee/

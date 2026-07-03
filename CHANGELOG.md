@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Tightened the Stage 49/50 Demo boundary: dry-run previews remain available
+  without credentials or reconciliation state, while Demo submit opt-in now
+  requires a provided clean Demo reconciliation state and remains covered by
+  mocked HTTP tests.
 - Added Stage 52 release and portfolio packaging docs with GitHub Release copy,
   reviewer-facing project summary, and resume-ready bullets while preserving
   the disabled-live public boundary.

@@ -60,7 +60,7 @@ flowchart TB
 | Complement research | Candidate model, fee model, offline scanner | Audit/paper records only |
 | Simulation | Taker fill, slippage, failed-leg reserve assumptions | Offline fixtures only |
 | Paper workflow | Paper proposals, paper ledger, risk decisions, manual approval records | Non-executable |
-| Demo workflow | Kalshi Demo dry-run previews, mocked submit path, reconciliation replay | Demo/paper research only |
+| Demo workflow | Kalshi Demo dry-run previews, guarded Demo submit path mocked in tests, reconciliation replay | Demo/paper research only |
 | Validation | Daily and rolling 7/30/90-day paper/demo reports | Framework implemented; validation not completed |
 | Private live gate | Disabled public placeholder and design document | Disabled |
 
@@ -77,7 +77,8 @@ flowchart TB
   insufficient edge, exposure breaches, loss limits, mismatches, and kill
   switch state.
 - Hash-bound manual approval records with expiry and single-use protections.
-- Kalshi Demo dry-run connector previews plus mocked submit-path tests.
+- Kalshi Demo dry-run connector previews plus guarded Demo submit-path tests
+  using mocked HTTP.
 - Local Demo reconciliation replay for accepted, rejected, partial/full fill,
   cancel, error, timeout, and backfill-style events.
 - Daily and rolling validation reports over local paper/demo artifacts.
