@@ -1,0 +1,958 @@
+"""Read-only V2 terminal monitor over local research artifacts."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import time
+from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
+from typing import Literal
+
+from edmn_trader.execution.private_live_gate import attempt_private_live_execution
+
+MonitorFormat = Literal["json", "markdown", "table"]
+SUMMARY_FILES = (
+    "run_info.json",
+    "recorder_summary.json",
+    "replay_summary.json",
+    "venue_status.json",
+    "paper_summary.json",
+    "risk_summary.json",
+    "reconciliation_summary.json",
+    "validation_summary.json",
+    "evidence_summary.json",
+    "campaign_summary.json",
+    "campaign_validation.json",
+)
+SECRET_KEYS = (
+    "authorization",
+    "credential",
+    "key",
+    "pass",
+    "private_key",
+    "secret",
+    "signature",
+    "token",
+)
+STALE_SECONDS = 15 * 60
+
+
+def build_monitor_snapshot(input_dir: Path, *, now: datetime | None = None) -> dict[str, object]:
+    """Build one fail-safe operator snapshot from local files only."""
+
+    generated_at = now or datetime.now(UTC)
+    warnings: list[str] = []
+    records = _read_records(input_dir, warnings)
+    summaries = _read_summaries(input_dir, warnings) if input_dir.exists() else {}
+    live_gate = attempt_private_live_execution().to_record()
+
+    run_info = _run_info(input_dir, generated_at, summaries)
+    venues = _venue_rows(records, summaries, generated_at, warnings)
+    positions = _position_rows(records, summaries)
+    orders = _order_rows(records)
+    candidates = _candidate_rows(records)
+    risk = _risk_status(records, summaries)
+    reconciliation = _reconciliation_status(records, summaries)
+    evidence = _evidence_status(records, summaries)
+    campaign = _campaign_status(summaries)
+    data_status = _data_status(records, summaries, venues)
+    health = _health(
+        input_dir=input_dir,
+        records=records,
+        summaries=summaries,
+        warnings=warnings,
+        risk=risk,
+        reconciliation=reconciliation,
+        data_status=data_status,
+    )
+
+    return {
+        "run_info": {
+            **run_info,
+            "health": health,
+            "live_gate": {
+                "status": live_gate["status"],
+                "production_trading_enabled": live_gate["production_trading_enabled"],
+                "strict_verdict": "STRICT NO-GO",
+            },
+            "trading_mode": "READ_ONLY/PAPER_ONLY",
+            "warnings": warnings,
+        },
+        "venue_status": venues,
+        "data_status": data_status,
+        "positions": positions,
+        "orders": orders,
+        "candidates": candidates,
+        "risk": risk,
+        "reconciliation": reconciliation,
+        "evidence": evidence,
+        "campaign": campaign,
+        "system": {
+            "mode": "read_only_monitor",
+            "input_dir": str(input_dir),
+            "generated_at_utc": generated_at.isoformat(),
+            "health": health,
+            "live_gate_status": live_gate["status"],
+            "warnings": warnings,
+        },
+        "validation": _validation_status(records, summaries),
+    }
+
+
+def render_snapshot(
+    snapshot: Mapping[str, object],
+    output_format: MonitorFormat,
+    *,
+    include_evidence: bool = False,
+) -> str:
+    if output_format == "json":
+        return json.dumps(snapshot, indent=2, sort_keys=True)
+    if output_format == "markdown":
+        return _render_markdown(snapshot, include_evidence=include_evidence)
+    return _render_table(snapshot, include_evidence=include_evidence)
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _parser().parse_args(argv)
+    while True:
+        snapshot = build_monitor_snapshot(args.input_dir)
+        rendered = render_snapshot(
+            snapshot,
+            args.format,
+            include_evidence=args.include_evidence,
+        )
+        if args.export_json:
+            args.export_json.parent.mkdir(parents=True, exist_ok=True)
+            args.export_json.write_text(
+                json.dumps(snapshot, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+        print(rendered)
+        if not args.watch:
+            return
+        time.sleep(args.interval)
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Read-only V2 terminal monitor")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--once", action="store_true", help="Render one snapshot and exit")
+    mode.add_argument("--watch", action="store_true", help="Refresh until interrupted")
+    parser.add_argument("--interval", type=float, default=5.0)
+    parser.add_argument("--input-dir", type=Path, required=True)
+    parser.add_argument("--format", choices=("json", "markdown", "table"), default="table")
+    parser.add_argument("--export-json", type=Path)
+    parser.add_argument(
+        "--include-evidence",
+        action="store_true",
+        help="Include Layer 0-7 evidence checklist status in table/markdown output.",
+    )
+    return parser
+
+
+def _read_summaries(input_dir: Path, warnings: list[str]) -> dict[str, dict[str, object]]:
+    summaries: dict[str, dict[str, object]] = {}
+    for name in SUMMARY_FILES:
+        path = input_dir / name
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            warnings.append(f"CORRUPT_SUMMARY: {name}: {exc}")
+            continue
+        if isinstance(payload, dict):
+            summaries[name] = _redact_mapping(payload)
+        else:
+            warnings.append(f"CORRUPT_SUMMARY: {name}: expected JSON object")
+    return summaries
+
+
+def _read_records(input_dir: Path, warnings: list[str]) -> list[dict[str, object]]:
+    if not input_dir.exists():
+        return []
+    records: list[dict[str, object]] = []
+    for path in sorted(input_dir.glob("*.jsonl")):
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError as exc:
+            warnings.append(f"CORRUPT_JSONL: {path.name}: {exc}")
+            continue
+        for index, line in enumerate(lines, start=1):
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError as exc:
+                warnings.append(f"CORRUPT_JSONL: {path.name}:{index}: {exc.msg}")
+                continue
+            if isinstance(payload, dict):
+                records.append(_redact_mapping(payload))
+            else:
+                warnings.append(f"CORRUPT_JSONL: {path.name}:{index}: expected JSON object")
+    return records
+
+
+def _run_info(
+    input_dir: Path,
+    generated_at: datetime,
+    summaries: Mapping[str, Mapping[str, object]],
+) -> dict[str, object]:
+    run_info = summaries.get("run_info.json", {})
+    return {
+        "generated_at_utc": str(run_info.get("generated_at_utc") or generated_at.isoformat()),
+        "input_dir": str(input_dir),
+        "schema_version": str(run_info.get("schema_version") or "v2.monitor.v1"),
+    }
+
+
+def _venue_rows(
+    records: list[dict[str, object]],
+    summaries: Mapping[str, Mapping[str, object]],
+    generated_at: datetime,
+    warnings: list[str],
+) -> list[dict[str, object]]:
+    venue_summary = summaries.get("venue_status.json", {})
+    source = _as_list(venue_summary.get("venues"))
+    if not source and venue_summary:
+        source = [venue_summary]
+    if not source:
+        venue = (
+            summaries.get("recorder_summary.json", {}).get("venue")
+            or _first_value(records, "venue")
+        )
+        if venue:
+            source = [
+                {
+                    "venue": venue,
+                    "mode": "read_only",
+                    "connectivity": "unknown",
+                    "last_event_ts": _last_value(records, "observed_at"),
+                    "gap_count": _count_flag(records, "sequence_gap"),
+                    "warning_count": 0,
+                }
+            ]
+
+    rows: list[dict[str, object]] = []
+    for item in source:
+        if not isinstance(item, Mapping):
+            warnings.append("CORRUPT_SUMMARY: venue_status.json: venue row must be object")
+            continue
+        row = {
+            "venue": item.get("venue"),
+            "mode": item.get("mode") or "read_only",
+            "connectivity": item.get("connectivity") or "unknown",
+            "last_event_ts": item.get("last_event_ts") or item.get("last_event_time"),
+            "data_staleness_seconds": item.get("data_staleness_seconds"),
+            "gap_count": item.get("gap_count") or 0,
+            "warning_count": item.get("warning_count") or 0,
+        }
+        if row["data_staleness_seconds"] is None:
+            row["data_staleness_seconds"] = _staleness_seconds(row["last_event_ts"], generated_at)
+        if _is_stale(row["data_staleness_seconds"]):
+            warnings.append(f"STALE_DATA: {row['venue']} staleness={row['data_staleness_seconds']}")
+        rows.append(row)
+    return rows
+
+
+def _data_status(
+    records: list[dict[str, object]],
+    summaries: Mapping[str, Mapping[str, object]],
+    venues: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    recorder = summaries.get("recorder_summary.json", {})
+    replay = summaries.get("replay_summary.json", {})
+    events = [record for record in records if _is_market_data_record(record)]
+    return {
+        "venue": recorder.get("venue") or _first_mapping_value(venues, "venue"),
+        "market_count": recorder.get("market_count")
+        or replay.get("market_count")
+        or _count_distinct(events, "market_id"),
+        "event_count": recorder.get("event_count") or len(events),
+        "last_event_time": recorder.get("ended_at_utc")
+        or _first_mapping_value(venues, "last_event_ts")
+        or _last_value(events, "observed_at"),
+        "stale_status": recorder.get("stale_status")
+        or (
+            "STALE"
+            if any(_is_stale(row.get("data_staleness_seconds")) for row in venues)
+            else _flag_status(records, "stale")
+        ),
+        "gap_count": recorder.get("gap_count")
+        or replay.get("gap_count")
+        or sum(_int_or_zero(row.get("gap_count")) for row in venues)
+        or _count_flag(records, "sequence_gap"),
+        "reconnect_count": recorder.get("reconnect_count"),
+        "book_rebuild_status": replay.get("book_rebuild_status") or replay.get("status"),
+    }
+
+
+def _candidate_rows(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    rows = []
+    for record in records:
+        if record.get("record_type") != "offline_complement_research_candidate":
+            continue
+        rows.append(
+            {
+                "venue": record.get("venue"),
+                "market_ticker": record.get("market_ticker") or record.get("market_id"),
+                "strategy": record.get("strategy") or "same_market_complement",
+                "edge_before_fees": record.get("gross_edge_per_contract")
+                or record.get("gross_edge"),
+                "expected_fees": record.get("estimated_fee_per_contract")
+                or record.get("fee_estimate"),
+                "edge_after_fees": record.get("net_edge_per_contract") or record.get("net_edge"),
+                "liquidity": record.get("candidate_size"),
+                "stale": "stale_book" in str(record.get("data_quality_flags", ())),
+                "rejected_reason": record.get("rejection_reasons")
+                or record.get("rejection_reason"),
+                "risk_decision": record.get("decision"),
+            }
+        )
+    return rows
+
+
+def _position_rows(
+    records: list[dict[str, object]],
+    summaries: Mapping[str, Mapping[str, object]],
+) -> list[dict[str, object]]:
+    paper = summaries.get("paper_summary.json", {})
+    positions_summary = _as_list(paper.get("positions"))
+    source = positions_summary or _as_list(
+        _first_record(records, "paper_ledger_state", {}).get("positions")
+    )
+    if not source:
+        source = [
+            record
+            for record in records
+            if record.get("record_type") in {"paper_position", "market_position"}
+        ]
+    rows = []
+    for item in source:
+        if not isinstance(item, Mapping):
+            continue
+        rows.append(
+            {
+                "venue": item.get("venue") or "paper",
+                "market_id": item.get("market_id") or item.get("market") or item.get("proposal_id"),
+                "market_ticker": item.get("market_ticker")
+                or item.get("market")
+                or item.get("proposal_id"),
+                "market_title": item.get("market_title"),
+                "currency": item.get("currency") or "USD",
+                "instrument_type": item.get("instrument_type")
+                or item.get("type")
+                or "binary_prediction",
+                "side": item.get("side"),
+                "quantity": item.get("quantity"),
+                "average_price": item.get("average_price"),
+                "mark_price": item.get("mark_price"),
+                "notional": item.get("notional"),
+                "exposure": item.get("exposure") or item.get("notional"),
+                "realized_pnl": item.get("realized_pnl"),
+                "unrealized_pnl": item.get("unrealized_pnl"),
+                "fees": item.get("fees") or item.get("fees_paid"),
+                "source": item.get("source") or "paper_ledger",
+            }
+        )
+    return rows
+
+
+def _order_rows(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    rows = []
+    seen: set[str] = set()
+    for record in records:
+        record_type = record.get("record_type")
+        if record_type not in {
+            "paper_complement_order_proposal",
+            "kalshi_demo_submission_preview",
+            "open_order",
+            "proposed_order",
+        }:
+            continue
+        order_id = record.get("order_id") or record.get("proposal_id")
+        dedupe_key = str(order_id) if order_id else json.dumps(record, sort_keys=True)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        legs = _as_list(record.get("legs"))
+        first_leg = legs[0] if legs and isinstance(legs[0], Mapping) else {}
+        price = record.get("price") or record.get("limit_price") or first_leg.get("limit_price")
+        quantity = record.get("quantity") or record.get("size") or first_leg.get("quantity")
+        rows.append(
+            {
+                "order_id": order_id,
+                "proposal_hash": record.get("proposal_hash") or record.get("candidate_hash"),
+                "venue": record.get("venue") or "kalshi_demo",
+                "market_ticker": record.get("market_ticker") or record.get("market_id"),
+                "side": record.get("side") or first_leg.get("side"),
+                "action": record.get("action") or "paper_propose",
+                "price": price,
+                "quantity": quantity,
+                "notional": record.get("notional") or _decimal_product(price, quantity),
+                "status": record.get("status") or "paper",
+                "reason": record.get("rejection_reason") or record.get("reason"),
+                "approval_required": _approval_required(record),
+                "risk_decision": record.get("risk_decision")
+                or _nested(record, "risk_preview", "reasons"),
+                "source": record_type,
+            }
+        )
+    return rows
+
+
+def _risk_status(
+    records: list[dict[str, object]],
+    summaries: Mapping[str, Mapping[str, object]],
+) -> dict[str, object]:
+    risk = summaries.get("risk_summary.json", {})
+    decision = _first_record(records, "complement_risk_decision_v2")
+    reasons = _as_list(risk.get("warnings")) + _as_list(decision.get("reasons"))
+    kill_switch = risk.get("kill_switch")
+    if kill_switch is None:
+        kill_switch = risk.get("kill_switch_status") == "active" or "kill_switch_active" in reasons
+    return {
+        "kill_switch": bool(kill_switch),
+        "manual_approval_required": bool(
+            risk.get("manual_approval_required")
+            if "manual_approval_required" in risk
+            else decision.get("manual_approval_required", True)
+        ),
+        "stale_data": bool(risk.get("stale_data") or "stale_data" in reasons),
+        "data_gap": bool(risk.get("data_gap") or "data_gap" in reasons),
+        "fee_missing": bool(risk.get("fee_missing") or "missing_fee_model" in reasons),
+        "edge_insufficient": bool(
+            risk.get("edge_insufficient") or "insufficient_net_edge" in reasons
+        ),
+        "exposure_limit": bool(
+            risk.get("exposure_limit") or "exposure_limit_breach" in reasons
+        ),
+        "daily_loss_limit": bool(
+            risk.get("daily_loss_limit") or "daily_loss_limit_breach" in reasons
+        ),
+        "reconciliation_mismatch": bool(
+            risk.get("reconciliation_mismatch") or "reconciliation_mismatch" in reasons
+        ),
+        "decision": risk.get("decision") or decision.get("decision"),
+        "warnings": reasons,
+    }
+
+
+def _reconciliation_status(
+    records: list[dict[str, object]],
+    summaries: Mapping[str, Mapping[str, object]],
+) -> dict[str, object]:
+    summary = summaries.get("reconciliation_summary.json", {})
+    ledger = _first_record(records, "paper_ledger_state")
+    demo = _first_record(records, "kalshi_demo_reconciliation_state")
+    mismatch_count = (
+        summary.get("mismatch_count")
+        or ledger.get("reconciliation_mismatch_count")
+        or demo.get("mismatch_count")
+        or 0
+    )
+    return {
+        "status": summary.get("status")
+        or ("mismatch" if _int_or_zero(mismatch_count) else "clean"),
+        "mismatch_count": mismatch_count,
+        "last_reconciled_at": summary.get("last_reconciled_at"),
+        "unresolved_items": summary.get("unresolved_items") or [],
+    }
+
+
+def _evidence_status(
+    records: list[dict[str, object]],
+    summaries: Mapping[str, Mapping[str, object]],
+) -> dict[str, object]:
+    summary = summaries.get("evidence_summary.json", {})
+    layers = summary.get("layers")
+    if not isinstance(layers, Mapping):
+        layers = {
+            "Layer 0 schema/audit": "pass" if records else "missing",
+            "Layer 1 recorder": "pass"
+            if any(_is_market_data_record(record) for record in records)
+            else "missing",
+            "Layer 2 replay/simulator": "pass"
+            if _has_record(records, "offline_taker_fill_simulation")
+            or any(_is_replay_frame(record) for record in records)
+            else "missing",
+            "Layer 3 ledger/reconciliation": "pass"
+            if _has_record(records, "paper_ledger_state")
+            else "missing",
+            "Layer 4 risk/manual approval/kill switch": "pass"
+            if _has_record(records, "complement_risk_decision_v2")
+            else "missing",
+            "Layer 5 demo/paper authenticated execution": "mocked/demo-only",
+            "Layer 6 private live gate": "disabled/fail-closed",
+            "Layer 7 monitor/reporting": "pass",
+        }
+    missing_required = summary.get("missing_required_artifacts")
+    if not isinstance(missing_required, list):
+        missing_required = [
+            "30-90 day read-only dataset",
+            "30+ day paper/demo history",
+            "fee/slippage validation",
+            "zero unexplained reconciliation mismatch",
+            "kill-switch/manual approval drill",
+            "legal/platform review",
+        ]
+    return {
+        "recorder_days": summary.get("recorder_days", 0),
+        "paper_days": summary.get("paper_days", 0),
+        "last_validation_report": summary.get("last_validation_report"),
+        "private_artifacts_present": bool(summary.get("private_artifacts_present", False)),
+        "missing_required_artifacts": missing_required,
+        "layers": dict(layers),
+        "strict_verdict": "STRICT NO-GO",
+    }
+
+
+def _validation_status(
+    records: list[dict[str, object]],
+    summaries: Mapping[str, Mapping[str, object]],
+) -> dict[str, object]:
+    validation = summaries.get("validation_summary.json", {})
+    daily = _first_record(records, "daily_validation_report")
+    return {
+        "one_day": validation.get("one_day") or daily.get("report_date"),
+        "seven_day": validation.get("seven_day"),
+        "thirty_day": validation.get("thirty_day"),
+        "ninety_day": validation.get("ninety_day"),
+        "reconciliation_mismatch_count": validation.get("reconciliation_mismatch_count")
+        or daily.get("reconciliation_mismatch_count"),
+        "fee_slippage_model_status": validation.get("fee_slippage_model_status"),
+        "paper_trade_count": validation.get("paper_trade_count")
+        or daily.get("paper_outcome_count"),
+        "blocked_trade_count": validation.get("blocked_trade_count") or daily.get("reject_count"),
+    }
+
+
+def _campaign_status(summaries: Mapping[str, Mapping[str, object]]) -> dict[str, object]:
+    campaign = summaries.get("campaign_summary.json", {})
+    validation = summaries.get("campaign_validation.json", {})
+    source_type = campaign.get("source_type") or validation.get("source_type")
+    event_count = campaign.get("event_count") or validation.get("event_count") or 0
+    validation_status = validation.get("status") or campaign.get("validation_status")
+    submit_attempts = campaign.get("submit_attempts", campaign.get("submit_attempt_count", 0))
+    return {
+        "campaign_id": campaign.get("campaign_id"),
+        "status": _campaign_monitor_status(campaign, validation),
+        "run_status": campaign.get("status"),
+        "source_type": source_type,
+        "venue": campaign.get("venue"),
+        "market": campaign.get("market"),
+        "market_count": campaign.get("market_count"),
+        "duration_seconds": campaign.get("duration_seconds"),
+        "event_count": event_count,
+        "snapshot_count": campaign.get("snapshot_count") or validation.get("snapshot_count") or 0,
+        "delta_count": campaign.get("delta_count") or validation.get("delta_count") or 0,
+        "trade_count": campaign.get("trade_count") or validation.get("trade_count") or 0,
+        "status_update_count": campaign.get("status_update_count")
+        or validation.get("status_update_count")
+        or 0,
+        "heartbeat_count": campaign.get("heartbeat_count"),
+        "disconnect_count": campaign.get("disconnect_count")
+        or validation.get("disconnect_count")
+        or 0,
+        "reconnect_count": campaign.get("reconnect_count")
+        or validation.get("reconnect_count")
+        or 0,
+        "gap_count": campaign.get("gap_count") or validation.get("gap_count") or 0,
+        "last_event_time": campaign.get("last_event_time") or validation.get("last_event_time"),
+        "stale_seconds": campaign.get("stale_seconds") or validation.get("stale_seconds"),
+        "recorder_event_count": campaign.get("recorder_event_count"),
+        "rebuild_frame_count": campaign.get("rebuild_frame_count"),
+        "validation_status": validation_status,
+        "evidence_classification": validation.get("evidence_classification")
+        or campaign.get("evidence_classification"),
+        "live_gate_status": campaign.get("live_gate_status"),
+        "submit_attempts": submit_attempts,
+        "submit_attempt_count": submit_attempts,
+        "manifest_path": campaign.get("manifest_path"),
+        "validation_report_path": campaign.get("validation_report_path"),
+        "raw_data_path_redacted": campaign.get("raw_data_path_redacted"),
+        "blocker": campaign.get("blocker") or validation.get("blocker"),
+    }
+
+
+def _campaign_monitor_status(
+    campaign: Mapping[str, object],
+    validation: Mapping[str, object],
+) -> str | None:
+    if not campaign.get("campaign_id"):
+        return None
+    source_type = campaign.get("source_type") or validation.get("source_type")
+    validation_status = validation.get("status") or campaign.get("validation_status")
+    event_count = _int_or_zero(campaign.get("event_count") or validation.get("event_count"))
+    if event_count <= 0:
+        return "NO_DATA"
+    if source_type == "SYNTHETIC":
+        return "SYNTHETIC_SMOKE"
+    if source_type == "REST":
+        return "REST_SMOKE"
+    if source_type in {"WEBSOCKET_SNAPSHOT", "WEBSOCKET_DELTA"}:
+        duration_seconds = _int_or_zero(campaign.get("duration_seconds"))
+        if validation_status == "pass" and duration_seconds >= 604_800:
+            return "WEBSOCKET_CAMPAIGN_VALIDATED"
+        if campaign.get("status") == "running":
+            return "WEBSOCKET_CAMPAIGN_RUNNING"
+        return "WEBSOCKET_SMOKE"
+    return "NO_DATA"
+
+
+def _health(
+    *,
+    input_dir: Path,
+    records: list[dict[str, object]],
+    summaries: Mapping[str, Mapping[str, object]],
+    warnings: Sequence[str],
+    risk: Mapping[str, object],
+    reconciliation: Mapping[str, object],
+    data_status: Mapping[str, object],
+) -> str:
+    if not input_dir.exists():
+        warnings.append("NO_DATA: input directory does not exist")
+        return "NO_DATA"
+    if not records and not summaries:
+        warnings.append("NO_DATA: no monitor artifacts found")
+        return "NO_DATA"
+    if (
+        risk.get("kill_switch")
+        or risk.get("decision") == "reject"
+        or risk.get("reconciliation_mismatch")
+        or _int_or_zero(reconciliation.get("mismatch_count")) > 0
+        or reconciliation.get("status") == "mismatch"
+    ):
+        return "BLOCKED"
+    if warnings or data_status.get("stale_status") == "STALE":
+        return "WARNING"
+    return "OK_PAPER"
+
+
+def _redact_mapping(value: Mapping[str, object]) -> dict[str, object]:
+    redacted: dict[str, object] = {}
+    for key, item in value.items():
+        lowered = key.lower()
+        if any(part in lowered for part in SECRET_KEYS):
+            redacted[key] = "[REDACTED]"
+        elif isinstance(item, dict):
+            redacted[key] = _redact_mapping(item)
+        elif isinstance(item, list):
+            redacted[key] = [_redact_mapping(x) if isinstance(x, dict) else x for x in item]
+        else:
+            redacted[key] = item
+    return redacted
+
+
+def _first_record(
+    records: list[dict[str, object]],
+    record_type: str,
+    default: dict[str, object] | None = None,
+) -> dict[str, object]:
+    return next(
+        (record for record in records if record.get("record_type") == record_type),
+        default or {},
+    )
+
+
+def _has_record(records: list[dict[str, object]], record_type: str) -> bool:
+    return bool(_first_record(records, record_type))
+
+
+def _is_market_data_record(record: Mapping[str, object]) -> bool:
+    if record.get("record_type") in {"live_market_data_event", "market_data_snapshot"}:
+        return True
+    return all(key in record for key in ("venue", "market_id", "observed_at", "event_type"))
+
+
+def _is_replay_frame(record: Mapping[str, object]) -> bool:
+    return "book_hash" in record and "event_sequence" in record and "market_id" in record
+
+
+def _first_value(records: list[dict[str, object]], field: str) -> object:
+    return next((record[field] for record in records if field in record), None)
+
+
+def _last_value(records: list[dict[str, object]], field: str) -> object:
+    return next((record[field] for record in reversed(records) if field in record), None)
+
+
+def _first_mapping_value(records: Sequence[Mapping[str, object]], field: str) -> object:
+    return next((record[field] for record in records if field in record), None)
+
+
+def _count_distinct(records: list[dict[str, object]], field: str) -> int:
+    return len({record[field] for record in records if field in record})
+
+
+def _flag_status(records: list[dict[str, object]], prefix: str) -> str:
+    return (
+        "WARN"
+        if any(prefix in str(record.get("data_quality_flags", ())) for record in records)
+        else "OK"
+    )
+
+
+def _count_flag(records: list[dict[str, object]], flag: str) -> int:
+    return sum(
+        flag in str(record.get("data_quality_flags", ())) or flag in str(record.get("flags", ()))
+        for record in records
+    )
+
+
+def _nested(record: Mapping[str, object], parent: str, child: str) -> object:
+    value = record.get(parent)
+    if isinstance(value, Mapping):
+        return value.get(child)
+    return None
+
+
+def _approval_required(record: Mapping[str, object]) -> bool:
+    preview = record.get("risk_preview")
+    if isinstance(preview, Mapping):
+        return "manual_approval_required" in str(preview.get("reasons", ()))
+    return True
+
+
+def _as_list(value: object) -> list[object]:
+    return value if isinstance(value, list) else []
+
+
+def _int_or_zero(value: object) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return 0
+
+
+def _decimal_product(left: object, right: object) -> str | None:
+    try:
+        return str(Decimal(str(left)) * Decimal(str(right)))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def _staleness_seconds(value: object, generated_at: datetime) -> int | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return max(0, int((generated_at - parsed.astimezone(UTC)).total_seconds()))
+
+
+def _is_stale(value: object) -> bool:
+    if isinstance(value, int | float):
+        return value > STALE_SECONDS
+    if isinstance(value, str):
+        try:
+            return float(value) > STALE_SECONDS
+        except ValueError:
+            return False
+    return False
+
+
+def _render_table(snapshot: Mapping[str, object], *, include_evidence: bool) -> str:
+    run = _mapping(snapshot, "run_info")
+    data = _mapping(snapshot, "data_status")
+    risk = _mapping(snapshot, "risk")
+    reconciliation = _mapping(snapshot, "reconciliation")
+    lines = [
+        "V2 Monitor",
+        f"LIVE GATE: {str(_mapping(run, 'live_gate').get('status')).upper()}",
+        f"TRADING MODE: {run['trading_mode']}",
+        f"HEALTH: {run['health']}",
+        (
+            f"DATA: venue={data.get('venue')} latest={data.get('last_event_time')} "
+            f"stale={data.get('stale_status')} gaps={data.get('gap_count')}"
+        ),
+        _campaign_line(snapshot),
+        "POSITIONS:",
+    ]
+    positions = _rows(snapshot, "positions")
+    lines.extend(_position_line(row) for row in positions)
+    if not positions:
+        lines.append("  none")
+    lines.append("ORDERS:")
+    orders = _rows(snapshot, "orders")
+    lines.extend(_order_line(row) for row in orders)
+    if not orders:
+        lines.append("  none")
+    lines.extend(
+        [
+            (
+                "RISK: "
+                f"decision={risk.get('decision')} "
+                f"kill_switch={risk.get('kill_switch')} "
+                f"manual_approval_required={risk.get('manual_approval_required')} "
+                f"warnings={risk.get('warnings')}"
+            ),
+            (
+                "RECONCILIATION: "
+                f"status={reconciliation.get('status')} "
+                f"mismatches={reconciliation.get('mismatch_count')}"
+            ),
+        ]
+    )
+    if include_evidence:
+        lines.extend(_evidence_lines(snapshot))
+    warnings = _as_list(run.get("warnings"))
+    if warnings:
+        lines.append("WARNINGS:")
+        lines.extend(f"  {warning}" for warning in warnings)
+    return "\n".join(lines)
+
+
+def _render_markdown(snapshot: Mapping[str, object], *, include_evidence: bool) -> str:
+    run = _mapping(snapshot, "run_info")
+    lines = [
+        "# V2 Monitor Snapshot",
+        "",
+        f"- LIVE GATE: {str(_mapping(run, 'live_gate').get('status')).upper()}",
+        f"- TRADING MODE: {run['trading_mode']}",
+        f"- HEALTH: {run['health']}",
+        f"- input_dir: `{run['input_dir']}`",
+        "",
+        "## Positions",
+        "",
+        (
+            "| venue | market_ticker | type | currency | side | qty | avg | mark | "
+            "notional | exposure | realized_pnl | unrealized_pnl | fees |"
+        ),
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for row in _rows(snapshot, "positions"):
+        lines.append(
+            (
+                "| {venue} | {market_ticker} | {instrument_type} | {currency} | "
+                "{side} | {quantity} | {average_price} | {mark_price} | {notional} | "
+                "{exposure} | {realized_pnl} | {unrealized_pnl} | {fees} |"
+            ).format(**_stringified(row))
+        )
+    if not _rows(snapshot, "positions"):
+        lines.append(
+            "| none | none | none | none | none | none | none | none | none | "
+            "none | none | none | none |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Orders",
+            "",
+            (
+                "| venue | market_ticker | side | action | price | quantity | "
+                "notional | status | approval_required | risk_decision |"
+            ),
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for row in _rows(snapshot, "orders"):
+        lines.append(
+            (
+                "| {venue} | {market_ticker} | {side} | {action} | {price} | "
+                "{quantity} | {notional} | {status} | {approval_required} | "
+                "{risk_decision} |"
+            ).format(**_stringified(row))
+        )
+    if not _rows(snapshot, "orders"):
+        lines.append(
+            "| none | none | none | none | none | none | none | none | "
+            "none | none |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Risk And Reconciliation",
+            "",
+            "```json",
+            json.dumps(
+                {
+                    "campaign": snapshot["campaign"],
+                    "risk": snapshot["risk"],
+                    "reconciliation": snapshot["reconciliation"],
+                    "data_status": snapshot["data_status"],
+                },
+                indent=2,
+                sort_keys=True,
+            ),
+            "```",
+        ]
+    )
+    if include_evidence:
+        lines.extend(["", "## Evidence", "", *_evidence_lines(snapshot)])
+    return "\n".join(lines)
+
+
+def _mapping(record: Mapping[str, object], key: str) -> Mapping[str, object]:
+    value = record.get(key)
+    return value if isinstance(value, Mapping) else {}
+
+
+def _rows(record: Mapping[str, object], key: str) -> list[Mapping[str, object]]:
+    value = record.get(key)
+    return [item for item in value if isinstance(item, Mapping)] if isinstance(value, list) else []
+
+
+def _position_line(row: Mapping[str, object]) -> str:
+    return (
+        "  {venue} {market_ticker} {instrument_type} {currency} {side} "
+        "qty={quantity} avg={average_price} mark={mark_price} notional={notional} "
+        "exposure={exposure} realized_pnl={realized_pnl} unrealized_pnl={unrealized_pnl} "
+        "fees={fees}"
+    ).format(**_stringified(row))
+
+
+def _campaign_line(snapshot: Mapping[str, object]) -> str:
+    campaign = _mapping(snapshot, "campaign")
+    if not campaign.get("campaign_id"):
+        return "CAMPAIGN: none"
+    return (
+        "CAMPAIGN: id={campaign_id} status={status} source_type={source_type} "
+        "venue={venue} markets={market_count} events={event_count} snapshots={snapshot_count} "
+        "deltas={delta_count} trades={trade_count} status_updates={status_update_count} "
+        "heartbeats={heartbeat_count} disconnects={disconnect_count} "
+        "reconnects={reconnect_count} gaps={gap_count} last_event={last_event_time} "
+        "stale_seconds={stale_seconds} rebuild_frames={rebuild_frame_count} "
+        "validation={validation_status} live_gate={live_gate_status} "
+        "submit_attempts={submit_attempts} manifest={manifest_path} "
+        "validation_report={validation_report_path}"
+    ).format(**_stringified(campaign))
+
+
+def _order_line(row: Mapping[str, object]) -> str:
+    return (
+        "  {venue} {market_ticker} {side} {action} price={price} qty={quantity} "
+        "notional={notional} status={status} approval_required={approval_required} "
+        "risk_decision={risk_decision}"
+    ).format(**_stringified(row))
+
+
+def _evidence_lines(snapshot: Mapping[str, object]) -> list[str]:
+    evidence = _mapping(snapshot, "evidence")
+    lines = ["EVIDENCE:"]
+    layers = evidence.get("layers")
+    if isinstance(layers, Mapping):
+        lines.extend(f"  {name}: {status}" for name, status in layers.items())
+    lines.append(
+        "  Required private evidence missing: "
+        + ", ".join(str(item) for item in _as_list(evidence.get("missing_required_artifacts")))
+    )
+    lines.append(f"  Verdict: {evidence.get('strict_verdict')}")
+    return lines
+
+
+def _stringified(row: Mapping[str, object]) -> dict[str, str]:
+    return {key: "" if value is None else str(value) for key, value in row.items()}
+
+
+if __name__ == "__main__":
+    main()
