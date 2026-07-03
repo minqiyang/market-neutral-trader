@@ -1098,7 +1098,7 @@ work, which required explicit review/authorization before implementation.
 ## Stage 49 Kalshi Demo authenticated connector
 
 Stage 49 adds a guarded Kalshi Demo connector boundary for request previews and
-mocked submit-path coverage. The connector consumes a paper proposal, clear
+Demo submit-path coverage mocked in tests. The connector consumes a paper proposal, clear
 manual-review-required risk decision, non-expired single-use manual approval,
 and reconciled paper ledger state before it can build tiny FOK/IOC Demo request
 previews.

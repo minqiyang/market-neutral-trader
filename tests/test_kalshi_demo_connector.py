@@ -51,6 +51,18 @@ def test_dry_run_preview_works_without_credentials(tmp_path: Path) -> None:
     assert audit["executable_order_intent"] is False
 
 
+def test_dry_run_preview_works_without_reconciliation_state(tmp_path: Path) -> None:
+    result = preview_or_submit_kalshi_demo(
+        **_connector_kwargs(tmp_path, demo_reconciliation_state_record=None),
+        config=KalshiDemoConnectorConfig(),
+        audit_log_path=tmp_path / "audit.jsonl",
+        now=NOW,
+    )
+
+    assert result.status == "preview"
+    assert result.dry_run is True
+
+
 def test_production_url_is_rejected_by_configuration() -> None:
     with pytest.raises(KalshiConfigurationError, match="Demo REST"):
         KalshiDemoConnectorConfig(base_url="https://external-api.kalshi.com/trade-api/v2")
@@ -142,7 +154,10 @@ def test_mocked_submit_accepts_and_redacts_audit_values(tmp_path: Path) -> None:
         return httpx.Response(201, json={"status": "accepted", "signature": "mock-signature"})
 
     result = preview_or_submit_kalshi_demo(
-        **_connector_kwargs(tmp_path),
+        **_connector_kwargs(
+            tmp_path,
+            demo_reconciliation_state_record=_clean_reconciliation_record(),
+        ),
         config=KalshiDemoConnectorConfig(submit_opt_in=True, time_in_force="ioc"),
         audit_log_path=tmp_path / "audit.jsonl",
         now=NOW,
@@ -167,9 +182,67 @@ def test_mocked_submit_accepts_and_redacts_audit_values(tmp_path: Path) -> None:
     assert "[REDACTED]" in audit_text
 
 
+def test_submit_opt_in_requires_demo_reconciliation_state(tmp_path: Path) -> None:
+    with pytest.raises(KalshiDemoConnectorError, match="clean demo reconciliation"):
+        preview_or_submit_kalshi_demo(
+            **_connector_kwargs(tmp_path),
+            config=KalshiDemoConnectorConfig(submit_opt_in=True),
+            audit_log_path=tmp_path / "audit.jsonl",
+            now=NOW,
+            credential_loader=_credential_headers,
+            http_client=httpx.Client(
+                transport=httpx.MockTransport(lambda _: httpx.Response(201))
+            ),
+        )
+
+
+def test_submit_opt_in_rejects_demo_reconciliation_mismatch(tmp_path: Path) -> None:
+    with pytest.raises(KalshiDemoConnectorError, match="mismatch"):
+        preview_or_submit_kalshi_demo(
+            **_connector_kwargs(
+                tmp_path,
+                demo_reconciliation_state_record={
+                    **_clean_reconciliation_record(),
+                    "submit_eligible": False,
+                    "mismatch_count": 1,
+                },
+            ),
+            config=KalshiDemoConnectorConfig(submit_opt_in=True),
+            audit_log_path=tmp_path / "audit.jsonl",
+            now=NOW,
+            credential_loader=_credential_headers,
+            http_client=httpx.Client(
+                transport=httpx.MockTransport(lambda _: httpx.Response(201))
+            ),
+        )
+
+
+def test_submit_opt_in_rejects_reconciliation_for_other_candidate(tmp_path: Path) -> None:
+    with pytest.raises(KalshiDemoConnectorError, match="candidate_hash mismatch"):
+        preview_or_submit_kalshi_demo(
+            **_connector_kwargs(
+                tmp_path,
+                demo_reconciliation_state_record={
+                    **_clean_reconciliation_record(),
+                    "candidate_hash": "d" * 64,
+                },
+            ),
+            config=KalshiDemoConnectorConfig(submit_opt_in=True),
+            audit_log_path=tmp_path / "audit.jsonl",
+            now=NOW,
+            credential_loader=_credential_headers,
+            http_client=httpx.Client(
+                transport=httpx.MockTransport(lambda _: httpx.Response(201))
+            ),
+        )
+
+
 def test_mocked_submit_rejection_and_timeout_are_logged(tmp_path: Path) -> None:
     rejected = preview_or_submit_kalshi_demo(
-        **_connector_kwargs(tmp_path),
+        **_connector_kwargs(
+            tmp_path,
+            demo_reconciliation_state_record=_clean_reconciliation_record(),
+        ),
         config=KalshiDemoConnectorConfig(submit_opt_in=True),
         audit_log_path=tmp_path / "rejected.jsonl",
         now=NOW,
@@ -187,7 +260,10 @@ def test_mocked_submit_rejection_and_timeout_are_logged(tmp_path: Path) -> None:
         raise httpx.ReadTimeout("mock timeout", request=request)
 
     errored = preview_or_submit_kalshi_demo(
-        **_connector_kwargs(tmp_path),
+        **_connector_kwargs(
+            tmp_path,
+            demo_reconciliation_state_record=_clean_reconciliation_record(),
+        ),
         config=KalshiDemoConnectorConfig(submit_opt_in=True),
         audit_log_path=tmp_path / "error.jsonl",
         now=NOW,
@@ -336,6 +412,19 @@ def _ledger_record() -> dict[str, object]:
         ],
         "positions": [],
         "reconciliation_mismatches": [],
+    }
+
+
+def _clean_reconciliation_record() -> dict[str, object]:
+    return {
+        "record_type": "kalshi_demo_reconciliation_state",
+        "research_use": "demo_paper_research_reconciliation_only",
+        "executable_order_intent": False,
+        "proposal_id": "p" * 64,
+        "candidate_hash": "c" * 64,
+        "approval_id": "a" * 64,
+        "submit_eligible": True,
+        "mismatch_count": 0,
     }
 
 

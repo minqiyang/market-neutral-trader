@@ -2,22 +2,24 @@
 
 ## Scope
 
-Audit date: 2026-07-02.
+Audit date: 2026-07-02. Updated by PR #108 follow-up on 2026-07-02.
 
-Baseline: `origin/main` at `b3e556f` (`Clarify demo connector risk policy boundary (#107)`).
+Original audit baseline: `origin/main` at `b3e556f` (`Clarify demo connector
+risk policy boundary (#107)`). Follow-up baseline: `origin/main` at `6e581f7`
+(`Add end-to-end conformance audit (#108)`).
 
 This audit checks whether the implemented Stage 35-52 mainline still matches
 the intended same-market YES/NO complement-parity research roadmap from
-fixture/live-readonly market data through the disabled private-live gate. It is
-documentation-only and changes no runtime behavior.
+fixture/live-readonly market data through the disabled private-live gate.
 
 ## Executive Answer
 
 Did implementation diverge from the roadmap mainline? No high-severity
 implementation divergence was found. The mainline is aligned end to end as a
-disabled-live, risk-gated research workflow. One stale-doc-only issue remains:
-`PROJECT_SPEC.md` still describes Stage 4 as current and Stage 5 as next even
-though the repository is complete through Stage 52.
+disabled-live, risk-gated research workflow. PR #108 review found three
+follow-up issues: stale-doc evidence was incomplete, Stage 49 mocked-submit
+wording was imprecise, and Demo submit opt-in did not require a provided Demo
+reconciliation state. This follow-up fixes those issues.
 
 Mainline status counts:
 
@@ -42,8 +44,8 @@ Mainline status counts:
 | Paper ledger replay | Deterministic local ledger from proposal/fill/settlement records | `src/edmn_trader/arb/paper_ledger.py` | `tests/test_paper_ledger.py` | `scripts/45_replay_paper_ledger.py` | `docs/STAGE_PLAN.md`; README | aligned | Low. Reconciliation mismatches are recorded instead of ignored. |
 | Risk decision | Reject stale/gap/missing-fee/edge/exposure/open-order/loss/mismatch/kill-switch blockers; otherwise manual review required | `src/edmn_trader/arb/risk.py` | `tests/test_complement_risk.py` | `scripts/46_complement_risk.py` | `docs/ARBITRAGE_ROADMAP.md`; `docs/RISK_POLICY.md`; README | aligned | Low. Clear decisions still require manual approval. |
 | Manual approval | Expiring, hash-bound, single-use local approval records | `src/edmn_trader/arb/approval.py` | `tests/test_manual_approval.py` | `scripts/47_manual_approval.py` | `docs/STAGE_PLAN.md`; README | aligned | Low. Approval records are paper manual-review metadata. |
-| Kalshi Demo dry-run/guarded connector | Demo-only dry-run preview by default; mocked submit path requires opt-in, credentials via env loader, risk/approval/ledger gates | `src/edmn_trader/adapters/kalshi/demo_connector.py` | `tests/test_kalshi_demo_connector.py` | `scripts/49_kalshi_demo_connector.py` | `docs/RISK_POLICY.md`; `docs/ARBITRAGE_ROADMAP.md`; README | aligned | Low/medium. Authenticated Demo boundary exists but remains Demo-only, dry-run default, and locally mocked in tests. |
-| Demo reconciliation | Append-only local/mock event replay linked to connector audit hash; mismatches block future Demo submit eligibility | `src/edmn_trader/adapters/kalshi/demo_reconciliation.py` | `tests/test_kalshi_demo_reconciliation.py` | `scripts/50_kalshi_demo_reconciliation.py` | `docs/STAGE_PLAN.md`; README | aligned | Low. Submit eligibility is false on mismatch. |
+| Kalshi Demo dry-run/guarded connector | Demo-only dry-run preview by default; submit opt-in requires credentials, injected HTTP client, risk/approval/ledger gates, and a provided clean Demo reconciliation state | `src/edmn_trader/adapters/kalshi/demo_connector.py` | `tests/test_kalshi_demo_connector.py` | `scripts/49_kalshi_demo_connector.py` | `docs/RISK_POLICY.md`; `docs/ARBITRAGE_ROADMAP.md`; README | aligned | Low/medium. Authenticated Demo boundary exists but remains Demo-only, dry-run default, and mocked through HTTP tests. |
+| Demo reconciliation | Append-only local/mock event replay linked to connector audit hash; missing or mismatched reconciliation blocks Demo submit opt-in while dry-run preview remains available | `src/edmn_trader/adapters/kalshi/demo_reconciliation.py` | `tests/test_kalshi_demo_reconciliation.py`; `tests/test_kalshi_demo_connector.py` | `scripts/50_kalshi_demo_reconciliation.py` | `docs/STAGE_PLAN.md`; README | aligned | Low. Submit eligibility is false on mismatch and submit opt-in now requires a clean reconciliation record. |
 | Rolling validation report | Local 7/30/90-day paper/demo summaries with unmet private-live prerequisites | `src/edmn_trader/arb/monitoring.py`; `src/edmn_trader/arb/long_term_validation.py` | `tests/test_daily_validation_report.py`; `tests/test_long_term_validation.py` | `scripts/48_daily_validation_report.py`; `scripts/51_long_term_validation.py` | `docs/STAGE_PLAN.md`; README | aligned | Low. Reports do not mark production readiness. |
 | Disabled private-live gate | Public placeholder fails closed; no production endpoint/order code | `src/edmn_trader/execution/private_live_gate.py` | `tests/test_private_live_gate.py` | Importable function only: `attempt_private_live_execution()` | `docs/private_live_execution_gate.md`; `docs/RISK_POLICY.md`; README | aligned | Low. Public live execution remains disabled. |
 
@@ -175,7 +177,9 @@ Mainline status counts:
 ### 8. Manual Approval -> Kalshi Demo Dry-Run/Guarded Connector
 
 - Planned intent: require proposal/risk/approval/ledger consistency before
-  Demo preview or mocked submit; default to dry-run; reject production URL.
+  Demo preview or Demo submit; default to dry-run; reject production URL.
+  Actual Demo submit opt-in additionally requires a provided clean Demo
+  reconciliation state. Submit-path tests use mocked HTTP.
 - Source-code entry points: `KalshiDemoConnectorConfig`,
   `preview_or_submit_kalshi_demo`, `_validate_risk_decision`,
   `_validate_manual_approval`, `_validate_ledger_state`.
@@ -184,9 +188,11 @@ Mainline status counts:
   request previews, redacted credential markers, and status.
 - Script or CLI entry point: `scripts/49_kalshi_demo_connector.py`.
 - Tests proving the transition: demo-connector tests cover dry-run without
-  credentials, production URL rejection, FOK/IOC limit, tiny limits, risk gate,
-  approval expiry/reuse/hash mismatch, ledger reconciliation gate, mocked
-  submit success/reject/error/timeout logging, redaction, and CLI.
+  credentials or reconciliation state, production URL rejection, FOK/IOC limit,
+  tiny limits, risk gate, approval expiry/reuse/hash mismatch, ledger
+  reconciliation gate, submit opt-in rejection when reconciliation is missing
+  or mismatched, clean reconciliation for mocked HTTP submit, submit
+  success/reject/error/timeout logging, redaction, and CLI.
 - Docs that describe the transition: Stage 49 in `docs/STAGE_PLAN.md`,
   `docs/RISK_POLICY.md`, README.
 - Conformance status: aligned.
@@ -194,8 +200,8 @@ Mainline status counts:
 
 ### 9. Kalshi Demo Dry-Run/Guarded Connector -> Demo Reconciliation
 
-- Planned intent: replay local/mock Demo lifecycle events and block later Demo
-  submits on mismatch.
+- Planned intent: replay local/mock Demo lifecycle events and block Demo submit
+  opt-in when reconciliation is missing or mismatched.
 - Source-code entry points: `reconcile_kalshi_demo_events`,
   `require_demo_reconciliation_submit_eligible`.
 - Data model / record shape: `kalshi_demo_reconciliation_state` with
@@ -205,6 +211,8 @@ Mainline status counts:
 - Tests proving the transition: reconciliation tests cover accepted/rejected/
   cancel/error/timeout/backfill states, idempotent duplicate fills, missing and
   conflicting events, mismatch blocking, append-only JSONL, and CLI.
+  Connector tests additionally prove dry-run remains available without
+  reconciliation state and submit opt-in requires clean reconciliation.
 - Docs that describe the transition: Stage 50 in `docs/STAGE_PLAN.md`; README.
 - Conformance status: aligned.
 - Recommendation: no code change.
@@ -253,11 +261,11 @@ Mainline status counts:
 | Same-market YES/NO complement parity remains the main strategy target | Roadmap primary target; `ComplementArbInput` requires `market_id`, YES/NO best bids; scanner produces complement records. | aligned | No change. |
 | Candidates are audit/paper research records, not trade recommendations | Scanner emits `research_use: audit_or_paper_research_record_only`; tests assert no executable order intent. | aligned | No change. |
 | Missing/unknown fee blocks `paper_candidate` | `complement.py` and scanner add `missing_fee_model` / `unknown_fee_model`; fee and scanner tests cover both. | aligned | No change. |
-| Stale/data-gap/mismatch conditions block forward progress where intended | Scanner flags stale/invalid books; rebuild flags gaps/staleness; risk rejects stale/gap/mismatch; reconciliation mismatch blocks submit eligibility. | aligned | No change. |
+| Stale/data-gap/mismatch conditions block forward progress where intended | Scanner flags stale/invalid books; rebuild flags gaps/staleness; risk rejects stale/gap/mismatch; missing or mismatched Demo reconciliation blocks submit opt-in. | aligned | No change. |
 | Decimal is used for money/probability logic | Core arb, fee, simulation, ledger, risk, connector, reconciliation, monitoring, and rolling validation modules import/use `Decimal`; tests preserve precision. | aligned | No change. |
 | Candidate/proposal/manual-approval/audit/reconciliation hashes or immutable references remain linked | Paper proposals lock candidate/simulation hashes; ledger carries source hashes; manual approvals bind `proposal_id`/`candidate_hash`; connector validates matching hashes; reconciliation stores `audit_record_hash`. | aligned | No change. |
 | Manual approval is required before Demo submit path | Connector validates `manual_approval_pending` and `manual_approval_decision` before preview/submit. | aligned | No change. |
-| Demo connector remains dry-run default and demo-only | `KalshiDemoConnectorConfig.submit_opt_in` defaults false; Demo base URL validation rejects production URL; tests cover both. | aligned | No change. |
+| Demo connector remains dry-run default and demo-only | `KalshiDemoConnectorConfig.submit_opt_in` defaults false; Demo base URL validation rejects production URL; dry-run tests need no credentials or reconciliation state; submit tests use mocked HTTP and require clean reconciliation. | aligned | No change. |
 | Production URL is rejected | `KalshiDemoConnectorConfig` and Kalshi read-only recorder tests reject production boundaries. | aligned | No change. |
 | Secrets are not logged | Demo connector loads auth from environment, stores redacted credential markers, and redacts secret-like keys; payload safety rejects secret-like market-data payload keys. | aligned | No change. |
 | Private-live gate remains disabled | `attempt_private_live_execution()` always returns disabled with `production_trading_enabled: false`. | aligned | No change. |
@@ -268,17 +276,33 @@ Mainline status counts:
 Concern rechecked: whether `docs/RISK_POLICY.md` order-placement wording is now
 precise or still stale/ambiguous after Stage 49.
 
-Finding: precise enough for the current public repo state. The policy now says
-Stage 49 is allowed only as demo/paper research infrastructure, dry-run by
-default, explicit opt-in for the guarded mocked submit path, Demo-only base URL,
-no production endpoint, and no real-money execution. That matches the
-implementation in `KalshiDemoConnectorConfig` and
-`preview_or_submit_kalshi_demo`, and the tests in
+Finding: precise after this follow-up. The policy now says Stage 49 is allowed
+only as demo/paper research infrastructure, dry-run by default, explicit opt-in
+for its guarded Demo-only submit path, mocked HTTP tests during validation,
+required clean Demo reconciliation state for submit, Demo-only base URL, no
+production endpoint, and no real-money execution. That matches
+`KalshiDemoConnectorConfig`, `preview_or_submit_kalshi_demo`, and
 `tests/test_kalshi_demo_connector.py`.
 
 Status: aligned.
 
 Recommendation: no follow-up needed for PR #106 wording.
+
+## PR #108 Review Resolution
+
+PR #108 review finding: include stale `docs/STAGE_PLAN.md` evidence.
+Resolution: this audit now records the stale pending-commit metadata for Stages
+35-39, 48, and 50-52. `docs/STAGE_PLAN.md` now classifies those pending lines
+as historical stage-branch metadata, not implementation drift.
+
+PR #108 review finding: qualify reconciliation hard stop.
+Resolution: actual Demo submit opt-in now requires a provided clean Demo
+reconciliation state and rejects missing or mismatched reconciliation. Dry-run
+preview still works without credentials or reconciliation state.
+
+PR #108 review finding: mark mocked-submit wording as stale.
+Resolution: Stage 49 wording now says the submit path is Kalshi Demo-only and
+mocked in tests; it is no longer described as a generally mocked path.
 
 ## Drift Register
 
@@ -296,16 +320,28 @@ None.
 
 ### Stale-Doc Only
 
-1. `PROJECT_SPEC.md` still says the current stage is Stage 4 and the next
-   stage is Stage 5.
-   - Roadmap/doc claim: `PROJECT_SPEC.md` describes Stage 4 as current and
-     Stage 5 as next.
-   - Code or test evidence: repository source and tests implement Stage 35-52
-     mainline modules including risk v2, manual approval, Demo connector,
-     reconciliation, rolling validation, and disabled private-live gate.
-   - Mismatch: stable project spec lags the implemented/public Stage 52 state.
-   - Recommended remediation: update `PROJECT_SPEC.md` in a small docs-only
-     follow-up, or explicitly mark its current/next-stage section historical.
+1. `docs/STAGE_PLAN.md` still contains historical `Commit: pending on ...`
+   branch metadata for completed Stages 35-39, 48, and 50-52.
+   - Roadmap/doc claim: completed-stage records list those stages as complete
+     but preserve old pending branch metadata.
+   - Code or test evidence: merged PR history, source modules, tests, scripts,
+     handoff, changelog, and `docs/roadmap_conformance_audit.md` all show
+     Stage 35-52 implementation is complete.
+   - Mismatch: metadata is stale if read as current commit status.
+   - Recommended remediation: no runtime change. This follow-up adds a
+     `docs/STAGE_PLAN.md` commit metadata note classifying those lines as
+     historical stage-branch notes, not implementation drift.
+
+Resolved in this follow-up:
+
+- `PROJECT_SPEC.md` no longer says the repository is at Stage 4/5; it now
+  describes the completed Stage 52 public state and the next human review
+  boundary.
+- Stage 49 wording now distinguishes the Demo-only submit path from the mocked
+  HTTP tests used to validate it.
+- Demo submit opt-in now rejects missing or mismatched reconciliation state,
+  while dry-run preview remains available without credentials or
+  reconciliation state.
 
 ### No-Fix-Needed Observations
 
@@ -313,24 +349,27 @@ None.
   connector boundary.
 - The Stage 52 public private-live gate is intentionally an importable disabled
   placeholder, not a full CLI.
-- Demo submit-path coverage is mocked and opt-in; this matches the public
-  disabled-live policy.
+- Demo submit-path validation uses mocked HTTP tests; the path itself remains
+  Kalshi Demo-only, opt-in, risk/manual approval/ledger/reconciliation gated,
+  and outside production/private-live execution.
 
 ## Validation Evidence
 
-Local validation run:
+Current follow-up validation run:
 
-- `python -m pip install -e ".[dev]"`: attempted first, failed because
-  `python` is not on PATH in this environment.
-- `/opt/homebrew/bin/python3 -m pip install -e ".[dev]"`: attempted next,
-  failed due PEP 668 externally managed system Python.
 - `/opt/homebrew/bin/python3 -m venv .venv && .venv/bin/python -m pip install -e ".[dev]"`:
   passed.
-- `.venv/bin/pytest`: passed, 253 tests.
-- `.venv/bin/ruff check .`: passed.
+- `PYTHONPATH=src .venv/bin/pytest tests/test_kalshi_demo_connector.py -q`:
+  passed, 14 tests.
+- `PYTHONPATH=src .venv/bin/pytest`: passed, 257 tests.
+- `PYTHONPATH=src .venv/bin/ruff check .`: passed.
 - `git diff --check`: passed.
+- `PYTHONPATH=src .venv/bin/python scripts/01_replay_orderbook_fixture.py`:
+  passed.
+- `PYTHONPATH=src .venv/bin/python scripts/49_kalshi_demo_connector.py --help`:
+  passed.
 
-Representative smoke chain run with `PYTHONPATH=src` and temp artifacts:
+Original PR #108 representative smoke chain retained as audit context:
 
 - fixture snapshot/replay: `.venv/bin/python scripts/01_replay_orderbook_fixture.py`
 - complement scanner: `.venv/bin/python scripts/23_scan_complement_arb.py ...`
@@ -353,5 +392,4 @@ Smoke result: `candidate=paper_candidate`, `demo_dry_run=True`,
 
 ## Follow-Up PRs Recommended
 
-1. Docs-only: refresh `PROJECT_SPEC.md` current/next-stage wording so it no
-   longer implies the repository is at Stage 4/5.
+None for PR #108 review feedback.

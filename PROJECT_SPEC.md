@@ -32,8 +32,10 @@ The architecture should later support:
 - No bypassing platform rules, KYC, regional restrictions, compliance
   boundaries, or rate limits.
 - No manipulative trading behavior.
-- No order placement until a later, separately reviewed stage with tests and a
-  risk engine.
+- No production or private-live order placement in the public repository.
+- Demo submit behavior is limited to the guarded Kalshi Demo research path: dry
+  run by default, explicit opt-in only, risk/manual approval/reconciliation
+  gated, and covered by mocked HTTP tests.
 - No live equities execution.
 - No credentials, private keys, tokens, wallet keys, or API keys in the repo.
 
@@ -55,17 +57,21 @@ The architecture should later support:
 - `observability`: future structured logs, metrics, run summaries, and audit
   trails.
 
-## Current stage
+## Current public state
 
-Stage 4 added a fair-value and quote engine dry-run. It consumes normalized or
-replayed books, estimates deterministic baseline fair value, applies bounded
-inventory-aware quote skew, and emits non-executable dry-run quote intents.
+The public repository is complete through Stage 52. It implements the
+same-market YES/NO complement-parity research mainline from local/read-only
+market data through scanner, simulation, paper proposal, paper ledger, risk
+decision, manual approval, guarded Kalshi Demo dry-run/submit infrastructure,
+local Demo reconciliation, rolling validation, and a disabled private-live gate.
 
 ## Next stage
 
-Stage 5 should add explicit risk checks before any demo execution smoke test.
-It must keep production trading disabled, cover blocked paths with tests, and
-avoid broad strategy deployment.
+The next step is human review of the private live gate design and private
+evidence collection outside the public repository. No production trading,
+private-live execution, production endpoints, credentials, wallets, broker
+integration, investment advice, executable advice, or profitability claim is
+authorized by this spec.
 
 ## Acceptance standards
 

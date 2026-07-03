@@ -17,6 +17,7 @@ from edmn_trader.adapters.kalshi.client import (
     KalshiConfigurationError,
 )
 from edmn_trader.adapters.kalshi.demo_reconciliation import (
+    KalshiDemoReconciliationError,
     require_demo_reconciliation_submit_eligible,
 )
 from edmn_trader.core.models import ONE, ZERO
@@ -159,11 +160,16 @@ def preview_or_submit_kalshi_demo(
         proposal_id=proposal_id,
         candidate_hash=candidate_hash,
     )
-    if demo_reconciliation_state_record is not None:
-        require_demo_reconciliation_submit_eligible(demo_reconciliation_state_record)
     previews = _build_request_previews(proposal_record, market_id=market_id, config=config)
 
     if not config.submit_opt_in:
+        if demo_reconciliation_state_record is not None:
+            _validate_demo_reconciliation_state(
+                demo_reconciliation_state_record,
+                proposal_id=proposal_id,
+                candidate_hash=candidate_hash,
+                approval_id=approval_id,
+            )
         result = KalshiDemoConnectorResult(
             status="preview",
             proposal_id=proposal_id,
@@ -174,6 +180,16 @@ def preview_or_submit_kalshi_demo(
         )
         _append_audit(audit_log_path, result, observed_at=observed_at)
         return result
+
+    if demo_reconciliation_state_record is None:
+        msg = "Kalshi Demo submit requires a clean demo reconciliation state"
+        raise KalshiDemoConnectorError(msg)
+    _validate_demo_reconciliation_state(
+        demo_reconciliation_state_record,
+        proposal_id=proposal_id,
+        candidate_hash=candidate_hash,
+        approval_id=approval_id,
+    )
 
     if http_client is None:
         msg = "submit path requires an explicit http_client in this stage"
@@ -261,6 +277,27 @@ def load_kalshi_demo_auth_headers_from_env() -> Mapping[str, str]:
         msg = "missing Kalshi Demo credential environment variables"
         raise KalshiDemoConnectorError(msg)
     return headers
+
+
+def _require_demo_reconciliation_submit_eligible(record: Mapping[str, object]) -> None:
+    try:
+        require_demo_reconciliation_submit_eligible(record)
+    except KalshiDemoReconciliationError as exc:
+        raise KalshiDemoConnectorError(str(exc)) from exc
+
+
+def _validate_demo_reconciliation_state(
+    record: Mapping[str, object],
+    *,
+    proposal_id: str,
+    candidate_hash: str,
+    approval_id: str,
+) -> None:
+    _match_hashes(record, proposal_id=proposal_id, candidate_hash=candidate_hash)
+    if _expect_str(record, "approval_id") != approval_id:
+        msg = "demo reconciliation approval_id mismatch"
+        raise KalshiDemoConnectorError(msg)
+    _require_demo_reconciliation_submit_eligible(record)
 
 
 def _validate_proposal(record: Mapping[str, object]) -> tuple[str, str, str]:

@@ -45,8 +45,9 @@ rebuild and replay consistency, plus Stage 43 taker fill, slippage, and
 failed-leg simulation, plus Stage 44 paper complement proposal engine, plus
 Stage 45 paper ledger state machine, plus Stage 46 risk engine v2, plus Stage
 47 manual approval workflow, plus Stage 48 monitoring and daily validation
-report, plus Stage 49 guarded Kalshi Demo connector previews and mocked
-submit-path coverage, plus Stage 50 local Kalshi Demo reconciliation replay,
+report, plus Stage 49 guarded Kalshi Demo connector previews and Demo
+submit-path coverage mocked in tests, plus Stage 50 local Kalshi Demo
+reconciliation replay,
 plus Stage 51 offline rolling paper/demo validation framework, plus Stage 52
 private live gate design and disabled public guard.
 
@@ -184,13 +185,14 @@ production-readiness claims, or profitability claims.
 
 Stage 49 adds `src/edmn_trader/adapters/kalshi/demo_connector.py` and
 `scripts/49_kalshi_demo_connector.py` for guarded Kalshi Demo request previews
-and mocked submit-path coverage. It consumes a hash-bound, non-expired,
-single-use manual approval record, a clear manual-review-required risk
-decision, and a reconciled paper ledger state before building tiny FOK/IOC
+and Demo submit-path coverage mocked in tests. It consumes a hash-bound,
+non-expired, single-use manual approval record, a clear manual-review-required
+risk decision, and a reconciled paper ledger state before building tiny FOK/IOC
 Demo request previews. Dry-run preview is the default and works without
-credentials. The submit path requires explicit opt-in, an injected HTTP client
-in this stage, environment-loaded auth headers, Demo-only base URL validation,
-and append-only local audit logs with auth-like values redacted. It does not
+credentials or reconciliation state. The submit path requires explicit opt-in,
+an injected HTTP client in this stage, environment-loaded auth headers,
+Demo-only base URL validation, a provided clean Demo reconciliation state, and
+append-only local audit logs with auth-like values redacted. It does not
 execute a real order during validation, add production endpoints, store
 credentials, add wallets, add Polymarket execution, add an LLM trading agent,
 optimize strategy, provide investment advice, emit executable advice, claim
@@ -204,14 +206,15 @@ timeout, and backfill-style state, and appends reconciliation records linked
 to the connector audit hash. Duplicate events are idempotent when their
 contents match. Missing events, conflicting duplicate ids, source-hash
 mismatches, fill-before-acceptance, overfill, and terminal-state conflicts
-produce mismatches. Any mismatch sets `submit_eligible` false and the Stage 49
-connector now rejects an optional mismatched reconciliation state before later
-Demo preview/submit attempts. Stage 50 uses local/mock records only and does
-not add venue connections, production endpoints, real Demo order execution
-during Codex validation, credentials, wallets, Polymarket execution, live
-user-order channels, broker integration, LLM trading agents, strategy
-optimization, investment advice, executable advice, production-readiness
-claims, or profitability claims.
+produce mismatches. Any mismatch sets `submit_eligible` false. The Stage 49
+connector keeps dry-run preview available without reconciliation state, while
+actual Demo submit opt-in requires a provided clean Demo reconciliation state
+and rejects missing or mismatched reconciliation. Stage 50 uses local/mock
+records only and does not add venue connections, production endpoints, real
+Demo order execution during Codex validation, credentials, wallets, Polymarket
+execution, live user-order channels, broker integration, LLM trading agents,
+strategy optimization, investment advice, executable advice,
+production-readiness claims, or profitability claims.
 
 Stage 51 adds `src/edmn_trader/arb/long_term_validation.py` and
 `scripts/51_long_term_validation.py` for offline rolling paper/demo validation
@@ -1142,7 +1145,7 @@ collection outside the public repo.
 - `src/edmn_trader/adapters/kalshi/readonly_recorder.py`: Stage 40 guarded
   Kalshi Demo read-only recorder.
 - `src/edmn_trader/adapters/kalshi/demo_connector.py`: Stage 49 guarded
-  Kalshi Demo request preview and mocked submit-path connector.
+  Kalshi Demo request preview and Demo submit path mocked in tests.
 - `src/edmn_trader/adapters/kalshi/demo_reconciliation.py`: Stage 50 local
   Kalshi Demo reconciliation replay and submit-eligibility blocker.
 - `src/edmn_trader/adapters/polymarket_us/client.py`: guarded read-only
@@ -1278,7 +1281,8 @@ collection outside the public repo.
 - `tests/test_daily_validation_report.py`: Stage 48 daily validation report
   metrics aggregation, output, and CLI coverage.
 - `tests/test_kalshi_demo_connector.py`: Stage 49 connector preview, guardrail,
-  mocked submit, and audit-redaction coverage.
+  reconciliation-required submit, mocked HTTP submit, and audit-redaction
+  coverage.
 - `tests/test_kalshi_demo_reconciliation.py`: Stage 50 reconciliation replay,
   duplicate, mismatch, submit-blocking, append-only output, and CLI coverage.
 - `tests/test_paper_report_pack.py`: Stage 10/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30/31/32/33/34 report-pack coverage

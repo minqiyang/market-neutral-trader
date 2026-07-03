@@ -82,7 +82,7 @@ context, then read only the files needed for the requested stage. Use `rg` and
   Kalshi Demo read-only recorder with explicit opt-in and mocked-testable
   client injection.
 - `src/edmn_trader/adapters/kalshi/demo_connector.py`: Stage 49 guarded
-  Kalshi Demo request preview and mocked submit-path connector. Read for
+  Kalshi Demo request preview and Demo submit path mocked in tests. Read for
   manual approval, risk, paper ledger, Demo allowlist, and audit-redaction
   behavior.
 - `src/edmn_trader/adapters/kalshi/demo_reconciliation.py`: Stage 50 local
@@ -322,8 +322,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   coverage for local metrics aggregation, deterministic output, and CLI
   behavior.
 - `tests/test_kalshi_demo_connector.py`: Stage 49 connector coverage for
-  dry-run previews, Demo URL rejection, risk/manual approval/ledger gates,
-  mocked submit success/reject/error paths, and audit redaction.
+  dry-run previews, Demo URL rejection, risk/manual approval/ledger/
+  reconciliation gates, mocked HTTP submit success/reject/error paths, and
+  audit redaction.
 - `tests/test_kalshi_demo_reconciliation.py`: Stage 50 reconciliation coverage
   for accepted/rejected/fill/cancel/error/timeout/backfill events, duplicate
   idempotency, mismatches, submit blocking, append-only output, and CLI

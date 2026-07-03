@@ -70,7 +70,10 @@ def main() -> None:
     parser.add_argument(
         "--submit-opt-in",
         action="store_true",
-        help="Attempt Demo submit path; dry-run preview is the default.",
+        help=(
+            "Attempt Demo submit path; input must include clean "
+            "demo_reconciliation_state. Dry-run preview is the default."
+        ),
     )
     args = parser.parse_args()
 

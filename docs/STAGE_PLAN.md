@@ -7,6 +7,11 @@ live gate design. They are intended as a durable audit map;
 implementation details remain in the source, tests, changelog, engineering
 log, and handoff archive.
 
+Commit metadata note: older `Commit: pending on ... branch` lines are
+historical stage-branch notes, not current implementation status. The code,
+tests, merged PR history, changelog, engineering log, and handoff archive are
+the source of truth for whether a stage is complete.
+
 Report-input metadata expansion from Stages 11 through 34 remains preserved as
 maintenance-only documentation/report-pack work. The active product direction
 is now narrow same-market YES/NO complement parity research, not continued
@@ -1198,8 +1203,8 @@ addition of small report-input metadata kinds.
 - Status: complete.
 - Commit: `eab1d7d` (merged via PR #99).
 - Purpose: bridge the paper workflow to a guarded Kalshi Demo request preview
-  and mocked submit path after manual approval, clear risk decision, and
-  healthy paper ledger state.
+  and Demo-only submit path after manual approval, clear risk decision, healthy
+  paper ledger state, and submit-time Demo reconciliation state.
 - Files/modules changed: `src/edmn_trader/adapters/kalshi/demo_connector.py`,
   `src/edmn_trader/scripts/kalshi_demo_connector.py`,
   `scripts/49_kalshi_demo_connector.py`, Kalshi adapter exports,
@@ -1212,19 +1217,21 @@ addition of small report-input metadata kinds.
   demo reconciliation only: accepted, rejected, fill, cancel, and backfill
   event reconciliation with mismatch hard-stops for later submissions.
 - Safety status: Demo/paper research infrastructure only, dry-run preview by
-  default, mocked submit-path tests only, Demo base URL allowlist, no production
-  endpoints, no real order execution during Codex validation, no credentials in
-  repo files, no wallet, no Polymarket execution, no LLM trading agent, no
-  strategy optimization, no investment advice, no executable advice, and no
-  profitability claims.
+  default, submit path restricted to Kalshi Demo with mocked HTTP tests during
+  validation, Demo base URL allowlist, no production endpoints, no real order
+  execution during Codex validation, no credentials in repo files, no wallet,
+  no Polymarket execution, no LLM trading agent, no strategy optimization, no
+  investment advice, no executable advice, and no profitability claims.
 
 ### Stage 50: Demo reconciliation
 
 - Status: complete.
 - Commit: pending on the Stage 50 demo reconciliation branch.
 - Purpose: reconcile local/mock Kalshi Demo connector outcomes into append-only
-  research state that links back to Stage 49 audit records and blocks later
-  Demo submissions when mismatches exist.
+  research state that links back to Stage 49 audit records. The Stage 49 dry-run
+  preview remains available without reconciliation state, but Demo submit opt-in
+  requires a provided clean reconciliation state and rejects missing or
+  mismatched reconciliation.
 - Files/modules changed:
   `src/edmn_trader/adapters/kalshi/demo_reconciliation.py`,
   `src/edmn_trader/scripts/kalshi_demo_reconciliation.py`,

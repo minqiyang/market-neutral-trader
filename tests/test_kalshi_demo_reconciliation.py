@@ -7,6 +7,7 @@ import pytest
 
 from edmn_trader.adapters.kalshi import (
     KalshiDemoConnectorConfig,
+    KalshiDemoConnectorError,
     KalshiDemoReconciliationError,
     append_kalshi_demo_reconciliation_jsonl,
     preview_or_submit_kalshi_demo,
@@ -114,7 +115,7 @@ def test_mismatch_state_blocks_future_demo_submit_preview(tmp_path: Path) -> Non
 
     with pytest.raises(KalshiDemoReconciliationError, match="blocks"):
         require_demo_reconciliation_submit_eligible(state.to_record())
-    with pytest.raises(KalshiDemoReconciliationError, match="blocks"):
+    with pytest.raises(KalshiDemoConnectorError, match="blocks"):
         preview_or_submit_kalshi_demo(
             **_connector_kwargs(),
             config=KalshiDemoConnectorConfig(),
