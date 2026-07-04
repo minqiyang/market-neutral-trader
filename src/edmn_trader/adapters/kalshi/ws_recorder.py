@@ -30,6 +30,7 @@ class KalshiWsRecorderConfig:
     raw_events_path: Path
     duration_seconds: int
     max_events: int = 500
+    max_reconnects: int = 0
     url: str = KALSHI_DEMO_WS_URL
 
     def __post_init__(self) -> None:
@@ -41,6 +42,8 @@ class KalshiWsRecorderConfig:
             raise ValueError("duration_seconds must be positive")
         if self.max_events < 1:
             raise ValueError("max_events must be positive")
+        if self.max_reconnects < 0:
+            raise ValueError("max_reconnects must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,59 +90,76 @@ def record_kalshi_demo_ws_orderbook(
     factory = websocket_factory or _websockets_connect
     rows: list[dict[str, object]] = []
     subscription_acknowledged = False
+    reconnect_count = 0
+    deadline = time.monotonic() + config.duration_seconds
     write_jsonl_records(config.raw_events_path, [])
-    try:
-        with factory(config.url, additional_headers=headers, open_timeout=10) as websocket:
-            websocket.send(_subscription_payload(config.market_tickers))
-            deadline = time.monotonic() + config.duration_seconds
-            while len(rows) < config.max_events and time.monotonic() < deadline:
-                try:
-                    raw = websocket.recv(timeout=min(30.0, max(0.1, deadline - time.monotonic())))
-                except TimeoutError:
-                    continue
-                received_at = clock()
-                payload = _loads(raw)
-                message_type = _message_type(payload)
-                subscription_acknowledged = subscription_acknowledged or _is_subscription_ack(
-                    payload,
-                    message_type,
-                )
-                row = {
-                    "record_type": "kalshi_demo_ws_message",
-                    "campaign_id": config.campaign_id,
-                    "venue": "kalshi_demo",
-                    "market_tickers": list(config.market_tickers),
-                    "sequence": len(rows) + 1,
-                    "received_at": received_at.isoformat(),
-                    "message_type": message_type,
-                    "payload": payload,
-                }
-                rows.append(row)
-                append_jsonl_record(config.raw_events_path, row)
-                if progress_callback is not None:
-                    progress_callback(
-                        _progress(
-                            rows,
-                            acknowledged=subscription_acknowledged,
-                            raw_events_path=config.raw_events_path,
+    while len(rows) < config.max_events and time.monotonic() < deadline:
+        try:
+            headers = build_kalshi_ws_headers(auth, timestamp_ms=int(clock().timestamp() * 1000))
+            with factory(config.url, additional_headers=headers, open_timeout=10) as websocket:
+                websocket.send(_subscription_payload(config.market_tickers))
+                while len(rows) < config.max_events and time.monotonic() < deadline:
+                    try:
+                        raw = websocket.recv(
+                            timeout=min(30.0, max(0.1, deadline - time.monotonic()))
                         )
+                    except TimeoutError:
+                        continue
+                    received_at = clock()
+                    payload = _loads(raw)
+                    message_type = _message_type(payload)
+                    subscription_acknowledged = subscription_acknowledged or _is_subscription_ack(
+                        payload,
+                        message_type,
                     )
-    except KalshiWsAuthBlocked as exc:
-        return _blocked(config, exc.code)
-    except Exception as exc:
-        code = "SUBSCRIPTION_REJECTED" if rows else "AUTH_SIGNATURE_FAILED"
-        if str(exc):
-            code = "WEBSOCKET_READ_FAILED" if rows else code
-        return _write_result(
-            config,
-            rows,
-            blocker_code=code,
-            acknowledged=subscription_acknowledged,
-        )
+                    row = {
+                        "record_type": "kalshi_demo_ws_message",
+                        "campaign_id": config.campaign_id,
+                        "venue": "kalshi_demo",
+                        "market_tickers": list(config.market_tickers),
+                        "sequence": len(rows) + 1,
+                        "received_at": received_at.isoformat(),
+                        "message_type": message_type,
+                        "payload": payload,
+                    }
+                    rows.append(row)
+                    append_jsonl_record(config.raw_events_path, row)
+                    if progress_callback is not None:
+                        progress_callback(
+                            _progress(
+                                rows,
+                                acknowledged=subscription_acknowledged,
+                                raw_events_path=config.raw_events_path,
+                                reconnect_count=reconnect_count,
+                            )
+                        )
+        except KalshiWsAuthBlocked as exc:
+            return _blocked(config, exc.code)
+        except Exception as exc:
+            if rows and reconnect_count < config.max_reconnects:
+                reconnect_count += 1
+                time.sleep(min(5.0, reconnect_count))
+                continue
+            code = "SUBSCRIPTION_REJECTED" if rows else "AUTH_SIGNATURE_FAILED"
+            if str(exc):
+                code = "WEBSOCKET_READ_FAILED" if rows else code
+            return _write_result(
+                config,
+                rows,
+                blocker_code=code,
+                acknowledged=subscription_acknowledged,
+                reconnect_count=reconnect_count,
+            )
 
     if not rows:
         return _write_result(config, rows, blocker_code="NO_MESSAGES_RECEIVED", acknowledged=False)
-    return _write_result(config, rows, blocker_code=None, acknowledged=subscription_acknowledged)
+    return _write_result(
+        config,
+        rows,
+        blocker_code=None,
+        acknowledged=subscription_acknowledged,
+        reconnect_count=reconnect_count,
+    )
 
 
 def _websockets_connect(*args: object, **kwargs: object) -> object:
@@ -196,6 +216,7 @@ def _write_result(
     *,
     blocker_code: str | None,
     acknowledged: bool,
+    reconnect_count: int = 0,
 ) -> KalshiWsRecorderResult:
     if not config.raw_events_path.exists():
         write_jsonl_records(config.raw_events_path, rows)
@@ -219,7 +240,7 @@ def _write_result(
         heartbeat_count=sum("heartbeat" in item for item in counts),
         error_count=sum("error" in item for item in counts) + (1 if blocker_code else 0),
         disconnect_count=0,
-        reconnect_count=0,
+        reconnect_count=reconnect_count,
         gap_count=0,
         last_event_time=last_event,
         stale_seconds=None,
@@ -256,6 +277,7 @@ def _progress(
     *,
     acknowledged: bool,
     raw_events_path: Path,
+    reconnect_count: int = 0,
 ) -> dict[str, object]:
     counts = [
         _message_type(row["payload"])
@@ -272,6 +294,7 @@ def _progress(
         "status_update_count": sum("status" in item for item in counts),
         "heartbeat_count": sum("heartbeat" in item for item in counts),
         "error_count": sum("error" in item for item in counts),
+        "reconnect_count": reconnect_count,
         "last_event_time": str(rows[-1]["received_at"]) if rows else None,
         "source_type": "WEBSOCKET_DELTA"
         if any("orderbook_delta" in item for item in counts)

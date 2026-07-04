@@ -792,6 +792,7 @@ def run_kalshi_ws_campaign(
             raw_events_path=output_dir / "kalshi_ws_raw_events.jsonl",
             duration_seconds=duration_seconds,
             max_events=1_000_000,
+            max_reconnects=1_000,
         ),
         auth,
         progress_callback=checkpoint,

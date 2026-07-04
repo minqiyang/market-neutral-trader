@@ -47,6 +47,37 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
     assert "KALSHI-ACCESS" not in (tmp_path / "raw.jsonl").read_text(encoding="utf-8")
 
 
+def test_ws_recorder_reconnects_after_read_failure_with_existing_rows(
+    tmp_path: Path,
+) -> None:
+    key_path = _fake_private_key_path(tmp_path)
+    websockets = [
+        _FailingWebSocket([{"type": "subscribed", "id": 1}]),
+        _FakeWebSocket([{"type": "orderbook_delta", "market_ticker": "DEMO-MARKET"}]),
+    ]
+
+    result = record_kalshi_demo_ws_orderbook(
+        KalshiWsRecorderConfig(
+            campaign_id="c1",
+            market_tickers=("DEMO-MARKET",),
+            raw_events_path=tmp_path / "raw.jsonl",
+            duration_seconds=5,
+            max_events=2,
+            max_reconnects=1,
+        ),
+        KalshiWsAuthConfig(api_key_id="fake", private_key_path=key_path),
+        websocket_factory=lambda *_args, **_kwargs: websockets.pop(0),
+        now=lambda: datetime(2026, 7, 3, 20, 0, tzinfo=UTC),
+    )
+
+    assert result.status == "ok"
+    assert result.subscription_acknowledged is True
+    assert result.event_count == 2
+    assert result.delta_count == 1
+    assert result.reconnect_count == 1
+    assert "orderbook_delta" in (tmp_path / "raw.jsonl").read_text(encoding="utf-8")
+
+
 class _FakeWebSocket:
     def __init__(self, messages: list[dict[str, object]]) -> None:
         self.messages = [json.dumps(message) for message in messages]
@@ -65,6 +96,13 @@ class _FakeWebSocket:
         if not self.messages:
             raise TimeoutError
         return self.messages.pop(0)
+
+
+class _FailingWebSocket(_FakeWebSocket):
+    def recv(self, *, timeout: float | None = None) -> str:
+        if self.messages:
+            return self.messages.pop(0)
+        raise ConnectionError("read failed")
 
 
 def _fake_private_key_path(tmp_path: Path) -> Path:
