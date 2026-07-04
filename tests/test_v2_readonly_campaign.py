@@ -11,6 +11,7 @@ from edmn_trader.adapters.kalshi import KalshiDemoMarketDataClient, KalshiReadOn
 from edmn_trader.cli.monitor import build_monitor_snapshot, render_snapshot
 from edmn_trader.scripts.v2_readonly_campaign import (
     plan_campaign,
+    plan_kalshi_ws_campaign,
     run_kalshi_rest_smoke,
     run_kalshi_ws_smoke,
     run_smoke,
@@ -250,6 +251,54 @@ def test_validator_classifies_extended_snapshot_without_delta(tmp_path: Path) ->
 
     assert result["status"] == "pass"
     assert result["evidence_classification"] == "LAYER1_WS_SNAPSHOT_ONLY_EXTENDED"
+
+
+def test_validator_does_not_mark_running_seven_day_campaign_complete(tmp_path: Path) -> None:
+    plan_kalshi_ws_campaign(
+        output_dir=tmp_path,
+        campaign_id="ws7d",
+        duration_seconds=604800,
+        max_markets=3,
+        now=datetime(2026, 7, 3, 18, 0, tzinfo=UTC),
+    )
+    summary = json.loads((tmp_path / "campaign_summary.json").read_text(encoding="utf-8"))
+    summary.update(
+        {
+            "status": "websocket_campaign_running",
+            "mode": "read_only_websocket_campaign",
+            "event_count": 2,
+            "snapshot_count": 1,
+            "delta_count": 1,
+            "connection_established": True,
+            "subscription_acknowledged": True,
+        }
+    )
+    (tmp_path / "campaign_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    (tmp_path / "campaign_heartbeat.jsonl").write_text(
+        json.dumps(
+            {
+                "record_type": "campaign_heartbeat",
+                "campaign_id": "ws7d",
+                "venue": "kalshi_demo",
+                "market": "DEMO-MARKET",
+                "sequence": 1,
+                "observed_at": "2026-07-03T18:00:00+00:00",
+                "received_at": "2026-07-03T18:00:00+00:00",
+                "source_type": "WEBSOCKET_DELTA",
+                "live_gate_status": "disabled",
+                "submit_attempt": False,
+                "production_endpoint_used": False,
+                "status": "websocket_campaign_running",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = validate_campaign(input_dir=tmp_path)
+
+    assert result["status"] == "pass"
+    assert result["evidence_classification"] == "LAYER1_WS_DELTA_SMOKE_PASS"
 
 
 def test_monitor_shows_campaign_view(tmp_path: Path) -> None:

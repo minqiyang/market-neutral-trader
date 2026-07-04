@@ -415,6 +415,7 @@ def _write_kalshi_ws_summary(
     stale_seconds: int | None = None,
     raw_event_path: str | None = None,
     raw_event_sha256: str | None = None,
+    mode: str = "read_only_websocket_smoke",
 ) -> dict[str, object]:
     market_tickers = market_tickers or []
     heartbeat = {
@@ -448,7 +449,7 @@ def _write_kalshi_ws_summary(
         "planned_end_utc": (generated_at + timedelta(seconds=duration_seconds)).isoformat(),
         "duration_seconds": duration_seconds,
         "interval_seconds": None,
-        "mode": "read_only_websocket_smoke",
+        "mode": mode,
         "live_gate_status": "disabled",
         "production_endpoint_used": False,
         "submit_attempt_count": 0,
@@ -655,7 +656,7 @@ def _run_mode_command(argv: list[str]) -> dict[str, object]:
     args = parser.parse_args(argv)
     campaign_id = args.campaign_id or args.output_dir.name
     if args.mode == "kalshi-ws-campaign":
-        return plan_kalshi_ws_campaign(
+        return run_kalshi_ws_campaign(
             output_dir=args.output_dir,
             campaign_id=campaign_id,
             duration_seconds=args.duration_seconds,
@@ -713,6 +714,121 @@ def plan_kalshi_ws_campaign(
     return summary
 
 
+def run_kalshi_ws_campaign(
+    *,
+    output_dir: Path,
+    campaign_id: str,
+    duration_seconds: int,
+    max_markets: int,
+    now: datetime | None = None,
+) -> dict[str, object]:
+    _validate_duration(duration_seconds, allow_seven_day=True)
+    generated_at = now or datetime.now(UTC)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        auth = load_kalshi_ws_auth_config_from_env()
+    except KalshiWsAuthBlocked as exc:
+        return _write_kalshi_ws_summary(
+            output_dir=output_dir,
+            campaign_id=campaign_id,
+            duration_seconds=duration_seconds,
+            max_markets=max_markets,
+            generated_at=generated_at,
+            status="websocket_auth_blocked",
+            blocker_code=exc.code,
+            blocker=exc.code,
+            credential_presence={"access_id_present": False, "signing_material_present": False},
+            mode="read_only_websocket_campaign",
+        )
+
+    market = _select_kalshi_demo_ws_market(max_markets=max_markets)
+    if market is None:
+        return _write_kalshi_ws_summary(
+            output_dir=output_dir,
+            campaign_id=campaign_id,
+            duration_seconds=duration_seconds,
+            max_markets=max_markets,
+            generated_at=generated_at,
+            status="websocket_blocked",
+            blocker_code="NO_ACTIVE_DEMO_MARKET",
+            blocker="NO_ACTIVE_DEMO_MARKET",
+            credential_presence=auth.credential_presence,
+            mode="read_only_websocket_campaign",
+        )
+
+    def checkpoint(progress: dict[str, object]) -> None:
+        _write_kalshi_ws_summary(
+            output_dir=output_dir,
+            campaign_id=campaign_id,
+            duration_seconds=duration_seconds,
+            max_markets=max_markets,
+            generated_at=generated_at,
+            status="websocket_campaign_running",
+            blocker_code=None,
+            blocker=None,
+            credential_presence=auth.credential_presence,
+            market_tickers=[market],
+            mode="read_only_websocket_campaign",
+            **progress,
+        )
+
+    _write_kalshi_ws_summary(
+        output_dir=output_dir,
+        campaign_id=campaign_id,
+        duration_seconds=duration_seconds,
+        max_markets=max_markets,
+        generated_at=generated_at,
+        status="websocket_campaign_running",
+        blocker_code=None,
+        blocker=None,
+        credential_presence=auth.credential_presence,
+        market_tickers=[market],
+        mode="read_only_websocket_campaign",
+    )
+    recorder = record_kalshi_demo_ws_orderbook(
+        KalshiWsRecorderConfig(
+            campaign_id=campaign_id,
+            market_tickers=(market,),
+            raw_events_path=output_dir / "kalshi_ws_raw_events.jsonl",
+            duration_seconds=duration_seconds,
+            max_events=1_000_000,
+        ),
+        auth,
+        progress_callback=checkpoint,
+    )
+    status = "websocket_campaign_complete" if recorder.blocker_code is None else "websocket_blocked"
+    return _write_kalshi_ws_summary(
+        output_dir=output_dir,
+        campaign_id=campaign_id,
+        duration_seconds=duration_seconds,
+        max_markets=max_markets,
+        generated_at=generated_at,
+        status=status,
+        blocker_code=recorder.blocker_code,
+        blocker=recorder.blocker_code,
+        credential_presence=auth.credential_presence,
+        market_tickers=[market],
+        connection_established=recorder.connection_established,
+        subscription_acknowledged=recorder.subscription_acknowledged,
+        source_type=recorder.source_type,
+        event_count=recorder.event_count,
+        snapshot_count=recorder.snapshot_count,
+        delta_count=recorder.delta_count,
+        trade_count=recorder.trade_count,
+        status_update_count=recorder.status_update_count,
+        heartbeat_count=recorder.heartbeat_count,
+        error_count=recorder.error_count,
+        disconnect_count=recorder.disconnect_count,
+        reconnect_count=recorder.reconnect_count,
+        gap_count=recorder.gap_count,
+        last_event_time=recorder.last_event_time,
+        stale_seconds=recorder.stale_seconds,
+        raw_event_path=recorder.raw_event_path,
+        raw_event_sha256=recorder.raw_event_sha256,
+        mode="read_only_websocket_campaign",
+    )
+
+
 def _add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--campaign-id", default="round4-readonly-smoke")
@@ -755,7 +871,11 @@ def _classify_campaign(
         if event_count <= 0:
             return "LAYER1_WS_CAMPAIGN_INCOMPLETE"
         if _as_int(summary.get("duration_seconds")) >= SEVEN_DAY_SECONDS:
-            return "LAYER1_WS_CAMPAIGN_PASS_7D"
+            if status == "websocket_campaign_complete":
+                return "LAYER1_WS_CAMPAIGN_PASS_7D"
+            if delta_count > 0:
+                return "LAYER1_WS_DELTA_SMOKE_PASS"
+            return "LAYER1_WS_CAMPAIGN_INCOMPLETE"
         if delta_count > 0:
             return "LAYER1_WS_DELTA_SMOKE_PASS"
         if snapshot_count > 0 and summary.get("subscription_acknowledged") is True:
