@@ -320,6 +320,62 @@ def test_monitor_shows_campaign_view(tmp_path: Path) -> None:
     assert "submit_attempts=0" in rendered
 
 
+def test_monitor_warns_for_running_websocket_campaign_staleness(tmp_path: Path) -> None:
+    _write_ws_campaign_summary(tmp_path, status="websocket_campaign_running")
+
+    snapshot = build_monitor_snapshot(tmp_path, now=datetime(2026, 7, 3, 18, 30, tzinfo=UTC))
+
+    assert snapshot["campaign"]["status"] == "WEBSOCKET_CAMPAIGN_RUNNING"
+    assert "STALE_DATA: kalshi_demo staleness=1800" in snapshot["system"]["warnings"]
+    assert snapshot["system"]["health"] == "WARNING"
+
+
+def test_monitor_completed_websocket_canary_quiet_period_is_informational(tmp_path: Path) -> None:
+    _write_ws_campaign_summary(tmp_path, status="websocket_campaign_complete")
+
+    snapshot = build_monitor_snapshot(tmp_path, now=datetime(2026, 7, 3, 18, 30, tzinfo=UTC))
+
+    assert (
+        snapshot["campaign"]["completion_status"]
+        == "CANARY_COMPLETED_QUIET_MARKET_NO_RECENT_EVENT"
+    )
+    assert snapshot["system"]["warnings"] == []
+    assert snapshot["system"]["health"] == "OK_PAPER"
+    assert snapshot["campaign"]["live_gate_status"] == "disabled"
+    assert snapshot["campaign"]["submit_attempts"] == 0
+
+
+def test_monitor_completed_websocket_canary_without_events_stays_incomplete(tmp_path: Path) -> None:
+    _write_ws_campaign_summary(
+        tmp_path,
+        status="websocket_campaign_complete",
+        event_count=0,
+        snapshot_count=0,
+        delta_count=0,
+    )
+
+    snapshot = build_monitor_snapshot(tmp_path, now=datetime(2026, 7, 3, 18, 30, tzinfo=UTC))
+
+    assert snapshot["campaign"]["status"] == "NO_DATA"
+    assert (
+        snapshot["campaign"]["completion_status"]
+        == "COMPLETED_WITH_MONITOR_STALE_METADATA_WARNING"
+    )
+    assert "STALE_DATA: kalshi_demo staleness=1800" in snapshot["system"]["warnings"]
+
+
+def test_monitor_stopped_unexpected_websocket_campaign_staleness_remains_warning(
+    tmp_path: Path,
+) -> None:
+    _write_ws_campaign_summary(tmp_path, status="websocket_blocked", validation_status="fail")
+
+    snapshot = build_monitor_snapshot(tmp_path, now=datetime(2026, 7, 3, 18, 30, tzinfo=UTC))
+
+    assert snapshot["campaign"]["completion_status"] is None
+    assert "STALE_DATA: kalshi_demo staleness=1800" in snapshot["system"]["warnings"]
+    assert snapshot["system"]["health"] == "WARNING"
+
+
 def _kalshi_client(requests: list[httpx.Request] | None = None) -> KalshiDemoMarketDataClient:
     payload = json.loads((FIXTURES / "kalshi_orderbook_response.json").read_text(encoding="utf-8"))
 
@@ -330,4 +386,73 @@ def _kalshi_client(requests: list[httpx.Request] | None = None) -> KalshiDemoMar
 
     return KalshiDemoMarketDataClient(
         http_client=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+
+
+def _write_ws_campaign_summary(
+    root: Path,
+    *,
+    status: str,
+    validation_status: str = "pass",
+    event_count: int = 6,
+    snapshot_count: int = 1,
+    delta_count: int = 4,
+) -> None:
+    summary = {
+        "schema_version": "v2.readonly_campaign.v1",
+        "campaign_id": "ws-canary",
+        "status": status,
+        "venue": "kalshi_demo",
+        "market": "DEMO-MARKET",
+        "source_type": "WEBSOCKET_DELTA",
+        "duration_seconds": 1800,
+        "live_gate_status": "disabled",
+        "production_endpoint_used": False,
+        "submit_attempt_count": 0,
+        "submit_attempts": 0,
+        "real_money_trading": False,
+        "connection_established": True,
+        "subscription_acknowledged": True,
+        "event_count": event_count,
+        "snapshot_count": snapshot_count,
+        "delta_count": delta_count,
+        "trade_count": 0,
+        "gap_count": 0,
+        "reconnect_count": 0,
+        "last_event_time": "2026-07-03T18:00:00+00:00",
+        "validation_status": validation_status,
+        "evidence_classification": "LAYER1_WS_DELTA_SMOKE_PASS",
+    }
+    validation = {
+        "status": validation_status,
+        "source_type": "WEBSOCKET_DELTA",
+        "evidence_classification": "LAYER1_WS_DELTA_SMOKE_PASS",
+        "event_count": event_count,
+        "snapshot_count": snapshot_count,
+        "delta_count": delta_count,
+        "trade_count": 0,
+        "gap_count": 0,
+        "reconnect_count": 0,
+        "last_event_time": "2026-07-03T18:00:00+00:00",
+    }
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "campaign_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    (root / "campaign_validation.json").write_text(json.dumps(validation), encoding="utf-8")
+    (root / "campaign_heartbeat.jsonl").write_text(
+        json.dumps(
+            {
+                "record_type": "campaign_heartbeat",
+                "campaign_id": "ws-canary",
+                "venue": "kalshi_demo",
+                "observed_at": "2026-07-03T18:00:00+00:00",
+                "received_at": "2026-07-03T18:00:00+00:00",
+                "source_type": "WEBSOCKET_DELTA",
+                "live_gate_status": "disabled",
+                "submit_attempt": False,
+                "production_endpoint_used": False,
+                "status": status,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
     )

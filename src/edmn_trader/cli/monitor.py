@@ -38,6 +38,8 @@ SECRET_KEYS = (
     "token",
 )
 STALE_SECONDS = 15 * 60
+RUNNING_CAMPAIGN_STATUSES = {"running", "websocket_campaign_running"}
+COMPLETED_WS_CAMPAIGN_STATUSES = {"websocket_campaign_complete", "websocket_smoke_complete"}
 
 
 def build_monitor_snapshot(input_dir: Path, *, now: datetime | None = None) -> dict[str, object]:
@@ -57,7 +59,7 @@ def build_monitor_snapshot(input_dir: Path, *, now: datetime | None = None) -> d
     risk = _risk_status(records, summaries)
     reconciliation = _reconciliation_status(records, summaries)
     evidence = _evidence_status(records, summaries)
-    campaign = _campaign_status(summaries)
+    campaign = _campaign_status(summaries, generated_at)
     data_status = _data_status(records, summaries, venues)
     health = _health(
         input_dir=input_dir,
@@ -220,8 +222,11 @@ def _venue_rows(
     if not source and venue_summary:
         source = [venue_summary]
     if not source:
+        campaign = summaries.get("campaign_summary.json", {})
+        validation = summaries.get("campaign_validation.json", {})
         venue = (
-            summaries.get("recorder_summary.json", {}).get("venue")
+            campaign.get("venue")
+            or summaries.get("recorder_summary.json", {}).get("venue")
             or _first_value(records, "venue")
         )
         if venue:
@@ -230,8 +235,13 @@ def _venue_rows(
                     "venue": venue,
                     "mode": "read_only",
                     "connectivity": "unknown",
-                    "last_event_ts": _last_value(records, "observed_at"),
-                    "gap_count": _count_flag(records, "sequence_gap"),
+                    "last_event_ts": campaign.get("last_event_time")
+                    or validation.get("last_event_time")
+                    or _last_value(records, "received_at")
+                    or _last_value(records, "observed_at"),
+                    "gap_count": campaign.get("gap_count")
+                    or validation.get("gap_count")
+                    or _count_flag(records, "sequence_gap"),
                     "warning_count": 0,
                 }
             ]
@@ -252,7 +262,7 @@ def _venue_rows(
         }
         if row["data_staleness_seconds"] is None:
             row["data_staleness_seconds"] = _staleness_seconds(row["last_event_ts"], generated_at)
-        if _is_stale(row["data_staleness_seconds"]):
+        if _is_stale(row["data_staleness_seconds"]) and not _completed_ws_canary_ok(summaries):
             warnings.append(f"STALE_DATA: {row['venue']} staleness={row['data_staleness_seconds']}")
         rows.append(row)
     return rows
@@ -279,6 +289,7 @@ def _data_status(
         or (
             "STALE"
             if any(_is_stale(row.get("data_staleness_seconds")) for row in venues)
+            and not _completed_ws_canary_ok(summaries)
             else _flag_status(records, "stale")
         ),
         "gap_count": recorder.get("gap_count")
@@ -530,16 +541,21 @@ def _validation_status(
     }
 
 
-def _campaign_status(summaries: Mapping[str, Mapping[str, object]]) -> dict[str, object]:
+def _campaign_status(
+    summaries: Mapping[str, Mapping[str, object]],
+    generated_at: datetime,
+) -> dict[str, object]:
     campaign = summaries.get("campaign_summary.json", {})
     validation = summaries.get("campaign_validation.json", {})
     source_type = campaign.get("source_type") or validation.get("source_type")
     event_count = campaign.get("event_count") or validation.get("event_count") or 0
     validation_status = validation.get("status") or campaign.get("validation_status")
     submit_attempts = campaign.get("submit_attempts", campaign.get("submit_attempt_count", 0))
+    completion_status = _campaign_completion_status(campaign, validation, generated_at)
     return {
         "campaign_id": campaign.get("campaign_id"),
         "status": _campaign_monitor_status(campaign, validation),
+        "completion_status": completion_status,
         "run_status": campaign.get("status"),
         "source_type": source_type,
         "venue": campaign.get("venue"),
@@ -612,7 +628,7 @@ def _campaign_monitor_status(
         duration_seconds = _int_or_zero(campaign.get("duration_seconds"))
         if validation_status == "pass" and duration_seconds >= 604_800:
             return "WEBSOCKET_CAMPAIGN_VALIDATED"
-        if campaign.get("status") == "running":
+        if campaign.get("status") in RUNNING_CAMPAIGN_STATUSES:
             return "WEBSOCKET_CAMPAIGN_RUNNING"
         if classification == "LAYER1_WS_DELTA_SMOKE_PASS":
             return "WEBSOCKET_DELTA_SMOKE"
@@ -622,6 +638,66 @@ def _campaign_monitor_status(
             return "WEBSOCKET_SNAPSHOT_SMOKE"
         return "NO_DATA"
     return "NO_DATA"
+
+
+def _completed_ws_canary_ok(summaries: Mapping[str, Mapping[str, object]]) -> bool:
+    return _campaign_completion_status(
+        summaries.get("campaign_summary.json", {}),
+        summaries.get("campaign_validation.json", {}),
+        None,
+    ) in {"CANARY_COMPLETED_OK", "CANARY_COMPLETED_QUIET_MARKET_NO_RECENT_EVENT"}
+
+
+def _campaign_completion_status(
+    campaign: Mapping[str, object],
+    validation: Mapping[str, object],
+    generated_at: datetime | None,
+) -> str | None:
+    if campaign.get("status") not in COMPLETED_WS_CAMPAIGN_STATUSES:
+        return None
+    if not _completed_ws_campaign_has_safe_evidence(campaign, validation):
+        return "COMPLETED_WITH_MONITOR_STALE_METADATA_WARNING"
+    last_event_time = campaign.get("last_event_time") or validation.get("last_event_time")
+    stale_seconds = _staleness_seconds(last_event_time, generated_at) if generated_at else None
+    if _is_stale(stale_seconds):
+        return "CANARY_COMPLETED_QUIET_MARKET_NO_RECENT_EVENT"
+    return "CANARY_COMPLETED_OK"
+
+
+def _completed_ws_campaign_has_safe_evidence(
+    campaign: Mapping[str, object],
+    validation: Mapping[str, object],
+) -> bool:
+    classification = validation.get("evidence_classification") or campaign.get(
+        "evidence_classification"
+    )
+    event_count = _int_or_zero(campaign.get("event_count") or validation.get("event_count"))
+    snapshot_count = _int_or_zero(
+        campaign.get("snapshot_count") or validation.get("snapshot_count")
+    )
+    delta_count = _int_or_zero(campaign.get("delta_count") or validation.get("delta_count"))
+    gap_count = _int_or_zero(campaign.get("gap_count") or validation.get("gap_count"))
+    submit_attempts = _int_or_zero(
+        campaign.get("submit_attempts") or campaign.get("submit_attempt_count")
+    )
+    return (
+        (validation.get("status") or campaign.get("validation_status")) == "pass"
+        and classification
+        in {
+            "LAYER1_WS_DELTA_SMOKE_PASS",
+            "LAYER1_WS_SNAPSHOT_ONLY_EXTENDED",
+            "LAYER1_WS_SNAPSHOT_SMOKE_PASS",
+        }
+        and campaign.get("blocker_code") in {None, ""}
+        and validation.get("blocker_code") in {None, ""}
+        and campaign.get("connection_established") is True
+        and campaign.get("subscription_acknowledged") is True
+        and event_count > 0
+        and snapshot_count + delta_count > 0
+        and gap_count == 0
+        and campaign.get("live_gate_status") == "disabled"
+        and submit_attempts == 0
+    )
 
 
 def _health(
