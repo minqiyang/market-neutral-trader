@@ -53,6 +53,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
   Stage 52 public release scope.
 - `docs/resume_bullets_stage_52.md`: resume-ready bullets for the completed
   Stage 52 public research platform.
+- `docs/v2_readonly_recorder_campaign.md`: V2 seven-day read-only campaign
+  lifecycle gate and evidence boundary.
+- `docs/v2_monitor_contract.md`: V2 monitor lifecycle, liveness, and stale
+  semantics contract.
 - `docs/stage8_polymarket_readiness.md`: Stage 8 compliance/readiness note.
   Read before any Polymarket US adapter work.
 - `docs/stage9_equities_readiness.md`: Stage 9 SEC EDGAR equities readiness
@@ -155,6 +159,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   execution smoke behavior.
 - `src/edmn_trader/execution/private_live_gate.py`: Stage 52 disabled public
   live execution gate placeholder. Read before any private-live gate work.
+- `src/edmn_trader/cli/monitor.py`: read-only terminal monitor over local
+  summaries/JSONL artifacts. Read for lifecycle, stale-data, and liveness
+  display changes.
 - `src/edmn_trader/scripts/replay_orderbook_fixture.py`: importable fixture
   replay entry point.
 - `src/edmn_trader/scripts/record_fixture_snapshots.py`: importable Stage 3
@@ -189,6 +196,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   manual approval CLI entry point.
 - `src/edmn_trader/scripts/daily_validation_report.py`: importable Stage 48
   daily validation report CLI entry point.
+- `src/edmn_trader/scripts/v2_readonly_campaign.py`: V2 read-only campaign
+  planning, smoke, validation, manifest, lifecycle gate, and evidence
+  classification helper. Read before any recorder campaign gate work.
 - `src/edmn_trader/scripts/kalshi_demo_connector.py`: importable Stage 49
   guarded Kalshi Demo connector preview CLI entry point.
 - `src/edmn_trader/scripts/kalshi_demo_reconciliation.py`: importable Stage 50
@@ -260,6 +270,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   reconciliation state.
 - `scripts/51_long_term_validation.py`: builds offline rolling 7/30/90-day
   validation reports from local paper/demo research JSONL artifacts.
+- `scripts/v2_readonly_campaign.py`: root wrapper for V2 read-only campaign
+  plan/smoke/validate commands. Do not use it to launch real campaigns without
+  the explicit owner-run boundary.
 - `scripts/07_research_report.py`: writes a local/offline Markdown attribution
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
 - `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
@@ -351,6 +364,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `tests/test_private_live_gate.py`: Stage 52 disabled live gate coverage for
   unmet prerequisites, fail-closed status, and no endpoint/credential/order
   payload exposure.
+- `tests/test_v2_readonly_campaign.py`: V2 read-only campaign smoke,
+  lifecycle selection gate, finalized-market evidence invalidation, monitor
+  lifecycle display, and disabled live gate coverage.
 - `tests/test_demo_execution_smoke.py`: Stage 5 smoke script coverage.
 - `tests/test_market_maker_replay.py`: Stage 6 dry-run/demo, lifecycle,
   run-control, adapter-error, and script-summary coverage.

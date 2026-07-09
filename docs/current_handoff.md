@@ -49,11 +49,17 @@ report, plus Stage 49 guarded Kalshi Demo connector previews and Demo
 submit-path coverage mocked in tests, plus Stage 50 local Kalshi Demo
 reconciliation replay,
 plus Stage 51 offline rolling paper/demo validation framework, plus Stage 52
-private live gate design and disabled public guard.
+private live gate design and disabled public guard. Round 8B adds public
+read-only campaign lifecycle gates: market metadata now records status and
+close/expiration fields, seven-day WebSocket campaign planning rejects missing
+market metadata, finalized/closed/settled markets invalidate campaign evidence,
+and the monitor surfaces market lifecycle plus separate liveness fields.
 
 ## Last completed stage
 
-Stage 52 private live gate design and disabled public guard.
+Stage 52 private live gate design and disabled public guard, plus Round 8B
+public lifecycle gates for read-only campaign selection, validation, manifest
+metadata, and monitor display.
 
 ## Stage plan status
 
@@ -76,6 +82,8 @@ added, validation commands, status, next-stage boundary, and safety status for
 each completed stage. Stage 35-52 is complete. The recommended next action is
 human review of the private live gate design and private evidence collection
 outside the public repo before any separately reviewed private implementation.
+Before any new seven-day recorder launch, select only open/trading markets
+whose close/expiration exceeds the campaign duration plus a 24-hour buffer.
 
 Report-input metadata expansion from Stages 11 through 34 is now
 maintenance-only. The previously clarified local delivery-notes report input is

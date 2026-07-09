@@ -6,6 +6,10 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added public Round 8B lifecycle gates for read-only recorder campaigns:
+  market status and time-to-close checks, manifest lifecycle metadata,
+  finalized/closed-market evidence invalidation, and monitor lifecycle/liveness
+  display. Live trading remains disabled.
 - Refreshed README and `docs/visual_overview.md` Mermaid diagrams for the
   post-PR #109 Demo dry-run/guarded submit boundary and public/private
   separation while preserving the disabled-live public boundary.

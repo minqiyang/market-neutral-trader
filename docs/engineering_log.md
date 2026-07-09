@@ -8,6 +8,24 @@ on correctness, staged delivery, risk boundaries, deterministic tests, and the
 ability to explain how a trading research platform is built from safe
 foundations.
 
+## Round 8B public lifecycle gates
+
+Round 8B tightened the public read-only campaign boundary after private ops
+evidence showed that a finalized market can make a long recorder run stale
+without producing useful seven-day evidence. The public campaign helper now
+evaluates market status, close/expiration time, a 24-hour safety buffer, and
+known empty orderbooks before a long WebSocket campaign can be considered
+selectable.
+
+The validator keeps raw artifact integrity separate from campaign evidence
+validity: finalized, closed, settled, resolved, or expired markets produce
+`MARKET_CLOSED_OR_FINALIZED_ENDS_CAMPAIGN_EVIDENCE` instead of a generic stale
+condition. The monitor now shows the subscribed market, lifecycle status,
+close time, time since close, and separate liveness fields for supervisor,
+campaign process, WebSocket freshness, market lifecycle, and exchange heartbeat
+observation. The exchange heartbeat remains `UNKNOWN` unless a recorder
+actually writes it.
+
 ## Why start with Kalshi-style binary orderbooks
 
 Kalshi-style binary prediction markets are a useful first target because they

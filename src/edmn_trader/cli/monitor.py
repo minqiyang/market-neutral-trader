@@ -60,6 +60,8 @@ def build_monitor_snapshot(input_dir: Path, *, now: datetime | None = None) -> d
     reconciliation = _reconciliation_status(records, summaries)
     evidence = _evidence_status(records, summaries)
     campaign = _campaign_status(summaries, generated_at)
+    if campaign.get("market_warning"):
+        warnings.append(str(campaign["market_warning"]))
     data_status = _data_status(records, summaries, venues)
     health = _health(
         input_dir=input_dir,
@@ -262,7 +264,11 @@ def _venue_rows(
         }
         if row["data_staleness_seconds"] is None:
             row["data_staleness_seconds"] = _staleness_seconds(row["last_event_ts"], generated_at)
-        if _is_stale(row["data_staleness_seconds"]) and not _completed_ws_canary_ok(summaries):
+        campaign = summaries.get("campaign_summary.json", {})
+        completed_campaign = _completed_bounded_campaign(campaign) or _completed_ws_canary_ok(
+            summaries
+        )
+        if _is_stale(row["data_staleness_seconds"]) and not completed_campaign:
             warnings.append(f"STALE_DATA: {row['venue']} staleness={row['data_staleness_seconds']}")
         rows.append(row)
     return rows
@@ -275,7 +281,18 @@ def _data_status(
 ) -> dict[str, object]:
     recorder = summaries.get("recorder_summary.json", {})
     replay = summaries.get("replay_summary.json", {})
+    campaign = summaries.get("campaign_summary.json", {})
     events = [record for record in records if _is_market_data_record(record)]
+    completed_campaign = _completed_bounded_campaign(campaign) or _completed_ws_canary_ok(summaries)
+    stale_status = recorder.get("stale_status") or (
+        "COMPLETE"
+        if completed_campaign
+        else (
+            "STALE"
+            if any(_is_stale(row.get("data_staleness_seconds")) for row in venues)
+            else _flag_status(records, "stale")
+        )
+    )
     return {
         "venue": recorder.get("venue") or _first_mapping_value(venues, "venue"),
         "market_count": recorder.get("market_count")
@@ -285,13 +302,7 @@ def _data_status(
         "last_event_time": recorder.get("ended_at_utc")
         or _first_mapping_value(venues, "last_event_ts")
         or _last_value(events, "observed_at"),
-        "stale_status": recorder.get("stale_status")
-        or (
-            "STALE"
-            if any(_is_stale(row.get("data_staleness_seconds")) for row in venues)
-            and not _completed_ws_canary_ok(summaries)
-            else _flag_status(records, "stale")
-        ),
+        "stale_status": stale_status,
         "gap_count": recorder.get("gap_count")
         or replay.get("gap_count")
         or sum(_int_or_zero(row.get("gap_count")) for row in venues)
@@ -552,6 +563,9 @@ def _campaign_status(
     validation_status = validation.get("status") or campaign.get("validation_status")
     submit_attempts = campaign.get("submit_attempts", campaign.get("submit_attempt_count", 0))
     completion_status = _campaign_completion_status(campaign, validation, generated_at)
+    market_status = campaign.get("market_status") or campaign.get("status_at_launch")
+    close_time = campaign.get("close_time") or campaign.get("expected_expiration")
+    market_closed = _is_closed_market_status(market_status)
     return {
         "campaign_id": campaign.get("campaign_id"),
         "status": _campaign_monitor_status(campaign, validation),
@@ -561,6 +575,29 @@ def _campaign_status(
         "venue": campaign.get("venue"),
         "market": campaign.get("market"),
         "market_tickers": campaign.get("market_tickers") or [],
+        "subscribed_market_ticker": campaign.get("market_ticker") or campaign.get("market"),
+        "event_ticker": campaign.get("event_ticker"),
+        "market_title": campaign.get("title") or campaign.get("name"),
+        "market_status": market_status,
+        "close_time": close_time,
+        "expected_expiration": campaign.get("expected_expiration"),
+        "time_to_close_at_launch_seconds": campaign.get("time_to_close_at_launch_seconds"),
+        "time_since_close_seconds": _seconds_since(close_time, generated_at)
+        if market_closed
+        else None,
+        "market_lifecycle_status": validation.get("market_lifecycle_status")
+        or campaign.get("market_lifecycle_status")
+        or ("CLOSED_OR_FINALIZED" if market_closed else "UNKNOWN"),
+        "market_evidence_valid": validation.get("campaign_evidence_valid", not market_closed),
+        "market_warning": "MARKET_CLOSED_OR_FINALIZED" if market_closed else None,
+        "selection_gate_result": campaign.get("selection_gate_result"),
+        "selection_gate_rejection_reason": campaign.get("selection_gate_rejection_reason"),
+        "supervisor_liveness_status": campaign.get("supervisor_liveness_status") or "UNKNOWN",
+        "campaign_process_liveness_status": campaign.get("campaign_process_liveness_status")
+        or "UNKNOWN",
+        "websocket_message_freshness_status": campaign.get("websocket_message_freshness_status")
+        or "UNKNOWN",
+        "exchange_heartbeat_status": campaign.get("exchange_heartbeat_status") or "UNKNOWN",
         "market_count": campaign.get("market_count"),
         "duration_seconds": campaign.get("duration_seconds"),
         "event_count": event_count,
@@ -605,6 +642,8 @@ def _campaign_monitor_status(
 ) -> str | None:
     if not campaign.get("campaign_id"):
         return None
+    if _is_closed_market_status(campaign.get("market_status") or campaign.get("status_at_launch")):
+        return "MARKET_CLOSED_OR_FINALIZED"
     source_type = campaign.get("source_type") or validation.get("source_type")
     validation_status = validation.get("status") or campaign.get("validation_status")
     classification = validation.get("evidence_classification") or campaign.get(
@@ -854,6 +893,28 @@ def _staleness_seconds(value: object, generated_at: datetime) -> int | None:
     return max(0, int((generated_at - parsed.astimezone(UTC)).total_seconds()))
 
 
+def _seconds_since(value: object, generated_at: datetime) -> int | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return max(0, int((generated_at - parsed.astimezone(UTC)).total_seconds()))
+
+
+def _is_closed_market_status(value: object) -> bool:
+    return str(value or "").strip().lower() in {
+        "closed",
+        "settled",
+        "finalized",
+        "resolved",
+        "expired",
+    }
+
+
 def _is_stale(value: object) -> bool:
     if isinstance(value, int | float):
         return value > STALE_SECONDS
@@ -863,6 +924,14 @@ def _is_stale(value: object) -> bool:
         except ValueError:
             return False
     return False
+
+
+def _completed_bounded_campaign(campaign: Mapping[str, object]) -> bool:
+    return campaign.get("status") in {
+        "smoke_complete",
+        "recorder_smoke_complete",
+        "websocket_smoke_complete",
+    }
 
 
 def _render_table(snapshot: Mapping[str, object], *, include_evidence: bool) -> str:
@@ -1021,12 +1090,21 @@ def _campaign_line(snapshot: Mapping[str, object]) -> str:
         return "CAMPAIGN: none"
     return (
         "CAMPAIGN: id={campaign_id} status={status} source_type={source_type} "
-        "venue={venue} markets={market_count} tickers={market_tickers} "
+        "venue={venue} market={subscribed_market_ticker} event_ticker={event_ticker} "
+        "market_status={market_status} close_time={close_time} "
+        "time_to_close_at_launch={time_to_close_at_launch_seconds} "
+        "time_since_close={time_since_close_seconds} "
+        "market_evidence_valid={market_evidence_valid} markets={market_count} "
+        "tickers={market_tickers} completion={completion_status} "
         "events={event_count} snapshots={snapshot_count} "
         "deltas={delta_count} trades={trade_count} status_updates={status_update_count} "
         "heartbeats={heartbeat_count} disconnects={disconnect_count} "
         "reconnects={reconnect_count} gaps={gap_count} last_event={last_event_time} "
         "stale_seconds={stale_seconds} rebuild_frames={rebuild_frame_count} "
+        "supervisor_liveness={supervisor_liveness_status} "
+        "campaign_process_liveness={campaign_process_liveness_status} "
+        "ws_freshness={websocket_message_freshness_status} "
+        "exchange_heartbeat={exchange_heartbeat_status} "
         "validation={validation_status} connection={connection_established} "
         "subscription={subscription_acknowledged} live_gate={live_gate_status} "
         "submit_attempts={submit_attempts} manifest={manifest_path} "
