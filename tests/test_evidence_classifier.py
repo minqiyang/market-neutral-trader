@@ -149,6 +149,30 @@ def test_in_progress_short_checkpoint_is_unknown_not_failed() -> None:
     assert classify_duration_evidence(timing) is EvidenceStatus.UNKNOWN
 
 
+def test_open_timing_rejects_terminal_reason_and_impossible_event_chronology() -> None:
+    timing = build_evidence_timing(
+        configured_duration_seconds=3_600,
+        started_at_utc=START,
+        checkpoint_at_utc=START + timedelta(minutes=5),
+        ended_at_utc=None,
+        first_snapshot_at=START + timedelta(minutes=1),
+        last_event_at=START + timedelta(minutes=4),
+        terminal_reason=None,
+        stop_requested=False,
+        total_disconnect_seconds=Decimal("0"),
+        threshold_policy_version="edmn.v2.thresholds.v1",
+        threshold_source_commit="0123456789abcdef",
+        threshold_effective_utc=START,
+    )
+
+    with pytest.raises(ValueError, match="terminal_reason"):
+        replace(timing, terminal_reason="remote_close")
+    with pytest.raises(ValueError, match="first_snapshot_at"):
+        replace(timing, last_event_at=START + timedelta(seconds=30))
+    with pytest.raises(ValueError, match="first_snapshot_at"):
+        replace(timing, last_event_at=None)
+
+
 def test_checkpoint_cannot_predate_evidence_start_even_when_run_has_ended() -> None:
     with pytest.raises(ValueError, match="checkpoint_at_utc"):
         build_evidence_timing(

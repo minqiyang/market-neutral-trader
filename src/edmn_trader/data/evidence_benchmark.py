@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import resource
 import statistics
 import sys
@@ -35,7 +36,48 @@ class EvidenceBenchmarkResult:
     no_full_file_callback_work: bool
     valid_hashes: bool
     crash_recovery_valid: bool
-    passed: bool
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("event_count", self.event_count),
+            ("memory_profile_bytes", self.memory_profile_bytes),
+            ("checkpoint_count", self.checkpoint_count),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        for name, value in (
+            ("elapsed_seconds", self.elapsed_seconds),
+            ("peak_rss_mib", self.peak_rss_mib),
+            ("checkpoint_p95_seconds", self.checkpoint_p95_seconds),
+        ):
+            if (
+                not isinstance(value, int | float)
+                or isinstance(value, bool)
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                raise ValueError(f"{name} must be finite and non-negative")
+        for name, value in (
+            ("no_oom", self.no_oom),
+            ("no_full_file_callback_work", self.no_full_file_callback_work),
+            ("valid_hashes", self.valid_hashes),
+            ("crash_recovery_valid", self.crash_recovery_valid),
+        ):
+            if not isinstance(value, bool):
+                raise ValueError(f"{name} must be Boolean")
+
+    @property
+    def passed(self) -> bool:
+        return (
+            self.elapsed_seconds <= MAX_ELAPSED_SECONDS
+            and self.peak_rss_mib <= MAX_PEAK_RSS_MIB
+            and self.peak_rss_mib * 1024 * 1024 <= self.memory_profile_bytes
+            and self.checkpoint_p95_seconds <= MAX_CHECKPOINT_P95_SECONDS
+            and self.no_oom
+            and self.no_full_file_callback_work
+            and self.valid_hashes
+            and self.crash_recovery_valid
+        )
 
     def to_record(self) -> dict[str, object]:
         return {
@@ -101,15 +143,6 @@ def run_evidence_benchmark(
     elapsed = time.perf_counter() - started
     checkpoint_p95 = _p95(writer.checkpoint_durations_seconds)
     peak_rss_mib = _peak_rss_mib()
-    passed = (
-        elapsed <= MAX_ELAPSED_SECONDS
-        and peak_rss_mib <= MAX_PEAK_RSS_MIB
-        and peak_rss_mib * 1024 * 1024 <= memory_profile_bytes
-        and checkpoint_p95 <= MAX_CHECKPOINT_P95_SECONDS
-        and no_callback_full_hash
-        and valid_hashes
-        and crash_recovery_valid
-    )
     return EvidenceBenchmarkResult(
         event_count=event_count,
         memory_profile_bytes=memory_profile_bytes,
@@ -121,7 +154,6 @@ def run_evidence_benchmark(
         no_full_file_callback_work=no_callback_full_hash,
         valid_hashes=valid_hashes,
         crash_recovery_valid=crash_recovery_valid,
-        passed=passed,
     )
 
 

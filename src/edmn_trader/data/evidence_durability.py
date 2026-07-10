@@ -8,7 +8,7 @@ import os
 import struct
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -46,15 +46,35 @@ class ChainVerification:
 @dataclass(frozen=True, slots=True)
 class RecoveryResult:
     segment_id: str
-    terminal_reason: str
     last_committed_local_row_index: int
     terminal_chain_hash: str
     closed_file_sha256: str
     partial_tail_bytes_removed: int
     next_segment_id: str
     next_segment_metadata_path: str
-    snapshot_required: bool = True
-    inherited_book_state: bool = False
+    terminal_reason: str = field(init=False, default="crash_recovered")
+    snapshot_required: bool = field(init=False, default=True)
+    inherited_book_state: bool = field(init=False, default=False)
+
+    def __post_init__(self) -> None:
+        _validate_segment_id(self.segment_id)
+        _validate_segment_id(self.next_segment_id)
+        if self.segment_id == self.next_segment_id:
+            raise ValueError("recovery must start a new segment")
+        _require_nonnegative_int(
+            self.last_committed_local_row_index,
+            "last_committed_local_row_index",
+        )
+        _require_nonnegative_int(
+            self.partial_tail_bytes_removed,
+            "partial_tail_bytes_removed",
+        )
+        _validate_sha256_digest(self.terminal_chain_hash, "terminal_chain_hash")
+        _validate_sha256_digest(self.closed_file_sha256, "closed_file_sha256")
+        if not isinstance(self.next_segment_metadata_path, str) or not (
+            self.next_segment_metadata_path
+        ):
+            raise ValueError("next_segment_metadata_path is required")
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,6 +254,10 @@ class EvidenceSegmentWriter:
             raise ValueError("terminal_reason must be a non-empty string")
         if rotation_reason is not None:
             rotation_reason = RotationReason(rotation_reason)
+        if (terminal_reason == "rotation") != (rotation_reason is not None):
+            raise ValueError(
+                "rotation_reason is required exactly when terminal_reason is rotation"
+            )
         checkpoint = self.checkpoint()
         self._handle.close()
         closed_at = self._aware_now()
@@ -458,7 +482,6 @@ def recover_unterminated_segment(
     )
     return RecoveryResult(
         segment_id=segment_id,
-        terminal_reason="crash_recovered",
         last_committed_local_row_index=local_row_index,
         terminal_chain_hash=chain_hash,
         closed_file_sha256=closed_file_sha256,
@@ -600,6 +623,15 @@ def _validate_segment_id(segment_id: str) -> None:
         character in segment_id for character in ("/", "\\", "\x00")
     ):
         raise ValueError("segment_id must be a safe filename component")
+
+
+def _validate_sha256_digest(value: object, field_name: str) -> None:
+    if not isinstance(value, str) or len(value) != 64:
+        raise ValueError(f"{field_name} must be a SHA-256 hex digest")
+    try:
+        bytes.fromhex(value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a SHA-256 hex digest") from exc
 
 
 def _artifact_exists(path: Path) -> bool:

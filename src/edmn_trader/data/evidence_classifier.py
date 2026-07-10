@@ -124,7 +124,10 @@ class EvidenceTiming:
             != expected_actual - self.total_disconnect_seconds
         ):
             raise ValueError("connected elapsed time contradicts disconnect evidence")
-        if self.ended_at is not None and not self.terminal_reason:
+        if self.ended_at is None:
+            if self.terminal_reason is not None:
+                raise ValueError("terminal_reason requires ended_at evidence")
+        elif not isinstance(self.terminal_reason, str) or not self.terminal_reason:
             raise ValueError("terminal_reason is required for ended evidence")
         if not self.threshold_policy_version or not self.threshold_source_commit:
             raise ValueError("threshold policy provenance is required")
@@ -144,6 +147,10 @@ class EvidenceTiming:
         ):
             if value is not None and not self.started_at_utc <= value <= evidence_at:
                 raise ValueError(f"{name} must fall within the evidence window")
+        if self.first_snapshot_at is not None and (
+            self.last_event_at is None or self.first_snapshot_at > self.last_event_at
+        ):
+            raise ValueError("first_snapshot_at cannot be later than last_event_at")
         current_ages = (
             self.transport_keepalive_age_seconds,
             self.lifecycle_observation_age_seconds,

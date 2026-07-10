@@ -51,7 +51,8 @@ A completed short run fails duration evidence. An in-progress short checkpoint
 remains unknown. A run passes duration only when timestamp-derived actual
 elapsed time reaches the configured duration. Threshold policy must have a
 hexadecimal source commit and be effective no later than the evidence window
-start.
+start. A terminal reason is valid only with an end timestamp, and a recorded
+first snapshot cannot be later than the last recorded event.
 
 ## Exact append chain
 
@@ -90,7 +91,8 @@ verification state, and retention/deletion eligibility.
 Default provisional rotation is 64 MiB or one hour, whichever occurs first.
 Rotation closes the old segment with a typed byte/time reason and creates the
 next segment. Backup state defaults to `NOT_VERIFIED`; deletion eligibility
-remains false. D2D performs no retention deletion.
+remains false. A rotation reason is accepted only with the typed `rotation`
+terminal reason. D2D performs no retention deletion.
 
 ## Crash recovery
 
@@ -103,7 +105,8 @@ The recovered segment is finalized with terminal reason `crash_recovered` and
 one closed-file SHA-256. D2D atomically writes next-segment metadata requiring a
 connection reset and fresh snapshot, with inherited book state false. Recovery
 never fills missing history or carries admitted book state into the new
-segment.
+segment. Those three recovery safety claims are fixed result fields rather than
+caller-overridable values.
 
 ## Synthetic performance gate
 
@@ -117,6 +120,9 @@ recovery. The merge gates are:
 - no out-of-memory failure;
 - no full-file work in event callbacks;
 - valid chain/closed-file evidence and crash recovery.
+
+The aggregate benchmark result derives its pass state from these gates; callers
+cannot supply or override a pass label.
 
 The 1,000,000-event benchmark remains pending and is mandatory before any
 30-day collection decision.

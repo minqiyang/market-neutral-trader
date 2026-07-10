@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from edmn_trader.data.evidence_durability import (
     EVIDENCE_SUMMARY_SCHEMA_VERSION,
     BackupVerificationState,
     EvidenceSegmentWriter,
+    RecoveryResult,
     RotationReason,
     chain_genesis_hash,
     compute_chain_hash,
@@ -143,6 +145,26 @@ def test_closed_file_hash_is_computed_once_only_when_segment_closes(tmp_path) ->
     assert summary["retention_deletion_eligible"] is False
 
 
+def test_recovery_result_hard_codes_fresh_snapshot_safety_boundary() -> None:
+    result = RecoveryResult(
+        segment_id="segment-1",
+        last_committed_local_row_index=1,
+        terminal_chain_hash="0" * 64,
+        closed_file_sha256="1" * 64,
+        partial_tail_bytes_removed=0,
+        next_segment_id="segment-2",
+        next_segment_metadata_path="segment-2.start.json",
+    )
+
+    assert result.terminal_reason == "crash_recovered"
+    assert result.snapshot_required is True
+    assert result.inherited_book_state is False
+    with pytest.raises(ValueError, match="init=False"):
+        replace(result, snapshot_required=False)
+    with pytest.raises(ValueError, match="new segment"):
+        replace(result, next_segment_id="segment-1")
+
+
 def test_rotation_by_bytes_and_time(tmp_path) -> None:
     monotonic = _MonotonicClock()
     byte_writer = _writer(
@@ -183,6 +205,29 @@ def test_rotation_rejects_reused_segment_id_before_closing_current(tmp_path) -> 
         writer.rotate_if_needed(next_segment_id="segment-1")
 
     assert writer.status_record()["segment_closed"] is False
+    writer.close(terminal_reason="test_complete")
+
+
+@pytest.mark.parametrize(
+    ("terminal_reason", "rotation_reason"),
+    [
+        ("rotation", None),
+        ("test_complete", RotationReason.BYTE_LIMIT),
+    ],
+)
+def test_close_rejects_contradictory_rotation_metadata(
+    tmp_path,
+    terminal_reason,
+    rotation_reason,
+) -> None:
+    writer = _writer(tmp_path)
+
+    with pytest.raises(ValueError, match="rotation_reason"):
+        writer.close(
+            terminal_reason=terminal_reason,
+            rotation_reason=rotation_reason,
+        )
+
     writer.close(terminal_reason="test_complete")
 
 
