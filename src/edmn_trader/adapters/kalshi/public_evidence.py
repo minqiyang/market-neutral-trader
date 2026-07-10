@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+from math import ceil
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,7 @@ _ACCOUNT_ONLY_FIELDS = frozenset(
 class PublicTradeStreamStatus(StrEnum):
     OBSERVED = "OBSERVED"
     QUIET_NO_PUBLIC_TRADES = "QUIET_NO_PUBLIC_TRADES"
+    QUARANTINED_INPUT = "QUARANTINED_INPUT"
 
 
 class LifecycleSource(StrEnum):
@@ -86,12 +88,22 @@ class KalshiPublicTradeEvidence:
     native_exchange_ts: str | int | float | None
     native_exchange_ts_ms: int | None
     native_trade_payload: Mapping[str, Any]
-    channel: str = "trade"
-    is_account_fill: bool = False
-    schema_version: str = PUBLIC_TRADE_SCHEMA_VERSION
+    channel: str = field(default="trade", init=False)
+    is_account_fill: bool = field(default=False, init=False)
+    schema_version: str = field(default=PUBLIC_TRADE_SCHEMA_VERSION, init=False)
 
     def __post_init__(self) -> None:
         _require_aware(self.received_at_utc, "received_at_utc")
+        if (
+            not self.campaign_id
+            or not self.market_ticker
+            or not self.connection_id
+            or not self.segment_id
+            or self.local_row_index < 1
+            or isinstance(self.native_trade_id, bool)
+            or not isinstance(self.native_trade_id, str | int)
+        ):
+            raise ValueError("public trade identity fields are invalid")
         copied = deepcopy(dict(self.native_trade_payload))
         validate_no_secret_payload(copied)
         object.__setattr__(self, "native_trade_payload", copied)
@@ -146,9 +158,9 @@ class KalshiRestLifecycleEvidence:
     validity: LifecycleValidity
     observation_age_seconds: int
     max_age_seconds: int
-    source: LifecycleSource = LifecycleSource.REST_FALLBACK
-    proves_websocket_transport: bool = False
-    schema_version: str = LIFECYCLE_SCHEMA_VERSION
+    source: LifecycleSource = field(default=LifecycleSource.REST_FALLBACK, init=False)
+    proves_websocket_transport: bool = field(default=False, init=False)
+    schema_version: str = field(default=LIFECYCLE_SCHEMA_VERSION, init=False)
 
     def to_record(self) -> dict[str, object]:
         return {
@@ -177,12 +189,17 @@ class ConnectionEvidenceEvent:
     reason: str
     previous_connection_id: str | None = None
     previous_segment_id: str | None = None
-    source: ConnectionEvidenceSource = ConnectionEvidenceSource.RECORDER_OBSERVATION
-    schema_version: str = CONNECTION_EVIDENCE_SCHEMA_VERSION
+    source: ConnectionEvidenceSource = field(
+        default=ConnectionEvidenceSource.RECORDER_OBSERVATION,
+        init=False,
+    )
+    schema_version: str = field(
+        default=CONNECTION_EVIDENCE_SCHEMA_VERSION,
+        init=False,
+    )
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "event_type", ConnectionEvidenceType(self.event_type))
-        object.__setattr__(self, "source", ConnectionEvidenceSource(self.source))
         _require_aware(self.observed_at_utc, "observed_at_utc")
         if not self.connection_id or not self.segment_id or not self.reason:
             raise ValueError("connection_id, segment_id, and reason are required")
@@ -210,7 +227,23 @@ class EvidenceFreshness:
     transport_keepalive_age_seconds: int | None
     lifecycle_observation_age_seconds: int | None
     orderbook_event_quiet_interval_seconds: int | None
-    schema_version: str = FRESHNESS_SCHEMA_VERSION
+    schema_version: str = field(default=FRESHNESS_SCHEMA_VERSION, init=False)
+
+    def __post_init__(self) -> None:
+        _require_aware(self.evaluated_at_utc, "evaluated_at_utc")
+        ages = (
+            self.transport_keepalive_age_seconds,
+            self.lifecycle_observation_age_seconds,
+            self.orderbook_event_quiet_interval_seconds,
+        )
+        if any(age is not None and age < 0 for age in ages):
+            raise ValueError("freshness ages must be non-negative")
+        observed = self.transport_keepalive_status is KeepaliveStatus.OBSERVED
+        if observed != (
+            self.transport_keepalive_source is not None
+            and self.transport_keepalive_age_seconds is not None
+        ):
+            raise ValueError("keepalive status, source, and age are inconsistent")
 
     def to_record(self) -> dict[str, object]:
         return {
@@ -297,7 +330,9 @@ def build_public_trade_stream(
         ignored_nontrade_count=ignored,
         quarantined_count=quarantined,
         status=(
-            PublicTradeStreamStatus.OBSERVED
+            PublicTradeStreamStatus.QUARANTINED_INPUT
+            if quarantined
+            else PublicTradeStreamStatus.OBSERVED
             if trades
             else PublicTradeStreamStatus.QUIET_NO_PUBLIC_TRADES
         ),
@@ -321,7 +356,10 @@ def record_rest_lifecycle(
     if ticker != selected_market_ticker:
         raise ValueError("lifecycle observation must match the selected market")
     age = _age_seconds(evaluated_at_utc, observed_at_utc, "observed_at_utc")
-    normalized = normalize_kalshi_market_metadata(market_metadata)
+    raw_status_value = market_metadata.get("raw_status")
+    if not isinstance(raw_status_value, str):
+        raw_status_value = market_metadata.get("status")
+    normalized = normalize_kalshi_market_metadata({"status": raw_status_value})
     normalized_status = normalized.get("status")
     status = _lifecycle_status(normalized_status)
     if _is_mve(market_metadata):
@@ -332,12 +370,11 @@ def record_rest_lifecycle(
         validity = LifecycleValidity.UNKNOWN_STATUS
     else:
         validity = LifecycleValidity.VALID
-    raw_status = market_metadata.get("status")
     return KalshiRestLifecycleEvidence(
         market_ticker=selected_market_ticker,
         observed_at_utc=observed_at_utc,
         evaluated_at_utc=evaluated_at_utc,
-        raw_status=raw_status if isinstance(raw_status, str) else None,
+        raw_status=raw_status_value if isinstance(raw_status_value, str) else None,
         normalized_status=(
             normalized_status if isinstance(normalized_status, str) else None
         ),
@@ -436,9 +473,10 @@ def _age_seconds(
     field_name: str,
 ) -> int:
     age = evaluated_at_utc - observed_at_utc
-    if age.total_seconds() < 0:
+    total_seconds = age.total_seconds()
+    if total_seconds < 0:
         raise ValueError(f"{field_name} must not be in the future")
-    return int(age.total_seconds())
+    return ceil(total_seconds)
 
 
 def _require_aware(value: datetime, field_name: str) -> None:

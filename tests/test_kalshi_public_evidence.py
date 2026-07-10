@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -132,6 +133,7 @@ def test_account_like_fields_quarantine_mislabeled_trade() -> None:
 
     assert stream.trades == ()
     assert stream.quarantined_count == 1
+    assert stream.status is PublicTradeStreamStatus.QUARANTINED_INPUT
 
 
 def test_trade_missing_market_identity_is_quarantined() -> None:
@@ -152,6 +154,26 @@ def test_trade_missing_market_identity_is_quarantined() -> None:
     assert stream.trades == ()
     assert stream.quarantined_count == 1
     assert stream.filtered_nonselected_count == 0
+    assert stream.status is PublicTradeStreamStatus.QUARANTINED_INPUT
+
+
+def test_accepted_trade_does_not_hide_quarantined_input() -> None:
+    malformed = _event(
+        _tracker(),
+        {
+            "type": "trade",
+            "msg": {"trade_id": "malformed-no-market"},
+        },
+    )
+
+    stream = build_public_trade_stream(
+        [_trade_event(), malformed],
+        selected_market_tickers=(MARKET,),
+    )
+
+    assert stream.trade_count == 1
+    assert stream.quarantined_count == 1
+    assert stream.status is PublicTradeStreamStatus.QUARANTINED_INPUT
 
 
 def test_zero_trade_fixture_is_valid_quiet_market_evidence() -> None:
@@ -227,6 +249,24 @@ def test_rest_lifecycle_status_transitions(
     )
 
 
+def test_rest_lifecycle_preserves_existing_raw_status_provenance() -> None:
+    evidence = record_rest_lifecycle(
+        {
+            "ticker": MARKET,
+            "status": "open",
+            "raw_status": "active",
+        },
+        selected_market_ticker=MARKET,
+        observed_at_utc=NOW,
+        evaluated_at_utc=NOW,
+        max_age_seconds=60,
+    )
+
+    assert evidence.raw_status == "active"
+    assert evidence.normalized_status == "open"
+    assert evidence.lifecycle_status is LifecycleStatus.OPEN
+
+
 def test_stale_lifecycle_observation_is_not_valid() -> None:
     evidence = record_rest_lifecycle(
         {"ticker": MARKET, "status": "active"},
@@ -239,6 +279,19 @@ def test_stale_lifecycle_observation_is_not_valid() -> None:
     assert evidence.lifecycle_status is LifecycleStatus.OPEN
     assert evidence.validity is LifecycleValidity.STALE
     assert evidence.observation_age_seconds == 61
+
+
+def test_fractional_age_rounds_up_at_stale_boundary() -> None:
+    evidence = record_rest_lifecycle(
+        {"ticker": MARKET, "status": "active"},
+        selected_market_ticker=MARKET,
+        observed_at_utc=NOW - timedelta(seconds=60, microseconds=1),
+        evaluated_at_utc=NOW,
+        max_age_seconds=60,
+    )
+
+    assert evidence.observation_age_seconds == 61
+    assert evidence.validity is LifecycleValidity.STALE
 
 
 def test_mve_lifecycle_is_explicitly_unsupported() -> None:
@@ -281,6 +334,39 @@ def test_connection_evidence_event_types(event_type: ConnectionEvidenceType) -> 
     assert event.source is ConnectionEvidenceSource.RECORDER_OBSERVATION
     assert event.event_type is event_type
     assert event.reason == "synthetic_fixture"
+
+
+def test_hard_evidence_flags_cannot_be_overridden() -> None:
+    trade = build_public_trade_stream(
+        [_trade_event()],
+        selected_market_tickers=(MARKET,),
+    ).trades[0]
+    lifecycle = record_rest_lifecycle(
+        {"ticker": MARKET, "status": "active"},
+        selected_market_ticker=MARKET,
+        observed_at_utc=NOW,
+        evaluated_at_utc=NOW,
+        max_age_seconds=60,
+    )
+
+    with pytest.raises(ValueError, match="init=False"):
+        replace(trade, is_account_fill=True)
+    with pytest.raises(ValueError, match="init=False"):
+        replace(lifecycle, proves_websocket_transport=True)
+
+
+def test_keepalive_record_rejects_inconsistent_direct_mutation() -> None:
+    freshness = evaluate_evidence_freshness(
+        evaluated_at_utc=NOW,
+        transport_keepalive_observed_at_utc=NOW,
+        transport_keepalive_source="PING_PONG",
+    )
+
+    with pytest.raises(ValueError, match="inconsistent"):
+        replace(
+            freshness,
+            transport_keepalive_status=KeepaliveStatus.UNKNOWN_NOT_OBSERVED,
+        )
 
 
 def test_keepalive_observed_and_unknown_are_distinct() -> None:

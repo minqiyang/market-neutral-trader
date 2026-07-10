@@ -25,7 +25,9 @@ rounded. `is_account_fill` is always false. `write_public_trade_evidence`
 writes only the accepted selected-market records.
 
 Zero accepted trades is the valid typed state `QUIET_NO_PUBLIC_TRADES`; it is
-not an ingestion failure.
+not an ingestion failure. If any input is quarantined, the stream is instead
+`QUARANTINED_INPUT`, even when another public trade was accepted, so malformed
+evidence cannot be hidden by a quiet or observed label.
 
 The recorder subscription payload now requests `orderbook_delta` and the
 public `trade` channel for the same selected market list. Tests use only finite
