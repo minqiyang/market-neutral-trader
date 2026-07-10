@@ -63,6 +63,11 @@ context, then read only the files needed for the requested stage. Use `rg` and
   contract plus its sequence/replay evidence limits.
 - `docs/v2_ws_public_evidence.md`: D2C selected-market public trade, REST
   lifecycle fallback, connection-event, and independent freshness contract.
+- `docs/v2_evidence_classifier_durability.md`: D2D orthogonal classifier,
+  timestamp-derived duration, append-chain, checkpoint, close/rotation,
+  recovery, retention-metadata, and synthetic benchmark contract.
+- `docs/d2d_100k_benchmark.md`: redacted synthetic 100k performance results,
+  memory/checkpoint gates, provenance limitation, and 1M deferral.
 - `docs/v2_monitor_contract.md`: V2 monitor lifecycle, liveness, and stale
   semantics contract.
 - `docs/stage8_polymarket_readiness.md`: Stage 8 compliance/readiness note.
@@ -112,6 +117,13 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/adapters/kalshi/ws_recorder.py`: read-only Kalshi Demo
   WebSocket recorder. It subscribes to selected-market orderbook and public
   trade channels and emits D2A envelopes without orderbook rebuild behavior.
+- `src/edmn_trader/data/evidence_classifier.py`: D2D orthogonal evidence
+  dimensions, overall classification, exact timing, freshness maxima, and
+  threshold provenance.
+- `src/edmn_trader/data/evidence_durability.py`: D2D incremental append chain,
+  atomic checkpoint/summary writes, close hashing, rotation, and recovery.
+- `src/edmn_trader/data/evidence_benchmark.py`: streaming synthetic durability
+  benchmark and merge-gate result model.
 - `src/edmn_trader/adapters/kalshi/demo_connector.py`: Stage 49 guarded
   Kalshi Demo request preview and Demo submit path mocked in tests. Read for
   manual approval, risk, paper ledger, Demo allowlist, and audit-redaction
@@ -348,6 +360,12 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `tests/test_kalshi_public_evidence.py`: synthetic D2C coverage for selected
   public trades, lifecycle fallback, MVE/stale handling, connection types, and
   independent freshness dimensions.
+- `tests/test_evidence_classifier.py`: D2D orthogonal classification,
+  actual-duration, freshness, and threshold-provenance coverage.
+- `tests/test_evidence_durability.py`: D2D chain, checkpoint, close, rotation,
+  fsync, recovery, fresh-segment, and callback-complexity coverage.
+- `tests/test_evidence_durability_benchmark.py`: mandatory 100k synthetic
+  completion, RSS, checkpoint-p95, hash, and recovery assertions.
 - `tests/test_kalshi_ws_recorder.py`: fixture-only recorder integration tests
   for v2 envelope output, connection/segment boundaries, and pre-snapshot
   delta exclusion.

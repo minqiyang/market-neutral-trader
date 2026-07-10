@@ -6,6 +6,13 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added D2D orthogonal evidence classification, timestamp-derived duration,
+  exact UTF-8 append chains, atomic fsynced checkpoints/summaries, closed-file
+  hashing, byte/time rotation, partial-tail crash recovery, fresh-segment reset
+  metadata, and a streaming 100k synthetic benchmark. Unknown critical
+  dimensions cannot produce overall pass, and no callback rehashes the full
+  file. No private data, market network, retention deletion, replay
+  qualification, credential, or order behavior was added.
 - Added D2C fixture-first public evidence contracts for selected-market public
   trades, selected-market REST lifecycle fallback, typed connection events,
   and independent keepalive/lifecycle/orderbook freshness dimensions. The

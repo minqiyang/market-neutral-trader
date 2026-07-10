@@ -8,6 +8,28 @@ on correctness, staged delivery, risk boundaries, deterministic tests, and the
 ability to explain how a trading research platform is built from safe
 foundations.
 
+## D2D evidence classification, durability, and performance
+
+D2D turns the D2A-D2C fixture contracts into an explicit software evidence
+model. Twelve dimensions remain orthogonal, so a transport snapshot cannot
+silently become sequence, rebuild, duration, backup, or replay evidence.
+Duration uses timestamps and exact disconnect arithmetic rather than configured
+duration. Threshold policy version, commit, and effective time remain attached
+to each timing record.
+
+The durability path hashes exact canonical JSONL bytes incrementally with a
+length prefix. Checkpoints flush and fsync data before atomic replacement and
+directory fsync. Open segments expose only persisted checkpoint scope. Close
+computes one full-file hash and records rotation, backup, and retention
+metadata. Default rotation is 64 MiB or one hour.
+
+Crash recovery resumes from the last checkpoint, validates complete tail rows,
+removes only a partial final row, finalizes the old segment, and writes fresh
+segment metadata requiring a new connection/snapshot without inherited book
+state. A streaming 100k synthetic benchmark exercises checkpoints, close/hash
+verification, and crash recovery without credentials, market network, private
+data, campaign operation, deletion, or order behavior.
+
 ## D2C public trade, lifecycle, and connection evidence
 
 D2C completes the fixture-tested public evidence surface without adding an

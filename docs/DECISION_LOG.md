@@ -157,3 +157,16 @@ Rationale: a quiet public trade channel is valid, REST status cannot prove
 WebSocket transport, and orderbook message activity cannot prove Ping/Pong
 keepalive. Keeping these claims separate prevents one available signal from
 silently promoting a different unknown evidence dimension.
+
+## 2026-07-10: Separate evidence claims from artifact durability
+
+Decision: classify artifact, transport, keepalive, subscription, sequence,
+rebuild, lifecycle, duration, process, supervisor, backup, and replay evidence
+independently. Protect serialized segment bytes with an incremental
+length-prefixed hash chain and atomic checkpoints; compute a whole-file hash
+only after close or crash recovery.
+
+Rationale: one available signal must not hide another unknown dimension, and
+event callbacks must remain O(1) with respect to file length. Atomic
+checkpoint-bounded integrity supports deterministic recovery without claiming
+uncheckpointed or missing history.
