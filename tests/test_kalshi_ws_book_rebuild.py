@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -84,6 +85,20 @@ def test_versioned_d2a_record_mapping_is_supported() -> None:
     assert result.frame.market_ticker == MARKET
 
 
+def test_rebuild_does_not_mutate_input_envelopes() -> None:
+    tracker = _tracker()
+    snapshot = _snapshot(tracker, yes=[["0.42", "3"]], no=[["0.56", "5"]])
+    delta = _delta(tracker, side="yes", price="0.42", delta="1")
+    records = [snapshot.to_record(), delta.to_record()]
+    before = deepcopy(records)
+    rebuilder = KalshiWsBookRebuilder()
+
+    results = [rebuilder.apply(record) for record in records]
+
+    assert all(result.frame is not None for result in results)
+    assert records == before
+
+
 def test_unified_yes_price_metadata_does_not_complement_no_levels() -> None:
     tracker = _tracker()
     rebuilder = KalshiWsBookRebuilder()
@@ -100,6 +115,43 @@ def test_unified_yes_price_metadata_does_not_complement_no_levels() -> None:
     result = rebuilder.apply(snapshot)
 
     assert ack_result.disposition is RebuildDisposition.IGNORED_NON_ORDERBOOK
+    assert result.frame is not None
+    assert result.frame.pricing_mode is PricingMode.UNIFIED_YES_PRICE
+    assert result.frame.pricing_mode_source is PricingModeSource.D2A_SUBSCRIPTION_METADATA
+    assert result.frame.pricing_mode_assumption is None
+    assert _levels(result.frame.canonical_yes_asks) == [
+        (Decimal("0.44"), Decimal("5"))
+    ]
+
+
+def test_subscription_params_bind_explicit_future_pricing_mode() -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    subscription = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 1,
+            "sid": 41,
+            "params": {
+                "channels": ["orderbook_delta"],
+                "use_yes_price": True,
+            },
+        },
+        local_row_index=1,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1001,
+    )
+    snapshot = _snapshot(
+        tracker,
+        yes=[["0.42", "3"]],
+        no=[["0.44", "5"]],
+        local_row_index=2,
+        seq=2,
+    )
+
+    rebuilder.apply(subscription)
+    result = rebuilder.apply(snapshot)
+
     assert result.frame is not None
     assert result.frame.pricing_mode is PricingMode.UNIFIED_YES_PRICE
     assert result.frame.pricing_mode_source is PricingModeSource.D2A_SUBSCRIPTION_METADATA
@@ -568,6 +620,66 @@ def test_same_market_has_independent_state_per_segment() -> None:
     assert second_state is not None
     assert first_state.native_yes_bids == {Decimal("0.42"): Decimal("3")}
     assert second_state.native_yes_bids == {Decimal("0.35"): Decimal("9")}
+
+
+def test_same_market_has_independent_state_per_connection() -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    first = _snapshot(tracker, yes=[["0.42", "3"]], no=[])
+    rebuilder.apply(first)
+    tracker.start_connection()
+    tracker.bind_subscription(command_id=2)
+    second = _snapshot(
+        tracker,
+        yes=[["0.35", "9"]],
+        no=[],
+        local_row_index=2,
+        seq=1,
+    )
+
+    rebuilder.apply(second)
+
+    assert first.connection_id != second.connection_id
+    first_state = rebuilder.state_for(MARKET, first.connection_id, first.segment_id)
+    second_state = rebuilder.state_for(MARKET, second.connection_id, second.segment_id)
+    assert first_state is not None
+    assert second_state is not None
+    assert first_state.native_yes_bids == {Decimal("0.42"): Decimal("3")}
+    assert second_state.native_yes_bids == {Decimal("0.35"): Decimal("9")}
+
+
+def test_sid_change_cannot_mutate_the_prior_segment() -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    snapshot = _snapshot(tracker, yes=[["0.42", "3"]], no=[])
+    rebuilder.apply(snapshot)
+    before = rebuilder.terminal_state_hash(
+        MARKET,
+        snapshot.connection_id,
+        snapshot.segment_id,
+    )
+
+    delta = _delta(
+        tracker,
+        side="yes",
+        price="0.42",
+        delta="5",
+        sid=42,
+    )
+    result = rebuilder.apply(delta)
+
+    assert delta.segment_id != snapshot.segment_id
+    assert delta.exclusion_reason is ExclusionReason.DELTA_BEFORE_SNAPSHOT
+    assert result.disposition is RebuildDisposition.EXCLUDED
+    assert rebuilder.state_for(MARKET, delta.connection_id, delta.segment_id) is None
+    assert (
+        rebuilder.terminal_state_hash(
+            MARKET,
+            snapshot.connection_id,
+            snapshot.segment_id,
+        )
+        == before
+    )
 
 
 def test_cross_market_delta_is_excluded_without_mutating_existing_market() -> None:
@@ -1056,6 +1168,7 @@ def _delta(
     delta: object,
     market_ticker: str = MARKET,
     market_id: str | None = "market-id-1",
+    sid: int = 41,
     local_row_index: int = 2,
     seq: int = 2,
 ):
@@ -1068,7 +1181,7 @@ def _delta(
     if market_id is not None:
         msg["market_id"] = market_id
     return tracker.record(
-        {"type": "orderbook_delta", "sid": 41, "seq": seq, "msg": msg},
+        {"type": "orderbook_delta", "sid": sid, "seq": seq, "msg": msg},
         local_row_index=local_row_index,
         received_at_utc=RECEIVED_AT,
         received_monotonic_ns=1000 + local_row_index,
