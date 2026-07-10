@@ -1,22 +1,25 @@
 # Current Handoff
 
-## D2A native WebSocket evidence notice
+## D2B native WebSocket rebuild notice
 
 As of 2026-07-10, Phase 0A has passed and `origin/main` remains the authoritative
-public source state. The owner-authorized D2A delivery introduces
-`edmn.kalshi.ws.raw.v2`: native SID/sequence fields remain distinct from local
-append order, connections and integrity segments are explicit, and orderbook
-deltas are excluded until their market has a snapshot in the current segment.
-D2A does not authorize D2B-D2D.
+public source state. The owner-authorized D2B delivery consumes
+`edmn.kalshi.ws.raw.v2` fixture rows and maintains an exact native orderbook per
+market, connection, and segment before deriving deterministic canonical YES
+frames. D2A-excluded rows do not mutate state; malformed or negative-result
+updates invalidate rather than clamp the segment; fresh admitted snapshots can
+recover it. D2B does not authorize D2C or D2D.
 
 The bounded VPS snapshot smoke proves transport snapshot receipt only. It does
-not prove native sequence continuity, incremental rebuild integrity, replay
+not prove native sequence continuity, real-stream rebuild integrity, replay
 qualification, or duration evidence. Generic monitor `OK_PAPER`,
 `campaign_evidence_valid`, and legacy `gap_count=0` values are not overall
-evidence gates. D2A's default sequence policy remains conservative and does not
-turn monotonic observations into continuity evidence. No campaign, network, or
-private-live action is part of this checkpoint. Older handoff text that
-conflicts with this notice is historical and noncanonical.
+evidence gates. D2B preserves D2A's conservative sequence states and does not
+turn monotonic observations or successful fixture rebuild into continuity
+evidence. The current recorder omits `use_yes_price`, so D2B records an explicit
+legacy/default pricing-mode assumption. No campaign, network, or private-live
+action is part of this checkpoint. Older handoff text that conflicts with this
+notice is historical and noncanonical.
 
 ## Current project state
 
@@ -77,25 +80,25 @@ and the monitor surfaces market lifecycle plus separate liveness fields. Round
 liquidity before orderbook probes, preserving raw status metadata, and emitting
 distinct HTTP, parse, no-open-market, and no-eligible-market blockers. The
 five-minute profile uses a 15-minute safety buffer; the seven-day profile keeps
-the campaign duration plus 24-hour buffer.
+the campaign duration plus 24-hour buffer. D2A adds the versioned raw envelope,
+and D2B adds fixture-only native incremental rebuild and canonical YES frames.
 
 ## Last completed stage
 
-Stage 52 private live gate design and disabled public guard, plus Round 8B
-public lifecycle gates for read-only campaign selection, validation, manifest
-metadata, and monitor display, plus Round 8C-D1 bounded Demo market discovery.
+Stage 52 private live gate design and disabled public guard, Round 8B public
+lifecycle gates, Round 8C-D1 bounded Demo market discovery, merged D2A raw
+WebSocket evidence, and the D2B branch implementation awaiting owner review.
 
 ## Current delivery checkpoint
 
-D2A raw WebSocket schema and transport integrity adds the versioned native
-envelope, deterministic parsed-payload hash, typed conservative sequence
-states, connection and segment boundaries, snapshot-before-delta admission,
-resync metadata, explicit legacy parsing, and synthetic fixture tests. Snapshot
-admission is tracked separately for each requested market. Its review gate also
-covers UTF-8/non-finite hash behavior, fail-closed non-object frames, and
-nested/auth-header secret rejection. It does not implement D2B orderbook
-rebuild, D2C trade/lifecycle channels, D2D campaign classifiers or durability,
-or any new network or execution behavior.
+D2B adds a narrow fixture-only consumer of D2A-admitted snapshot and delta
+envelopes. It keeps independent Decimal native state, explicit pricing-mode
+metadata, atomic snapshots, signed incremental deltas, typed invalidation and
+resnapshot recovery, canonical YES bids/asks, locked/crossed/one-sided labels,
+and deterministic semantic frame and terminal-state hashes. Unsupported and
+legacy rows remain quarantined. It does not establish sequence integrity or
+replay qualification, implement D2C/D2D, or add network, persistence,
+credential, campaign, or execution behavior.
 
 ## Stage plan status
 
@@ -115,9 +118,10 @@ reconciliation, Stage 51 long-term paper/demo validation framework, and Stage
 52 private live gate design and disabled public guard. The
 ledger records purpose, known commit hashes, files/modules
 added, validation commands, status, next-stage boundary, and safety status for
-each completed stage. Stage 35-52 is complete. D2B remains a separate owner
-authorization boundary after D2A. No seven-day recorder launch is authorized
-by this handoff.
+each completed stage. Stage 35-52 is complete. D2B is implemented on its
+separate owner-authorized branch and remains unmerged pending review. D2C and
+D2D still require separate authorization. No seven-day recorder launch is
+authorized by this handoff.
 
 Report-input metadata expansion from Stages 11 through 34 is now
 maintenance-only. The previously clarified local delivery-notes report input is
@@ -1403,7 +1407,7 @@ python -m pip install -e ".[dev]"
 ## Known issues
 
 - GitHub remote `origin` is configured for
-  `https://github.com/minqiyang/market-neutral-trading-research.git`; do not
+  `https://github.com/minqiyang/market-neutral-trader.git`; do not
   push unless the user explicitly asks or the active workflow requires it.
 - PR #1 merged Stage 5 into `main` at
   `6cd1d536fa41e721a998f23eab19d7129938c3da`.
@@ -1441,7 +1445,7 @@ python -m pip install -e ".[dev]"
 `docs/codex_long_running_controller.md` now contains the publish policy for
 future staged work. Default to branch + PR. An owner-direct fast path may skip
 PR creation only when `gh` is authenticated as `minqiyang`, `origin` is
-`minqiyang/market-neutral-trading-research`, work starts from clean synced
+`minqiyang/market-neutral-trader`, work starts from clean synced
 `origin/main`, work occurs on a `codex/` branch, local validation and branch
 `Validate` pass, risk is low or medium, the change avoids all listed safety and
 compliance hazards, no PR/divergence conflict exists, and the final update to
@@ -1495,7 +1499,8 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 - Do not add credentials or secrets.
 - Do not implement production order placement.
-- Do not treat current WebSocket rows as sequence-verified or rebuild-qualified.
+- Do not treat D2B fixture success as sequence-verified, replay-qualified, or
+  real-stream rebuild evidence.
 - Do not extend live complement-arbitrage scanning from unqualified recorder
   evidence.
 - Keep fill simulation offline and based only on explicitly qualified inputs.
@@ -1507,15 +1512,15 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended action
 
-Preserve the D2A evidence boundary. D2B native orderbook rebuild requires new,
-separate owner authorization and must not begin automatically.
+Owner/expert review of the open D2B PR only. Do not begin D2C, D2D, deployment,
+or a network campaign from this handoff.
 
 ## Exact next prompt suggestion
 
-Review the merged D2A evidence contract before proposing D2B. Request separate
-owner authorization for D2B only; do not authorize D2C, D2D, a campaign, or any
-order path in that request.
+Review the D2B native incremental rebuild contract and synthetic tests. Keep the
+PR open and unmerged; do not authorize D2C, D2D, a campaign, credentials, or any
+order path.
 
 ## Last updated timestamp
 
-2026-07-10 00:21:45 -07:00
+2026-07-10 00:55:45 -07:00

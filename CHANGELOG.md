@@ -6,6 +6,13 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added D2B native incremental Kalshi WebSocket orderbook rebuild for admitted
+  D2A snapshot/delta envelopes. The fixture-only adapter keeps independent
+  Decimal state per market/connection/segment, handles explicit legacy and
+  unified price scales, invalidates underflow or malformed segments, derives
+  canonical YES frames, and emits deterministic semantic frame/state hashes.
+  It does not establish sequence integrity or replay qualification and adds no
+  network, campaign, persistence, credential, or order behavior.
 - Added D2A Kalshi WebSocket raw evidence schema v2 with preserved native
   SID/sequence/timestamps and payloads, separate local append order, explicit
   connection and integrity segments, conservative sequence states,

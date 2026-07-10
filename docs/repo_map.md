@@ -58,6 +58,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `docs/v2_ws_raw_event_schema.md`: D2A Kalshi WebSocket native envelope,
   payload hash, sequence/segment semantics, snapshot prerequisite, legacy
   compatibility, and evidence limitations.
+- `docs/v2_ws_native_orderbook_rebuild.md`: D2B native state, snapshot/delta,
+  price-scale, invalidation/recovery, canonical YES frame, and semantic-hash
+  contract plus its sequence/replay evidence limits.
 - `docs/v2_monitor_contract.md`: V2 monitor lifecycle, liveness, and stale
   semantics contract.
 - `docs/stage8_polymarket_readiness.md`: Stage 8 compliance/readiness note.
@@ -98,6 +101,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/adapters/kalshi/ws_events.py`: D2A versioned native raw
   event envelope, deterministic parsed-payload hash, conservative sequence
   tracker, segment/snapshot admission state, and explicit legacy parser.
+- `src/edmn_trader/adapters/kalshi/ws_book_rebuild.py`: D2B fixture-only
+  incremental native snapshot/delta rebuild, Decimal price-scale conversion,
+  typed quarantine/invalidation, canonical YES frames, and semantic hashes.
 - `src/edmn_trader/adapters/kalshi/ws_recorder.py`: read-only Kalshi Demo
   WebSocket recorder. It emits D2A envelopes without additional subscriptions
   or orderbook rebuild behavior.
@@ -331,6 +337,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `tests/test_kalshi_ws_events.py`: synthetic D2A envelope, payload hash,
   native/local sequence, segment, snapshot admission, resync, and legacy
   compatibility tests.
+- `tests/test_kalshi_ws_book_rebuild.py`: synthetic D2B coverage for native
+  snapshots/deltas, isolation, pricing modes, invalidation/recovery, canonical
+  books, exact Decimal values, deterministic hashes, and compatibility gates.
 - `tests/test_kalshi_ws_recorder.py`: fixture-only recorder integration tests
   for v2 envelope output, connection/segment boundaries, and pre-snapshot
   delta exclusion.

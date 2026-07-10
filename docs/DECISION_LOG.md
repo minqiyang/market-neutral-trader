@@ -131,3 +131,17 @@ Rationale: downstream rebuild must not confuse recorder order with exchange
 order, cross market-specific snapshot boundaries, or treat semantic JSON hashes
 as exact wire-frame evidence. This establishes the narrow evidence contract
 without implementing rebuild or expanding network behavior.
+
+## 2026-07-10: Rebuild native WebSocket books before replay integration
+
+Decision: apply only D2A-admitted snapshot and delta rows to independent
+Decimal-native states keyed by market, connection, and segment, then derive a
+canonical YES-side frame. Preserve pricing-mode and sequence uncertainty in
+frame metadata, invalidate rather than clamp impossible state, and keep D2B
+semantic hashes separate from raw-file durability evidence.
+
+Rationale: native venue semantics, price-scale conversion, segment recovery,
+and deterministic state mutation must be testable before scanners or replay can
+trust incremental books. Keeping D2B fixture-only prevents a successful local
+rebuild from being mistaken for sequence integrity, replay qualification, or
+authorization to run a network campaign.

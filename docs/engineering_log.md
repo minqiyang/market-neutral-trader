@@ -8,6 +8,30 @@ on correctness, staged delivery, risk boundaries, deterministic tests, and the
 ability to explain how a trading research platform is built from safe
 foundations.
 
+## D2B native incremental orderbook rebuild
+
+D2B adds the first consumer of the D2A native WebSocket envelope. The adapter
+maintains exact native YES and NO price-to-quantity maps independently for each
+market, connection, and integrity segment. Admitted snapshots replace state
+atomically; admitted signed deltas update one level; exact-zero levels are
+removed; malformed values, identity drift, and negative resulting quantities
+invalidate rather than partially mutate or clamp the book. A fresh admitted
+snapshot can recover an invalid state with an explicit reset reason.
+
+The main modeling choice is to keep venue-native state before deriving the
+canonical YES view. In legacy side-price mode, native NO bids become YES asks
+through `1 - no_price`; in unified YES-price mode, reported NO-side prices are
+already on the YES scale. Explicit D2A metadata selects the mode. Because the
+reviewed recorder currently omits `use_yes_price`, the compatibility path names
+and records its legacy/default assumption rather than guessing from prices.
+
+Frames preserve source side/price, D2A sequence state, one-sided/locked/crossed
+labels, and deterministic semantic hashes built without binary floats. The
+implementation and synthetic tests open no network connection and inspect no
+private data. Existing REST/full-book replay stays unchanged. D2B does not
+claim sequence continuity, replay qualification, durability evidence, or any
+authorization for D2C, D2D, campaigns, credentials, or order paths.
+
 ## D2A raw WebSocket schema and transport integrity
 
 D2A fixes an evidence-modeling ambiguity in the first read-only WebSocket
