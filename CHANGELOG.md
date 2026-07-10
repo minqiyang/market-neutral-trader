@@ -6,6 +6,13 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added D2C fixture-first public evidence contracts for selected-market public
+  trades, selected-market REST lifecycle fallback, typed connection events,
+  and independent keepalive/lifecycle/orderbook freshness dimensions. The
+  recorder subscription includes the public `trade` channel, while account
+  fills, nonselected trades, stale/unknown lifecycle, and MVE metadata remain
+  filtered or fail-closed. No market network, global lifecycle subscription,
+  credential, replay-qualification, or order behavior was added.
 - Added D2B native incremental Kalshi WebSocket orderbook rebuild for admitted
   D2A snapshot/delta envelopes. The fixture-only adapter keeps independent
   Decimal state per market/connection/segment, handles explicit legacy and

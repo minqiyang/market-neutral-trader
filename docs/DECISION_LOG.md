@@ -145,3 +145,15 @@ and deterministic state mutation must be testable before scanners or replay can
 trust incremental books. Keeping D2B fixture-only prevents a successful local
 rebuild from being mistaken for sequence integrity, replay qualification, or
 authorization to run a network campaign.
+
+## 2026-07-10: Keep public evidence channels orthogonal
+
+Decision: record selected-market public trades separately from account fills,
+use selected-market REST metadata as lifecycle fallback only, and represent
+connection, transport keepalive, lifecycle freshness, and orderbook quiet time
+as distinct typed evidence.
+
+Rationale: a quiet public trade channel is valid, REST status cannot prove
+WebSocket transport, and orderbook message activity cannot prove Ping/Pong
+keepalive. Keeping these claims separate prevents one available signal from
+silently promoting a different unknown evidence dimension.

@@ -61,6 +61,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `docs/v2_ws_native_orderbook_rebuild.md`: D2B native state, snapshot/delta,
   price-scale, invalidation/recovery, canonical YES frame, and semantic-hash
   contract plus its sequence/replay evidence limits.
+- `docs/v2_ws_public_evidence.md`: D2C selected-market public trade, REST
+  lifecycle fallback, connection-event, and independent freshness contract.
 - `docs/v2_monitor_contract.md`: V2 monitor lifecycle, liveness, and stale
   semantics contract.
 - `docs/stage8_polymarket_readiness.md`: Stage 8 compliance/readiness note.
@@ -104,9 +106,12 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/adapters/kalshi/ws_book_rebuild.py`: D2B fixture-only
   incremental native snapshot/delta rebuild, Decimal price-scale conversion,
   typed quarantine/invalidation, canonical YES frames, and semantic hashes.
+- `src/edmn_trader/adapters/kalshi/public_evidence.py`: D2C fixture-only
+  selected-market public trade stream, REST lifecycle fallback, typed
+  connection evidence, and independent freshness dimensions.
 - `src/edmn_trader/adapters/kalshi/ws_recorder.py`: read-only Kalshi Demo
-  WebSocket recorder. It emits D2A envelopes without additional subscriptions
-  or orderbook rebuild behavior.
+  WebSocket recorder. It subscribes to selected-market orderbook and public
+  trade channels and emits D2A envelopes without orderbook rebuild behavior.
 - `src/edmn_trader/adapters/kalshi/demo_connector.py`: Stage 49 guarded
   Kalshi Demo request preview and Demo submit path mocked in tests. Read for
   manual approval, risk, paper ledger, Demo allowlist, and audit-redaction
@@ -340,6 +345,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `tests/test_kalshi_ws_book_rebuild.py`: synthetic D2B coverage for native
   snapshots/deltas, isolation, pricing modes, invalidation/recovery, canonical
   books, exact Decimal values, deterministic hashes, and compatibility gates.
+- `tests/test_kalshi_public_evidence.py`: synthetic D2C coverage for selected
+  public trades, lifecycle fallback, MVE/stale handling, connection types, and
+  independent freshness dimensions.
 - `tests/test_kalshi_ws_recorder.py`: fixture-only recorder integration tests
   for v2 envelope output, connection/segment boundaries, and pre-snapshot
   delta exclusion.

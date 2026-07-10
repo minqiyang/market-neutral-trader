@@ -1,4 +1,4 @@
-"""Read-only Kalshi Demo WebSocket orderbook recorder."""
+"""Read-only Kalshi Demo selected-market WebSocket recorder."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ class KalshiWsRecorderResult:
 
     @property
     def source_type(self) -> str:
-        return "WEBSOCKET_DELTA" if self.delta_count else "WEBSOCKET_SNAPSHOT"
+        return _source_type(self.snapshot_count, self.delta_count, self.trade_count)
 
 
 def record_kalshi_demo_ws_orderbook(
@@ -180,7 +180,7 @@ def _subscription_payload(market_tickers: tuple[str, ...]) -> str:
             "id": 1,
             "cmd": "subscribe",
             "params": {
-                "channels": ["orderbook_delta"],
+                "channels": ["orderbook_delta", "trade"],
                 "market_tickers": list(market_tickers),
             },
         },
@@ -241,7 +241,7 @@ def _write_result(
         event_count=len(rows),
         snapshot_count=sum("orderbook_snapshot" in item for item in counts),
         delta_count=sum("orderbook_delta" in item for item in counts),
-        trade_count=sum("trade" in item for item in counts),
+        trade_count=sum(item == "trade" for item in counts),
         status_update_count=sum("status" in item for item in counts),
         heartbeat_count=sum("heartbeat" in item for item in counts),
         error_count=sum("error" in item for item in counts) + (1 if blocker_code else 0),
@@ -296,15 +296,17 @@ def _progress(
         "event_count": len(rows),
         "snapshot_count": sum("orderbook_snapshot" in item for item in counts),
         "delta_count": sum("orderbook_delta" in item for item in counts),
-        "trade_count": sum("trade" in item for item in counts),
+        "trade_count": sum(item == "trade" for item in counts),
         "status_update_count": sum("status" in item for item in counts),
         "heartbeat_count": sum("heartbeat" in item for item in counts),
         "error_count": sum("error" in item for item in counts),
         "reconnect_count": reconnect_count,
         "last_event_time": _row_received_at(rows[-1]) if rows else None,
-        "source_type": "WEBSOCKET_DELTA"
-        if any("orderbook_delta" in item for item in counts)
-        else "WEBSOCKET_SNAPSHOT",
+        "source_type": _source_type(
+            sum("orderbook_snapshot" in item for item in counts),
+            sum("orderbook_delta" in item for item in counts),
+            sum(item == "trade" for item in counts),
+        ),
         "raw_event_path": str(raw_events_path),
         "raw_event_sha256": _sha256(raw_events_path) if rows else None,
     }
@@ -326,3 +328,13 @@ def _row_payload(row: Mapping[str, object]) -> Mapping[str, object] | None:
 def _row_received_at(row: Mapping[str, object]) -> str | None:
     value = row.get("received_at_utc", row.get("received_at"))
     return str(value) if value is not None else None
+
+
+def _source_type(snapshot_count: int, delta_count: int, trade_count: int) -> str:
+    if delta_count:
+        return "WEBSOCKET_DELTA"
+    if snapshot_count:
+        return "WEBSOCKET_SNAPSHOT"
+    if trade_count:
+        return "WEBSOCKET_PUBLIC_TRADE"
+    return "WEBSOCKET_NO_ORDERBOOK"

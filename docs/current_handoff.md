@@ -1,25 +1,25 @@
 # Current Handoff
 
-## D2B native WebSocket rebuild notice
+## D2C public evidence notice
 
 As of 2026-07-10, Phase 0A has passed and `origin/main` remains the authoritative
-public source state. The owner-authorized D2B delivery consumes
-`edmn.kalshi.ws.raw.v2` fixture rows and maintains an exact native orderbook per
-market, connection, and segment before deriving deterministic canonical YES
-frames. D2A-excluded rows do not mutate state; malformed or negative-result
-updates invalidate rather than clamp the segment; fresh admitted snapshots can
-recover it. D2B does not authorize D2C or D2D.
+public source state. D2B passed independent review and merged as PR #121. The
+owner-authorized D2C delivery adds selected-market public trade evidence,
+selected-market REST lifecycle fallback, typed connection events, and separate
+transport-keepalive, lifecycle-age, and orderbook-quiet dimensions. Public
+trades never become account fills, and REST lifecycle never becomes WebSocket
+transport evidence.
 
 The bounded VPS snapshot smoke proves transport snapshot receipt only. It does
 not prove native sequence continuity, real-stream rebuild integrity, replay
 qualification, or duration evidence. Generic monitor `OK_PAPER`,
 `campaign_evidence_valid`, and legacy `gap_count=0` values are not overall
-evidence gates. D2B preserves D2A's conservative sequence states and does not
-turn monotonic observations or successful fixture rebuild into continuity
-evidence. The current recorder omits `use_yes_price`, so D2B records an explicit
-legacy/default pricing-mode assumption. No campaign, network, or private-live
-action is part of this checkpoint. Older handoff text that conflicts with this
-notice is historical and noncanonical.
+evidence gates. D2C preserves D2A's conservative sequence states and D2B's
+explicit pricing-mode assumption. A quiet trade fixture is valid; stale,
+unknown, or MVE lifecycle evidence remains non-valid; Ping/Pong remains
+`UNKNOWN_NOT_OBSERVED` unless directly supplied. No market network, campaign,
+credential, or private-live action is part of this checkpoint. Older handoff
+text that conflicts with this notice is historical and noncanonical.
 
 ## Current project state
 
@@ -82,23 +82,23 @@ distinct HTTP, parse, no-open-market, and no-eligible-market blockers. The
 five-minute profile uses a 15-minute safety buffer; the seven-day profile keeps
 the campaign duration plus 24-hour buffer. D2A adds the versioned raw envelope,
 and D2B adds fixture-only native incremental rebuild and canonical YES frames.
+D2C adds fixture-only public trade, lifecycle, and connection evidence.
 
 ## Last completed stage
 
 Stage 52 private live gate design and disabled public guard, Round 8B public
 lifecycle gates, Round 8C-D1 bounded Demo market discovery, merged D2A raw
-WebSocket evidence, and the D2B branch implementation awaiting owner review.
+WebSocket evidence, and merged D2B native incremental rebuild PR #121.
 
 ## Current delivery checkpoint
 
-D2B adds a narrow fixture-only consumer of D2A-admitted snapshot and delta
-envelopes. It keeps independent Decimal native state, explicit pricing-mode
-metadata, atomic snapshots, signed incremental deltas, typed invalidation and
-resnapshot recovery, canonical YES bids/asks, locked/crossed/one-sided labels,
-and deterministic semantic frame and terminal-state hashes. Unsupported and
-legacy rows remain quarantined. It does not establish sequence integrity or
-replay qualification, implement D2C/D2D, or add network, persistence,
-credential, campaign, or execution behavior.
+D2C adds a narrow fixture-only public evidence adapter. It persists only
+selected-market public trades, preserves exact native trade payloads, filters
+account/nonselected events, and treats zero trades as a valid quiet state. Its
+selected-market REST fallback records lifecycle provenance and age without
+claiming WebSocket transport. Typed connection events and three independent
+freshness dimensions avoid heartbeat substitution. It adds no global lifecycle
+subscription, replay qualification, credential, campaign, or order behavior.
 
 ## Stage plan status
 
@@ -118,10 +118,9 @@ reconciliation, Stage 51 long-term paper/demo validation framework, and Stage
 52 private live gate design and disabled public guard. The
 ledger records purpose, known commit hashes, files/modules
 added, validation commands, status, next-stage boundary, and safety status for
-each completed stage. Stage 35-52 is complete. D2B is implemented on its
-separate owner-authorized branch and remains unmerged pending review. D2C and
-D2D still require separate authorization. No seven-day recorder launch is
-authorized by this handoff.
+each completed stage. Stage 35-52, D2A, and D2B are complete. D2C is the active
+separate delivery; D2D remains a later separate phase under the autonomous D2
+controller. No seven-day recorder launch is authorized by this handoff.
 
 Report-input metadata expansion from Stages 11 through 34 is now
 maintenance-only. The previously clarified local delivery-notes report input is
@@ -1501,6 +1500,8 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 - Do not implement production order placement.
 - Do not treat D2B fixture success as sequence-verified, replay-qualified, or
   real-stream rebuild evidence.
+- Do not treat a public trade, REST lifecycle observation, or orderbook message
+  as account-fill, WebSocket keepalive, sequence, duration, or replay evidence.
 - Do not extend live complement-arbitrage scanning from unqualified recorder
   evidence.
 - Keep fill simulation offline and based only on explicitly qualified inputs.
@@ -1512,15 +1513,16 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended action
 
-Owner/expert review of the open D2B PR only. Do not begin D2C, D2D, deployment,
-or a network campaign from this handoff.
+Independent adversarial review of the focused D2C PR, followed by correction,
+merge, and merged-main verification. Do not combine D2D or deployment work in
+the D2C branch.
 
 ## Exact next prompt suggestion
 
-Review the D2B native incremental rebuild contract and synthetic tests. Keep the
-PR open and unmerged; do not authorize D2C, D2D, a campaign, credentials, or any
-order path.
+Review the D2C public trade, REST lifecycle fallback, connection-event, and
+freshness contracts against local fixtures only. Do not authorize a market
+network, campaign, credentials, global lifecycle subscription, or order path.
 
 ## Last updated timestamp
 
-2026-07-10 00:55:45 -07:00
+2026-07-10 10:46:16 -07:00

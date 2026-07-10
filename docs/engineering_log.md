@@ -8,6 +8,27 @@ on correctness, staged delivery, risk boundaries, deterministic tests, and the
 ability to explain how a trading research platform is built from safe
 foundations.
 
+## D2C public trade, lifecycle, and connection evidence
+
+D2C completes the fixture-tested public evidence surface without adding an
+account or order path. The selected-market subscription payload now includes
+the public `trade` channel. A narrow adapter consumes D2A envelopes, filters
+nonselected markets, rejects account-like fields, preserves native trade
+identifiers/prices/quantities/timestamps without conversion, and writes only
+accepted public trades. Zero trades remains a valid quiet-market state.
+
+Lifecycle evidence uses an already-observed selected-market REST metadata
+fixture. It records raw and normalized status, source, observation time and
+age, but explicitly cannot prove WebSocket transport. Stale, unknown, and MVE
+observations stay typed and non-valid rather than being promoted.
+
+Connection evidence has explicit open, close, error, reconnect, and
+resubscription records. Transport keepalive, lifecycle observation age, and
+orderbook quiet interval remain independent. Ping/Pong is
+`UNKNOWN_NOT_OBSERVED` unless directly supplied. All tests are local fixtures;
+D2C adds no global lifecycle subscription, credential use, market network,
+replay qualification, or execution behavior.
+
 ## D2B native incremental orderbook rebuild
 
 D2B adds the first consumer of the D2A native WebSocket envelope. The adapter

@@ -78,7 +78,7 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
             "id": 1,
             "cmd": "subscribe",
             "params": {
-                "channels": ["orderbook_delta"],
+                "channels": ["orderbook_delta", "trade"],
                 "market_tickers": ["DEMO-MARKET"],
             },
         }
