@@ -17,6 +17,7 @@ def test_synthetic_100k_evidence_benchmark_meets_merge_gates(tmp_path) -> None:
     )
 
     assert result.event_count == 100_000
+    assert result.checkpoint_every_records == 1_000
     assert result.memory_profile_bytes == 1024 * 1024 * 1024
     assert result.elapsed_seconds <= 600
     assert result.peak_rss_mib <= 512
@@ -44,6 +45,7 @@ def test_benchmark_pass_is_derived_and_cannot_be_overridden() -> None:
     result = EvidenceBenchmarkResult(
         event_count=1,
         memory_profile_bytes=1,
+        checkpoint_every_records=1,
         elapsed_seconds=601,
         peak_rss_mib=513,
         checkpoint_count=1,
@@ -59,6 +61,7 @@ def test_benchmark_pass_is_derived_and_cannot_be_overridden() -> None:
         EvidenceBenchmarkResult(
             event_count=1,
             memory_profile_bytes=1,
+            checkpoint_every_records=1,
             elapsed_seconds=601,
             peak_rss_mib=513,
             checkpoint_count=1,
@@ -69,3 +72,31 @@ def test_benchmark_pass_is_derived_and_cannot_be_overridden() -> None:
             crash_recovery_valid=False,
             passed=True,
         )
+
+
+@pytest.mark.parametrize(
+    ("event_count", "checkpoint_every_records"),
+    [
+        (99_999, 1_000),
+        (100_000, 1_001),
+    ],
+)
+def test_benchmark_pass_requires_the_mandatory_workload(
+    event_count,
+    checkpoint_every_records,
+) -> None:
+    result = EvidenceBenchmarkResult(
+        event_count=event_count,
+        memory_profile_bytes=1024 * 1024 * 1024,
+        checkpoint_every_records=checkpoint_every_records,
+        elapsed_seconds=1,
+        peak_rss_mib=1,
+        checkpoint_count=100,
+        checkpoint_p95_seconds=0.001,
+        no_oom=True,
+        no_full_file_callback_work=True,
+        valid_hashes=True,
+        crash_recovery_valid=True,
+    )
+
+    assert result.passed is False

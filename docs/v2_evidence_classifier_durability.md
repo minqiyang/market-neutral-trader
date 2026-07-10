@@ -121,8 +121,9 @@ recovery. The merge gates are:
 - no full-file work in event callbacks;
 - valid chain/closed-file evidence and crash recovery.
 
-The aggregate benchmark result derives its pass state from these gates; callers
-cannot supply or override a pass label.
+The aggregate benchmark result derives its pass state from these gates and
+requires at least 100,000 events with checkpoints no less frequent than every
+1,000 records; callers cannot supply or override a pass label.
 
 The 1,000,000-event benchmark remains pending and is mandatory before any
 30-day collection decision.

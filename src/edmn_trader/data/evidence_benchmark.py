@@ -22,12 +22,15 @@ from edmn_trader.data.evidence_durability import (
 MAX_ELAPSED_SECONDS = 600
 MAX_PEAK_RSS_MIB = 512
 MAX_CHECKPOINT_P95_SECONDS = 1
+MIN_BENCHMARK_EVENT_COUNT = 100_000
+MAX_BENCHMARK_CHECKPOINT_INTERVAL = 1_000
 
 
 @dataclass(frozen=True, slots=True)
 class EvidenceBenchmarkResult:
     event_count: int
     memory_profile_bytes: int
+    checkpoint_every_records: int
     elapsed_seconds: float
     peak_rss_mib: float
     checkpoint_count: int
@@ -41,6 +44,7 @@ class EvidenceBenchmarkResult:
         for name, value in (
             ("event_count", self.event_count),
             ("memory_profile_bytes", self.memory_profile_bytes),
+            ("checkpoint_every_records", self.checkpoint_every_records),
             ("checkpoint_count", self.checkpoint_count),
         ):
             if not isinstance(value, int) or isinstance(value, bool) or value < 1:
@@ -69,7 +73,10 @@ class EvidenceBenchmarkResult:
     @property
     def passed(self) -> bool:
         return (
-            self.elapsed_seconds <= MAX_ELAPSED_SECONDS
+            self.event_count >= MIN_BENCHMARK_EVENT_COUNT
+            and self.checkpoint_every_records
+            <= MAX_BENCHMARK_CHECKPOINT_INTERVAL
+            and self.elapsed_seconds <= MAX_ELAPSED_SECONDS
             and self.peak_rss_mib <= MAX_PEAK_RSS_MIB
             and self.peak_rss_mib * 1024 * 1024 <= self.memory_profile_bytes
             and self.checkpoint_p95_seconds <= MAX_CHECKPOINT_P95_SECONDS
@@ -83,6 +90,7 @@ class EvidenceBenchmarkResult:
         return {
             "event_count": self.event_count,
             "memory_profile_bytes": self.memory_profile_bytes,
+            "checkpoint_every_records": self.checkpoint_every_records,
             "elapsed_seconds": self.elapsed_seconds,
             "peak_rss_mib": self.peak_rss_mib,
             "checkpoint_count": self.checkpoint_count,
@@ -146,6 +154,7 @@ def run_evidence_benchmark(
     return EvidenceBenchmarkResult(
         event_count=event_count,
         memory_profile_bytes=memory_profile_bytes,
+        checkpoint_every_records=checkpoint_every_records,
         elapsed_seconds=elapsed,
         peak_rss_mib=peak_rss_mib,
         checkpoint_count=len(writer.checkpoint_durations_seconds),
