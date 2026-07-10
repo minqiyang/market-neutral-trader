@@ -1,5 +1,21 @@
 # Current Handoff
 
+## Phase 0A canonicalization notice
+
+As of 2026-07-10, `origin/main` is the authoritative public source state and
+`EDMN_PUBLIC_CHECKOUT` means a recorded clean local materialization of that
+state, not a permanently named historical worktree. The current program is the
+owner-approved Phase 0A plan/repository freeze. D2A raw WebSocket schema,
+sequence, and segment work remains pending a separate owner authorization.
+
+The bounded VPS snapshot smoke proves transport snapshot receipt only. It does
+not prove native sequence continuity, incremental rebuild integrity, replay
+qualification, or duration evidence. Generic monitor `OK_PAPER`,
+`campaign_evidence_valid`, and legacy `gap_count=0` values are not overall
+evidence gates. No immediate seven-day campaign or private-live review is the
+current next milestone. Older handoff text that conflicts with this notice is
+historical and noncanonical.
+
 ## Current project state
 
 The repository contains a Python 3.12 package for a demo-first,
@@ -85,11 +101,10 @@ reconciliation, Stage 51 long-term paper/demo validation framework, and Stage
 52 private live gate design and disabled public guard. The
 ledger records purpose, known commit hashes, files/modules
 added, validation commands, status, next-stage boundary, and safety status for
-each completed stage. Stage 35-52 is complete. The recommended next action is
-human review of the private live gate design and private evidence collection
-outside the public repo before any separately reviewed private implementation.
-Before any new seven-day recorder launch, select only open/trading markets
-whose close/expiration exceeds the campaign duration plus a 24-hour buffer.
+each completed stage. Stage 35-52 is complete. The current next action is to
+complete Phase 0A governance review, then request separate owner authorization
+for focused D2A raw WebSocket schema, native sequence, and segment work. No
+seven-day recorder launch is authorized by this handoff.
 
 Report-input metadata expansion from Stages 11 through 34 is now
 maintenance-only. The previously clarified local delivery-notes report input is
@@ -1393,12 +1408,14 @@ python -m pip install -e ".[dev]"
   the Stage 7 research report and Stage 10 report-pack commands.
 - GitHub branch protection is enabled on `main` and requires the `Validate`
   status check.
-- The Kalshi Demo client is tested with mocked HTTP and local fixtures; no live
-  network smoke script exists.
+- The Kalshi Demo client has mocked coverage and bounded read-only Demo network
+  smoke evidence. The latest accepted VPS result is snapshot-only transport
+  evidence and is not sequence, rebuild, replay, or duration evidence.
 - Quote dry-runs emit non-executable intents. Stage 6 can convert those
   boundaries into fake-adapter demo execution requests only after explicit
-  opt-in and Stage 5 risk approval; no fill simulation, WebSocket ingestion,
-  production trading path, or live market-making loop exists.
+  opt-in and Stage 5 risk approval. Offline fill simulation and bounded
+  read-only WebSocket ingestion exist, but production trading and live
+  market-making remain disabled.
 - On the migrated Mac environment, root wrapper scripts may still need the
   repo fallback `PYTHONPATH=src` despite a passing editable install. The direct
   `python scripts/01_replay_orderbook_fixture.py` wrapper failed with
@@ -1465,10 +1482,10 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 - Do not add credentials or secrets.
 - Do not implement production order placement.
-- Do not implement WebSocket ingestion.
-- Do not add live complement-arbitrage scanning before a dedicated read-only
-  recorder stage.
-- Do not add fill simulation before a dedicated simulation stage.
+- Do not treat current WebSocket rows as sequence-verified or rebuild-qualified.
+- Do not extend live complement-arbitrage scanning from unqualified recorder
+  evidence.
+- Keep fill simulation offline and based only on explicitly qualified inputs.
 - Do not enable live or production trading.
 - Do not make profitability claims.
 - Keep Kalshi-specific code under `src/edmn_trader/adapters/kalshi`.
@@ -1477,20 +1494,19 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended action
 
-Stage 35-52 is complete. Stop for human review of
-`docs/private_live_execution_gate.md`. Any future private implementation must
-be separately reviewed outside the public repo and must be backed by private
-evidence for every listed prerequisite.
+Complete the Phase 0A plan/repository freeze. After its freeze report is
+reviewed, request separate owner authorization for D2A only. D2A must preserve
+native WebSocket fields, separate local row order from exchange sequence, and
+define connection/subscription segments without implementing D2B-D2D.
 
 ## Exact next prompt suggestion
 
-Human review: inspect `docs/private_live_execution_gate.md`, decide whether the
-private-live gate design is acceptable, and collect private evidence for
-30-90 days live read-only data, 30+ days paper trading history, zero unresolved
-reconciliation mismatches, validated fee/slippage assumptions, successful demo
-lifecycle coverage, kill-switch and manual approval drills, and legal/platform
-compliance review before requesting any separately reviewed private work.
+Phase 0A review: verify the recorded `origin/main` identity, clean
+`EDMN_PUBLIC_CHECKOUT`, private repository state, approved root permissions,
+retired runbooks, threshold policy, and strict no-go boundary. If Phase 0A
+passes, authorize a new focused D2A implementation goal; do not authorize D2B,
+D2C, D2D, a long campaign, or any order path in that goal.
 
 ## Last updated timestamp
 
-2026-07-02 17:24:15 -07:00
+2026-07-09 19:30:00 -07:00
