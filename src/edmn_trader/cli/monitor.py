@@ -148,11 +148,27 @@ def _refresh_d2_validation(
         or campaign.get("status") == "d2_runtime_running"
     ):
         if campaign.get("status") == "d2_runtime_running":
+            failures: list[str] = []
             try:
                 validate_no_secret_payload(campaign, path="campaign_summary")
                 validate_no_private_account_payload(campaign, path="campaign_summary")
             except ValueError as exc:
-                warnings.append(f"CORRUPT_SUMMARY: campaign_summary.json: {exc}")
+                failures.append(str(exc))
+            for field, expected in (
+                ("live_gate_status", "disabled"),
+                ("production_trading_enabled", False),
+                ("executable_order_intent", False),
+                ("production_endpoint_used", False),
+                ("submit_attempts", 0),
+                ("real_money_trading", False),
+                ("replay_qualified", False),
+            ):
+                if campaign.get(field) != expected:
+                    failures.append(f"running campaign safety field invalid: {field}")
+            if failures:
+                warnings.extend(
+                    f"CORRUPT_SUMMARY: campaign_summary.json: {failure}" for failure in failures
+                )
                 refreshed = dict(summaries)
                 refreshed["campaign_summary.json"] = {
                     "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
@@ -163,7 +179,7 @@ def _refresh_d2_validation(
                     "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
                     "status": "fail",
                     "overall_evidence_classification": "FAIL",
-                    "failures": ["running campaign summary failed payload safety"],
+                    "failures": failures,
                     "strict_verdict": "STRICT NO-GO",
                 }
                 return refreshed

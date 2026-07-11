@@ -184,6 +184,7 @@ class _SegmentMetadata:
     subscription_id: str | int | None = None
     subscription_sid: str | int | None = None
     market_tickers: set[str] = field(default_factory=set)
+    market_ids: dict[str, str] = field(default_factory=dict)
     invalidation_reason: RebuildReason | None = None
 
 
@@ -229,7 +230,13 @@ class KalshiWsBookRebuilder:
                 reason=RebuildReason.D2A_ROW_EXCLUDED,
                 key=key,
             )
-        if not is_orderbook and event.native_type not in {"subscribed", "ack", "ok"}:
+        if not is_orderbook and event.native_type not in {
+            "subscribed",
+            "ack",
+            "ok",
+            "error",
+            "rejected",
+        }:
             return RebuildResult(
                 disposition=RebuildDisposition.IGNORED_NON_ORDERBOOK,
                 reason=None,
@@ -392,6 +399,13 @@ class KalshiWsBookRebuilder:
             return metadata.invalidation_reason
         if observed_market is not None:
             metadata.market_tickers.add(observed_market)
+            observed_market_id = event.native_market_id
+            if observed_market_id is not None:
+                current_market_id = metadata.market_ids.get(observed_market)
+                if current_market_id is not None and current_market_id != observed_market_id:
+                    metadata.invalidation_reason = RebuildReason.IDENTITY_MISMATCH
+                    return metadata.invalidation_reason
+                metadata.market_ids.setdefault(observed_market, observed_market_id)
         pricing_values = _pricing_values(event.original_payload)
         if not pricing_values:
             return None

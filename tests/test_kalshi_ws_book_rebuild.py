@@ -267,6 +267,55 @@ def test_control_frame_identity_mismatch_is_quarantined(
     assert result.reason is RebuildReason.IDENTITY_MISMATCH
 
 
+def test_error_control_frame_identity_mismatch_is_quarantined() -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    rebuilder.apply(_ack(tracker, use_yes_price=False))
+
+    result = rebuilder.apply(
+        tracker.record(
+            {
+                "type": "error",
+                "id": 1,
+                "sid": 99,
+                "msg": {"channel": "orderbook_delta", "error": "rejected"},
+            },
+            local_row_index=2,
+            received_at_utc=RECEIVED_AT,
+            received_monotonic_ns=1002,
+        )
+    )
+
+    assert result.disposition is RebuildDisposition.QUARANTINED
+    assert result.reason is RebuildReason.IDENTITY_MISMATCH
+
+
+def test_control_frame_market_id_mismatch_is_quarantined() -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    snapshot = _snapshot(tracker, yes=[["0.42", "3"]], no=[])
+    rebuilder.apply(snapshot)
+
+    result = rebuilder.apply(
+        tracker.record(
+            {
+                "type": "ack",
+                "id": 1,
+                "sid": 41,
+                "market_ticker": MARKET,
+                "market_id": "different-market-id",
+                "msg": {"channel": "orderbook_delta"},
+            },
+            local_row_index=2,
+            received_at_utc=RECEIVED_AT,
+            received_monotonic_ns=1002,
+        )
+    )
+
+    assert result.disposition is RebuildDisposition.QUARANTINED
+    assert result.reason is RebuildReason.IDENTITY_MISMATCH
+
+
 def test_late_subscription_metadata_cannot_reprice_an_existing_book() -> None:
     tracker = _tracker()
     rebuilder = KalshiWsBookRebuilder()
