@@ -63,6 +63,13 @@ evaluated selection policy, and added mocked reconnect, canary, nested-secret,
 wrong-market, and summary-tamper regressions. The dead legacy WebSocket writer
 was removed; the historical reader remains.
 
+Correction round 2 followed a fresh detached-worktree review. Provenance now
+names detached HEAD explicitly; subscription acknowledgment proves the command
+and full public channel set; sequence and rebuild aggregation cannot inherit a
+historical pass across an unknown current segment; blocked discovery preserves
+selection policy; and crash recovery emits synchronized, validator-consumable
+terminal artifacts without restart. Each correction has a focused regression.
+
 ## D2D evidence classification, durability, and performance
 
 D2D turns the D2A-D2C fixture contracts into an explicit software evidence

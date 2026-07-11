@@ -114,7 +114,7 @@ def collect_runtime_code_provenance(repo_root: Path) -> RuntimeCodeProvenance:
 
     return RuntimeCodeProvenance(
         public_code_commit=git("rev-parse", "HEAD"),
-        branch=git("branch", "--show-current"),
+        branch=git("branch", "--show-current") or "DETACHED_HEAD",
         remote=git("remote", "get-url", "origin"),
         dirty_state=bool(git("status", "--porcelain")),
     )
@@ -234,6 +234,7 @@ def write_d2_runtime_preflight_block(
     blocker_code: str,
     started_at_utc: datetime,
     selected_market_metadata: Mapping[str, object] | None = None,
+    selected_market_selection: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Record a D2-versioned preflight block without opening a transport."""
 
@@ -277,6 +278,7 @@ def write_d2_runtime_preflight_block(
         "terminal_reason": f"preflight_blocked:{blocker_code}",
         "stop_requested": False,
         "selected_market_metadata": dict(selected_market_metadata or {}),
+        "selected_market_selection": dict(selected_market_selection or {}),
         "market": (selected_market_metadata or {}).get("ticker", "UNSELECTED"),
         "market_tickers": [],
         "lifecycle_mode_and_source": "selected_market_rest_fallback",
@@ -969,6 +971,7 @@ class RuntimeEvidenceSession:
                 "connection_id": key[1],
                 "segment_id": key[2],
                 "frame_count": 0,
+                "orderbook_row_count": 0,
                 "excluded_row_count": 0,
                 "invalidation_reasons": Counter(),
                 "pricing_modes": set(),
@@ -984,6 +987,8 @@ class RuntimeEvidenceSession:
             "reason": result.reason,
             "frame": None,
         }
+        if event.native_type in {"orderbook_snapshot", "orderbook_delta"}:
+            summary["orderbook_row_count"] += 1
         if result.frame is not None:
             frame = result.frame
             frame_record = frame.to_record()
@@ -1535,6 +1540,7 @@ def _accumulate_validation_rebuild(
         key,
         {
             "frame_count": 0,
+            "orderbook_row_count": 0,
             "invalidation_reasons": Counter(),
             "snapshot_first_admitted": False,
             "native_state_valid": None,
@@ -1547,6 +1553,8 @@ def _accumulate_validation_rebuild(
     )
     if selected_admitted:
         counts[f"admitted_selected:{event.native_type}"] += 1
+    if event.native_type in {"orderbook_snapshot", "orderbook_delta"}:
+        summary["orderbook_row_count"] += 1
     frame = result.get("frame")
     if isinstance(frame, Mapping):
         summary["frame_count"] += 1
@@ -1692,10 +1700,48 @@ def recover_d2_runtime_artifacts(
         for item in summary["segment_summaries"]
     ]
     summary["status"] = "d2_runtime_crash_recovered"
+    started_at = _parse_required_time(summary.get("started_at"), "started_at")
+    actual_elapsed = _decimal_seconds(recovered_at_utc - started_at)
+    recovered_windows = []
+    for window in summary.get("connection_windows", []):
+        if not isinstance(window, Mapping):
+            continue
+        opened = _parse_time(window.get("opened_at_utc"))
+        closed = _parse_time(window.get("closed_at_utc")) or recovered_at_utc
+        duration = (
+            _decimal_seconds(closed - opened)
+            if opened is not None and closed >= opened
+            else Decimal("0")
+        )
+        recovered_windows.append(
+            {
+                **window,
+                "closed_at_utc": closed.isoformat() if opened is not None else None,
+                "duration_seconds": _decimal_text(duration),
+            }
+        )
+    connected_elapsed = min(
+        actual_elapsed,
+        sum(
+            (Decimal(str(window["duration_seconds"])) for window in recovered_windows),
+            Decimal("0"),
+        ),
+    )
+    summary["connection_windows"] = recovered_windows
+    summary["disconnect_durations"] = RuntimeEvidenceSession._disconnect_durations(
+        recovered_windows
+    )
+    summary["actual_elapsed_seconds"] = _decimal_text(actual_elapsed)
+    summary["connected_elapsed_seconds"] = _decimal_text(connected_elapsed)
+    summary["connection_coverage"] = _decimal_text(
+        connected_elapsed / actual_elapsed if actual_elapsed else Decimal("0")
+    )
+    summary["ended_at"] = recovered_at_utc.isoformat()
     summary["ended_at_utc"] = recovered_at_utc.isoformat()
     summary["terminal_reason"] = "crash_recovered"
     summary["stop_requested"] = False
     summary["replay_qualified"] = False
+    summary["campaign_process_liveness_status"] = "EXITED"
     summary["artifact_integrity_summary"] = {
         "integrity_scope": "CLOSED_FILE",
         "recovery_status": "CRASH_RECOVERED",
@@ -1719,9 +1765,30 @@ def recover_d2_runtime_artifacts(
         "automatic_restart": False,
         "replay_qualified": False,
     }
-    _atomic_write_json(summary_path, summary)
+    _sync_runtime_summary(root, summary)
+    first_validation = validate_d2_runtime_artifacts(root)
+    summary["independent_evidence_classifications"] = {
+        field: first_validation[field] for field in EvidenceDimensions.__dataclass_fields__
+    }
+    summary["independent_evidence_classifications"]["artifact_integrity"] = (
+        EvidenceStatus.PASS
+    )
+    summary["overall_evidence_classification"] = classify_evidence(
+        EvidenceDimensions(**summary["independent_evidence_classifications"])
+    ).overall_classification
+    _sync_runtime_summary(root, summary)
+    validation = validate_d2_runtime_artifacts(root)
+    summary["validation_status"] = validation["status"]
+    summary["evidence_classification"] = validation["overall_evidence_classification"]
+    recovery["validation_status"] = validation["status"]
+    _sync_runtime_summary(root, summary)
     _atomic_write_json(root / "runtime_recovery.json", recovery)
     return recovery
+
+
+def _sync_runtime_summary(root: Path, summary: Mapping[str, object]) -> None:
+    for name in ("campaign_summary.json", "campaign_manifest.json", "run_metadata.json"):
+        _atomic_write_json(root / name, summary)
 
 
 def _sequence_result(states: Counter[SequenceState]) -> str:
@@ -1740,7 +1807,7 @@ def _sequence_evidence_status(
     counters = [summary["sequence_states"] for summary in summaries.values()]
     if any(any(state in counter for state in _BAD_SEQUENCE_STATES) for counter in counters):
         return EvidenceStatus.FAIL
-    if any(SequenceState.SEQUENCE_CONTIGUITY_VERIFIED in counter for counter in counters):
+    if all(SequenceState.SEQUENCE_CONTIGUITY_VERIFIED in counter for counter in counters):
         return EvidenceStatus.PASS
     return EvidenceStatus.UNKNOWN
 
@@ -1753,16 +1820,28 @@ def _rebuild_evidence_status(
         for summary in summaries.values()
     ):
         return EvidenceStatus.FAIL
-    orderbook = [summary for summary in summaries.values() if summary["frame_count"]]
+    orderbook = [
+        summary for summary in summaries.values() if summary["orderbook_row_count"]
+    ]
     if not orderbook:
         return EvidenceStatus.UNKNOWN
     if any(
-        not summary["snapshot_first_admitted"]
-        or summary["native_state_valid"] is not True
-        or summary["invalidation_reasons"]
+        summary["frame_count"]
+        and (
+            not summary["snapshot_first_admitted"]
+            or summary["native_state_valid"] is not True
+            or summary["invalidation_reasons"]
+        )
         for summary in orderbook
     ):
         return EvidenceStatus.FAIL
+    if any(
+        not summary["frame_count"]
+        or not summary["snapshot_first_admitted"]
+        or summary["native_state_valid"] is not True
+        for summary in orderbook
+    ):
+        return EvidenceStatus.UNKNOWN
     return EvidenceStatus.PASS
 
 

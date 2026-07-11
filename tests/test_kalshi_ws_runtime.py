@@ -10,7 +10,7 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from edmn_trader.adapters.kalshi import ws_recorder
+from edmn_trader.adapters.kalshi import ws_recorder, ws_runtime
 from edmn_trader.adapters.kalshi.public_evidence import (
     ConnectionEvidenceEvent,
     ConnectionEvidenceType,
@@ -24,6 +24,7 @@ from edmn_trader.adapters.kalshi.ws_runtime import (
     D2_RUNTIME_SCHEMA_VERSION,
     RuntimeCodeProvenance,
     RuntimeEvidenceSession,
+    collect_runtime_code_provenance,
     recover_d2_runtime_artifacts,
     run_d2_kalshi_ws_runtime,
     validate_d2_runtime_artifacts,
@@ -49,13 +50,39 @@ def test_reviewed_threshold_policy_is_single_versioned_runtime_contract() -> Non
     }
 
 
+def test_runtime_provenance_names_detached_head_instead_of_failing(monkeypatch) -> None:
+    outputs = {
+        ("rev-parse", "HEAD"): COMMIT,
+        ("branch", "--show-current"): "",
+        ("remote", "get-url", "origin"): "https://example.test/repo",
+        ("status", "--porcelain"): "",
+    }
+
+    def fake_run(command, **_kwargs):
+        return type("Result", (), {"stdout": outputs[tuple(command[1:])]})()
+
+    monkeypatch.setattr(ws_runtime.subprocess, "run", fake_run)
+
+    provenance = collect_runtime_code_provenance(Path.cwd())
+
+    assert provenance.branch == "DETACHED_HEAD"
+
+
 def test_actual_runtime_assembly_uses_d2_writer_and_mocked_transports(
     tmp_path: Path,
 ) -> None:
     fake_time = _FakeTime()
     websocket = _FakeWebSocket(
         [
-            {"type": "subscribed", "id": 1, "sid": 41, "msg": {"use_yes_price": False}},
+            {
+                "type": "subscribed",
+                "id": 1,
+                "sid": 41,
+                "msg": {
+                    "channels": ["orderbook_delta", "trade"],
+                    "use_yes_price": False,
+                },
+            },
             {
                 "type": "orderbook_snapshot",
                 "sid": 41,
@@ -143,7 +170,12 @@ def test_actual_runtime_requires_acknowledgement_after_resubscription(
     websockets = [
         _FailingFakeWebSocket(
             [
-                {"type": "subscribed", "id": 1, "sid": 41},
+                {
+                    "type": "subscribed",
+                    "id": 1,
+                    "sid": 41,
+                    "msg": {"channels": ["orderbook_delta", "trade"]},
+                },
                 {
                     "type": "orderbook_snapshot",
                     "sid": 41,
@@ -222,7 +254,12 @@ def test_public_ws_entrypoints_emit_d2_artifacts_with_selection_provenance(
     fake_time = _FakeTime()
     websocket = _FakeWebSocket(
         [
-            {"type": "subscribed", "id": 1, "sid": 41},
+            {
+                "type": "subscribed",
+                "id": 1,
+                "sid": 41,
+                "msg": {"channels": ["orderbook_delta", "trade"]},
+            },
             {
                 "type": "orderbook_snapshot",
                 "sid": 41,
@@ -276,6 +313,58 @@ def test_public_ws_entrypoints_emit_d2_artifacts_with_selection_provenance(
     assert summary["runtime_schema_version"] == D2_RUNTIME_SCHEMA_VERSION
     assert summary["schema_version"] != "v2.readonly_campaign.v1"
     assert summary["selected_market_selection"]["selection_profile"] == expected_profile
+
+
+def test_blocked_canary_discovery_preserves_selection_policy_provenance(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    auth = KalshiWsAuthConfig(
+        api_key_id="fixture-id",
+        private_key_path=_private_key(tmp_path),
+    )
+    monkeypatch.setattr(
+        v2_readonly_campaign,
+        "load_kalshi_ws_auth_config_from_env",
+        lambda: auth,
+    )
+    monkeypatch.setattr(
+        v2_readonly_campaign,
+        "discover_kalshi_demo_ws_market",
+        lambda **_kwargs: {
+            "market_metadata": None,
+            "selection": None,
+            "blocker_code": "DEMO_MARKET_DISCOVERY_INCOMPLETE",
+            "pages_fetched": 3,
+            "markets_seen": 250,
+            "rejection_counts": {"EVENT_METADATA_MISSING": 7},
+            "cursor_remaining": True,
+            "coverage_complete": False,
+        },
+    )
+
+    result = v2_readonly_campaign.run_kalshi_ws_campaign(
+        output_dir=tmp_path / "run",
+        campaign_id="d2e-blocked-canary",
+        duration_seconds=1_800,
+        max_markets=1,
+    )
+    summary = json.loads(
+        (tmp_path / "run" / "campaign_summary.json").read_text(encoding="utf-8")
+    )
+
+    assert result["blocker_code"] == "DEMO_MARKET_DISCOVERY_INCOMPLETE"
+    assert summary["selected_market_selection"] == {
+        "selection_profile": "canary",
+        "selection_safety_buffer_seconds": 3_600,
+        "selection_gate_result": "reject",
+        "selection_gate_rejection_reason": "DEMO_MARKET_DISCOVERY_INCOMPLETE",
+        "market_discovery_pages": 3,
+        "market_discovery_count": 250,
+        "market_discovery_rejection_counts": {"EVENT_METADATA_MISSING": 7},
+        "market_discovery_cursor_remaining": True,
+        "market_discovery_coverage_complete": False,
+    }
 
 
 def test_runtime_session_wires_d2_pipeline_and_closes_verified_artifacts(
@@ -529,6 +618,77 @@ def test_explicit_sequence_gap_is_excluded_then_resynced_by_new_snapshot(
         item["aggregate_result"] == "SEQUENCE_INTEGRITY_FAIL"
         for item in summary["sequence_summaries"]
     )
+
+
+def test_unknown_current_segment_cannot_inherit_historical_sequence_or_rebuild_pass(
+    tmp_path: Path,
+) -> None:
+    session = _session(tmp_path, configured_duration_seconds=3)
+    tracker = _tracker(continuity_policy=SequenceContinuityPolicy.CONTIGUOUS_INCREMENT)
+    first_segment = [
+        tracker.record(
+            {
+                "type": "orderbook_snapshot",
+                "sid": 41,
+                "seq": 1,
+                "msg": {
+                    "market_ticker": MARKET,
+                    "yes_dollars_fp": [["0.42", "3"]],
+                    "no_dollars_fp": [],
+                },
+            },
+            local_row_index=1,
+            received_at_utc=START,
+            received_monotonic_ns=1,
+        ),
+        tracker.record(
+            {
+                "type": "orderbook_delta",
+                "sid": 41,
+                "seq": 2,
+                "msg": {
+                    "market_ticker": MARKET,
+                    "side": "yes",
+                    "price_dollars": "0.42",
+                    "delta_fp": "1",
+                },
+            },
+            local_row_index=2,
+            received_at_utc=START + timedelta(seconds=1),
+            received_monotonic_ns=2,
+        ),
+    ]
+    tracker.start_connection()
+    tracker.bind_subscription(command_id=1)
+    current_unknown = tracker.record(
+        {
+            "type": "orderbook_delta",
+            "sid": 42,
+            "msg": {
+                "market_ticker": MARKET,
+                "side": "yes",
+                "price_dollars": "0.42",
+                "delta_fp": "1",
+            },
+        },
+        local_row_index=3,
+        received_at_utc=START + timedelta(seconds=2),
+        received_monotonic_ns=3,
+    )
+    for event in (*first_segment, current_unknown):
+        session.record_event(event)
+
+    summary = session.close(
+        ended_at_utc=START + timedelta(seconds=3),
+        terminal_reason="bounded_duration_complete",
+        stop_requested=False,
+        connection_established=True,
+        subscription_acknowledged=True,
+        blocker_code=None,
+    )
+
+    assert summary["independent_evidence_classifications"]["sequence_integrity"] == "UNKNOWN"
+    assert summary["independent_evidence_classifications"]["rebuild_integrity"] == "UNKNOWN"
 
 
 @pytest.mark.parametrize(
@@ -908,6 +1068,12 @@ def test_runtime_crash_recovery_removes_only_partial_tail_and_never_restarts(
     assert recovery["inherited_book_state"] is False
     assert recovery["automatic_restart"] is False
     assert recovery["replay_qualified"] is False
+    assert recovery["validation_status"] == "pass"
+    validation = validate_d2_runtime_artifacts(tmp_path)
+    monitor = build_monitor_snapshot(tmp_path, now=START + timedelta(seconds=10))
+    assert validation["status"] == "pass"
+    assert validation["process_liveness"] == "FAIL"
+    assert monitor["run_info"]["health"] == "BLOCKED"
 
 
 def test_runtime_validator_rejects_tampered_durable_record(tmp_path: Path) -> None:

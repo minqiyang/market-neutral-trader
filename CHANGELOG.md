@@ -20,9 +20,11 @@ numbers while the repository is still in early research scaffolding.
   and campaign runs emit `edmn.kalshi.ws.runtime.v2` artifacts with D2A
   admission, D2B rebuild hashes, D2C public/lifecycle/connection evidence, D2D
   append-chain durability, timestamp-derived timing, threshold provenance,
-  independently derived validator dimensions, per-connection subscription
-  acknowledgment, selection-policy provenance, admitted selected-market
-  freshness, monitor fail-closed behavior, rotation, and crash recovery.
+  independently derived validator dimensions, command/channel-bound
+  per-connection subscription acknowledgment, selection-policy provenance,
+  admitted selected-market freshness, all-segment classification, detached
+  provenance, monitor fail-closed behavior, rotation, and coherent crash
+  recovery.
   Legacy v1 artifacts remain readable but are not selected for new WebSocket
   runs. Tests are mocked and public live trading remains disabled.
 - Added D2D orthogonal evidence classification, timestamp-derived duration,

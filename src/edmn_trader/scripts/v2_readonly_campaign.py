@@ -130,6 +130,25 @@ def selection_safety_buffer_seconds(profile: SelectionProfile) -> int:
     return SMOKE_SELECTION_SAFETY_BUFFER_SECONDS
 
 
+def _blocked_ws_selection_record(
+    profile: SelectionProfile,
+    discovery: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    discovery = discovery or {}
+    return {
+        "selection_profile": profile.value,
+        "selection_safety_buffer_seconds": selection_safety_buffer_seconds(profile),
+        "selection_gate_result": "reject",
+        "selection_gate_rejection_reason": discovery.get("blocker_code")
+        or "PRE_DISCOVERY_BLOCKED",
+        "market_discovery_pages": discovery.get("pages_fetched", 0),
+        "market_discovery_count": discovery.get("markets_seen", 0),
+        "market_discovery_rejection_counts": discovery.get("rejection_counts", {}),
+        "market_discovery_cursor_remaining": discovery.get("cursor_remaining"),
+        "market_discovery_coverage_complete": discovery.get("coverage_complete"),
+    }
+
+
 def evaluate_market_selection(
     market_metadata: Mapping[str, object] | None,
     *,
@@ -533,6 +552,7 @@ def run_kalshi_ws_smoke(
         raise ValueError("max_markets must be at least 1")
     generated_at = now or datetime.now(UTC)
     output_dir.mkdir(parents=True, exist_ok=True)
+    profile = selection_profile_for_duration(duration_seconds)
     provenance = collect_runtime_code_provenance(Path.cwd())
     try:
         auth = load_kalshi_ws_auth_config_from_env()
@@ -545,9 +565,9 @@ def run_kalshi_ws_smoke(
             provenance=provenance,
             blocker_code=exc.code,
             started_at_utc=generated_at,
+            selected_market_selection=_blocked_ws_selection_record(profile),
         )
 
-    profile = selection_profile_for_duration(duration_seconds)
     discovery = discover_kalshi_demo_ws_market(
         duration_seconds=duration_seconds,
         safety_buffer_seconds=selection_safety_buffer_seconds(profile),
@@ -566,6 +586,7 @@ def run_kalshi_ws_smoke(
             provenance=provenance,
             blocker_code=blocker_code,
             started_at_utc=generated_at,
+            selected_market_selection=_blocked_ws_selection_record(profile, discovery),
         )
     return run_d2_kalshi_ws_runtime(
         output_dir=output_dir,
@@ -835,6 +856,7 @@ def run_kalshi_ws_campaign(
     _validate_duration(duration_seconds, allow_seven_day=True)
     generated_at = now or datetime.now(UTC)
     output_dir.mkdir(parents=True, exist_ok=True)
+    profile = selection_profile_for_duration(duration_seconds)
     provenance = collect_runtime_code_provenance(Path.cwd())
     try:
         auth = load_kalshi_ws_auth_config_from_env()
@@ -847,9 +869,9 @@ def run_kalshi_ws_campaign(
             provenance=provenance,
             blocker_code=exc.code,
             started_at_utc=generated_at,
+            selected_market_selection=_blocked_ws_selection_record(profile),
         )
 
-    profile = selection_profile_for_duration(duration_seconds)
     discovery = discover_kalshi_demo_ws_market(
         duration_seconds=duration_seconds,
         safety_buffer_seconds=selection_safety_buffer_seconds(profile),
@@ -868,6 +890,7 @@ def run_kalshi_ws_campaign(
             provenance=provenance,
             blocker_code=blocker_code,
             started_at_utc=generated_at,
+            selected_market_selection=_blocked_ws_selection_record(profile, discovery),
         )
     return run_d2_kalshi_ws_runtime(
         output_dir=output_dir,

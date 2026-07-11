@@ -33,6 +33,12 @@ acknowledgment is connection-local across reconnects, and excluded markets
 cannot refresh selected-market freshness. Runtime artifacts also preserve the
 evaluated smoke/canary/seven-day selection record.
 
+Fresh review correction round 2 additionally requires every applicable
+connection segment to carry its own sequence/rebuild evidence, binds channel
+acknowledgment to command `1` and both public channels, supports detached-HEAD
+deployment provenance, preserves blocked-discovery policy metadata, and makes
+crash-recovered artifacts validator/monitor consumable without relaunch.
+
 This checkpoint is software-only. Tests use mocked WebSocket and lifecycle
 transports. No VPS, credential, campaign, private raw data, production endpoint,
 order path, or real market network was used. Replay qualification remains

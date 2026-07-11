@@ -52,7 +52,8 @@ old file once; event callbacks never scan or hash the full file.
   but cannot change native book state or refresh selected-market snapshot and
   orderbook-freshness evidence.
 - Every connection and resubscription must receive its own channel
-  acknowledgment; an acknowledgment from an earlier connection is never
+  acknowledgment bound to command `1` and the complete `orderbook_delta` plus
+  `trade` channel set; an acknowledgment from an earlier connection is never
   carried forward.
 - Increasing sequence values under unknown semantics remain unknown; they do
   not establish continuity.
@@ -72,6 +73,12 @@ append chain, checkpoint, and one closed-file SHA-256. Crash recovery validates
 complete rows after the checkpoint, removes only a partial final row, records
 `snapshot_required=true`, records `inherited_book_state=false`, and never
 automatically restarts a campaign.
+
+Detached deployments record `branch=DETACHED_HEAD` instead of failing before
+preflight. Blocked discovery preserves its intended selection profile and
+coverage metadata. Crash recovery synchronizes terminal timing and summary
+artifacts, remains fail-closed for process evidence, and is consumable by the
+D2 validator and monitor without starting a replacement process.
 
 The validator dispatches by runtime schema. D2 artifacts receive full terminal
 chain/hash/safety verification, and critical counts and classifier dimensions

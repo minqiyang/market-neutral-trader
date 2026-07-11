@@ -30,6 +30,7 @@ ProgressCallback = Callable[[dict[str, object]], None]
 EventCallback = Callable[[KalshiWsRawEvent], None]
 ConnectionCallback = Callable[[ConnectionEvidenceEvent], None]
 TickCallback = Callable[[datetime], None]
+REQUIRED_PUBLIC_CHANNELS = frozenset({"orderbook_delta", "trade"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +115,7 @@ def record_kalshi_demo_ws_orderbook(
     last_event_time: str | None = None
     all_subscriptions_acknowledged = True
     current_subscription_acknowledged = False
+    acknowledged_channels: set[str] = set()
     reconnect_count = 0
     integrity_tracker = KalshiWsIntegrityTracker(
         campaign_id=config.campaign_id,
@@ -132,6 +134,7 @@ def record_kalshi_demo_ws_orderbook(
                 integrity_tracker.start_connection()
                 opened = True
                 current_subscription_acknowledged = False
+                acknowledged_channels.clear()
                 _emit_connection(
                     connection_callback,
                     event_type=(
@@ -170,7 +173,10 @@ def record_kalshi_demo_ws_orderbook(
                     received_monotonic_ns = monotonic_ns_clock()
                     payload = _loads(raw)
                     message_type = _message_type(payload)
-                    acknowledged = _is_subscription_ack(payload, message_type)
+                    acknowledged_channels.update(
+                        _subscription_ack_channels(payload, message_type)
+                    )
+                    acknowledged = REQUIRED_PUBLIC_CHANNELS <= acknowledged_channels
                     rejected = _is_subscription_rejection(payload, message_type)
                     if acknowledged and not current_subscription_acknowledged:
                         current_subscription_acknowledged = True
@@ -332,14 +338,30 @@ def _message_type(payload: Mapping[str, object]) -> str:
     return "unknown"
 
 
-def _is_subscription_ack(payload: Mapping[str, object], message_type: str) -> bool:
+def _subscription_ack_channels(
+    payload: Mapping[str, object],
+    message_type: str,
+) -> set[str]:
     lowered = message_type.lower()
-    if "subscribed" in lowered or lowered in {"ack", "ok"}:
-        return True
-    return str(payload.get("cmd") or "").lower() == "subscribe" and not payload.get("error")
+    if payload.get("id") != 1 or not (
+        "subscribed" in lowered or lowered == "ack"
+    ):
+        return set()
+    nested = payload.get("msg")
+    source = nested if isinstance(nested, Mapping) else payload
+    channels: set[str] = set()
+    channel = source.get("channel")
+    if isinstance(channel, str):
+        channels.add(channel)
+    channel_list = source.get("channels")
+    if isinstance(channel_list, list):
+        channels.update(str(item) for item in channel_list if isinstance(item, str))
+    return channels & REQUIRED_PUBLIC_CHANNELS
 
 
 def _is_subscription_rejection(payload: Mapping[str, object], message_type: str) -> bool:
+    if payload.get("id") != 1:
+        return False
     lowered = message_type.lower()
     return (
         "reject" in lowered
