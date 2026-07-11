@@ -1118,6 +1118,8 @@ def test_runtime_crash_recovery_reconciles_complete_tail_record_counts(
     assert summary["sequence_summaries"]
     assert summary["rebuild_summaries"]
     assert summary["freshness_dimensions"]["transport_keepalive_status"] == "OBSERVED"
+    assert summary["transport_keepalive_age_seconds"] == 9
+    assert summary["max_transport_keepalive_age_seconds"] == 9
 
 
 def test_validator_rebuilds_d2b_instead_of_trusting_persisted_frame(
@@ -1201,6 +1203,49 @@ def test_validator_rejects_tampered_aggregate_rebuild_hashes(tmp_path: Path) -> 
 
     assert validation["status"] == "fail"
     assert any("rebuild_summaries" in item for item in validation["failures"])
+
+
+def test_validator_rejects_tampered_top_level_freshness_timing(tmp_path: Path) -> None:
+    session = _session(tmp_path, configured_duration_seconds=1)
+    session.record_event(
+        _tracker().record(
+            {
+                "type": "orderbook_snapshot",
+                "sid": 41,
+                "seq": 1,
+                "msg": {
+                    "market_ticker": MARKET,
+                    "yes_dollars_fp": [["0.42", "3"]],
+                    "no_dollars_fp": [],
+                },
+            },
+            local_row_index=1,
+            received_at_utc=START,
+            received_monotonic_ns=1,
+        )
+    )
+    session.close(
+        ended_at_utc=START + timedelta(seconds=1),
+        terminal_reason="bounded_duration_complete",
+        stop_requested=False,
+        connection_established=True,
+        subscription_acknowledged=True,
+        blocker_code=None,
+    )
+    for name in ("campaign_summary.json", "campaign_manifest.json", "run_metadata.json"):
+        path = tmp_path / name
+        payload = json.loads(path.read_text())
+        payload["orderbook_event_quiet_interval_seconds"] = 999_999
+        payload["max_orderbook_event_quiet_interval_seconds"] = 999_999
+        path.write_text(json.dumps(payload) + "\n")
+
+    validation = validate_d2_runtime_artifacts(tmp_path)
+
+    assert validation["status"] == "fail"
+    assert any(
+        "orderbook_event_quiet_interval_seconds" in item
+        for item in validation["failures"]
+    )
 
 
 def test_runtime_validator_rejects_tampered_durable_record(tmp_path: Path) -> None:

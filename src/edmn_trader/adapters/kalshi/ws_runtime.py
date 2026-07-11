@@ -505,6 +505,7 @@ class RuntimeEvidenceSession:
     def record_event(self, event: KalshiWsRawEvent) -> None:
         if event.campaign_id != self.campaign_id:
             raise ValueError("D2A event campaign does not match runtime campaign")
+        self._sample_freshness(event.received_at_utc)
         rebuild = self._rebuilder.apply(event)
         trade_stream = build_public_trade_stream(
             (event,),
@@ -542,7 +543,6 @@ class RuntimeEvidenceSession:
             },
             observed_at_utc=event.received_at_utc,
         )
-        self._sample_freshness(event.received_at_utc)
 
     def close(
         self,
@@ -1532,6 +1532,7 @@ def _derive_runtime_validation(
         ),
     )
     durable_fields: dict[str, object] = {
+        **timing.to_record(),
         "sequence_summaries": _sequence_summary_records(sequence),
         "rebuild_summaries": _rebuild_summary_records(rebuild),
         "connection_windows": windows,
