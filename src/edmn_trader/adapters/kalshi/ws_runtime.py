@@ -38,6 +38,7 @@ from edmn_trader.adapters.kalshi.ws_events import (
     KALSHI_WS_RAW_SCHEMA_VERSION,
     AdmissionStatus,
     KalshiWsRawEvent,
+    SegmentBoundaryReason,
     SequenceState,
 )
 from edmn_trader.adapters.kalshi.ws_recorder import (
@@ -55,8 +56,10 @@ from edmn_trader.data.evidence_classifier import (
 from edmn_trader.data.evidence_durability import (
     EVIDENCE_CHAIN_SCHEMA_VERSION,
     EVIDENCE_CHECKPOINT_SCHEMA_VERSION,
+    EVIDENCE_SEGMENT_START_SCHEMA_VERSION,
     EVIDENCE_SUMMARY_SCHEMA_VERSION,
     EvidenceSegmentWriter,
+    RecoveryResult,
     recover_unterminated_segment,
     verify_segment_chain,
 )
@@ -64,7 +67,10 @@ from edmn_trader.data.evidence_policy import (
     V2_THRESHOLD_POLICY,
     EvidenceThresholdPolicy,
 )
-from edmn_trader.data.payload_safety import validate_no_secret_payload
+from edmn_trader.data.payload_safety import (
+    validate_no_private_account_payload,
+    validate_no_secret_payload,
+)
 
 D2_RUNTIME_SCHEMA_VERSION = "edmn.kalshi.ws.runtime.v2"
 D2_RUNTIME_RECORD_SCHEMA_VERSION = "edmn.kalshi.ws.runtime_record.v1"
@@ -151,6 +157,12 @@ def _sanitize_git_remote(remote: str) -> str:
     return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
 
 
+def _require_empty_runtime_root(root: Path) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    if any(root.iterdir()):
+        raise FileExistsError("new D2 runtime requires an empty artifact root")
+
+
 def run_d2_kalshi_ws_runtime(
     *,
     output_dir: Path,
@@ -201,13 +213,14 @@ def run_d2_kalshi_ws_runtime(
         last_lifecycle_poll = observed_at
         try:
             current = provider(session.selected_market_ticker)
-            session.record_lifecycle(
-                current,
-                observed_at_utc=observed_at,
-                evaluated_at_utc=observed_at,
-            )
         except Exception:
             lifecycle_blocker = "LIFECYCLE_OBSERVATION_FAILED"
+            return
+        session.record_lifecycle(
+            current,
+            observed_at_utc=observed_at,
+            evaluated_at_utc=observed_at,
+        )
 
     recorder = record_kalshi_demo_ws_orderbook(
         KalshiWsRecorderConfig(
@@ -286,7 +299,12 @@ def write_d2_runtime_preflight_block(
 
     _require_aware(started_at_utc, "started_at_utc")
     root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
+    _require_empty_runtime_root(root)
+    metadata = dict(selected_market_metadata or {})
+    selection = dict(selected_market_selection or {})
+    for label, value in (("market metadata", metadata), ("market selection", selection)):
+        validate_no_secret_payload(value, path=label)
+        validate_no_private_account_payload(value, path=label)
     dimensions = _preflight_dimensions()
 
     summary = {
@@ -311,9 +329,9 @@ def write_d2_runtime_preflight_block(
         "ended_at_utc": started_at_utc.isoformat(),
         "terminal_reason": f"preflight_blocked:{blocker_code}",
         "stop_requested": False,
-        "selected_market_metadata": dict(selected_market_metadata or {}),
-        "selected_market_selection": dict(selected_market_selection or {}),
-        "market": (selected_market_metadata or {}).get("ticker", "UNSELECTED"),
+        "selected_market_metadata": metadata,
+        "selected_market_selection": selection,
+        "market": metadata.get("ticker", "UNSELECTED"),
         "market_tickers": [],
         "lifecycle_mode_and_source": "selected_market_rest_fallback",
         "pricing_mode_and_source": "not_observed",
@@ -417,6 +435,8 @@ class RuntimeEvidenceSession:
         _require_aware(started_at_utc, "started_at_utc")
         validate_no_secret_payload(selected_market_metadata)
         validate_no_secret_payload(selected_market_selection)
+        validate_no_private_account_payload(selected_market_metadata)
+        validate_no_private_account_payload(selected_market_selection)
         ticker = selected_market_metadata.get("ticker") or selected_market_metadata.get(
             "market_ticker"
         )
@@ -425,10 +445,7 @@ class RuntimeEvidenceSession:
         if threshold_policy.effective_at_utc > started_at_utc:
             raise ValueError("threshold policy must be effective before runtime start")
         self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        for name in ("campaign_summary.json", "campaign_validation.json"):
-            if (self.output_dir / name).exists():
-                raise FileExistsError(f"new D2 runtime will not overwrite {name}")
+        _require_empty_runtime_root(self.output_dir)
         self.campaign_id = campaign_id
         self.mode = mode
         self.configured_duration_seconds = configured_duration_seconds
@@ -1265,6 +1282,7 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
     failures.extend(f"missing required field: {name}" for name in required if name not in summary)
     try:
         validate_no_secret_payload(summary)
+        _validate_runtime_metadata_safety(summary)
     except ValueError as exc:
         failures.append(str(exc))
     segments = summary.get("segment_summaries", [])
@@ -1412,6 +1430,7 @@ def _validate_d2_preflight_block(
         failures.append(f"campaign_validation unavailable: {exc}")
     try:
         validate_no_secret_payload(summary)
+        _validate_runtime_metadata_safety(summary)
     except ValueError as exc:
         failures.append(str(exc))
     for sibling_name in ("campaign_manifest.json", "run_metadata.json"):
@@ -1513,6 +1532,13 @@ def _validate_d2_preflight_block(
     return expected_validation
 
 
+def _validate_runtime_metadata_safety(summary: Mapping[str, object]) -> None:
+    for field in ("selected_market_metadata", "selected_market_selection"):
+        value = summary.get(field)
+        if isinstance(value, Mapping):
+            validate_no_private_account_payload(value, path=field)
+
+
 def _validate_runtime_records(
     path: Path,
     counts: Counter[str],
@@ -1536,6 +1562,70 @@ def _validate_runtime_records(
                 KalshiWsRawEvent.from_record(d2a_event)
 
 
+def _update_validation_connection_state(
+    states: dict[str, dict[str, object]],
+    event: ConnectionEvidenceEvent,
+) -> None:
+    state = states.get(event.connection_id)
+    if event.event_type in {
+        ConnectionEvidenceType.CONNECTION_OPEN,
+        ConnectionEvidenceType.RECONNECT,
+    }:
+        if state is not None and state["closed_at"] is None:
+            raise ValueError("connection opened more than once without closing")
+        states[event.connection_id] = {
+            "opened_at": event.observed_at_utc,
+            "opening_segment_id": event.segment_id,
+            "acknowledged_at": None,
+            "acknowledged_segment_id": None,
+            "closed_at": None,
+            "last_event_at": None,
+        }
+        return
+    if state is None or state["closed_at"] is not None:
+        raise ValueError("connection evidence occurred outside an open connection")
+    opened_at = state["opened_at"]
+    if not isinstance(opened_at, datetime) or event.observed_at_utc < opened_at:
+        raise ValueError("connection evidence predates its open event")
+    last_event_at = state["last_event_at"]
+    if isinstance(last_event_at, datetime) and event.observed_at_utc < last_event_at:
+        raise ValueError("connection evidence predates its latest D2A event")
+    if event.event_type is ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED:
+        if state["acknowledged_at"] is not None:
+            raise ValueError("connection has duplicate subscription acknowledgment")
+        state["acknowledged_at"] = event.observed_at_utc
+        state["acknowledged_segment_id"] = event.segment_id
+    elif event.event_type is ConnectionEvidenceType.CONNECTION_CLOSE:
+        state["closed_at"] = event.observed_at_utc
+
+
+def _validate_event_subscription_state(
+    event: KalshiWsRawEvent,
+    states: dict[str, dict[str, object]],
+) -> None:
+    state = states.get(event.connection_id)
+    if state is None:
+        raise ValueError("D2A event has no matching connection open evidence")
+    opened_at = state.get("opened_at")
+    acknowledged_at = state.get("acknowledged_at")
+    closed_at = state.get("closed_at")
+    if not isinstance(opened_at, datetime) or event.received_at_utc < opened_at:
+        raise ValueError("D2A event predates its connection open evidence")
+    if not isinstance(acknowledged_at, datetime) or event.received_at_utc < acknowledged_at:
+        raise ValueError("D2A event was recorded before subscription acknowledgment")
+    if isinstance(closed_at, datetime) and event.received_at_utc >= closed_at:
+        raise ValueError("D2A event was recorded after connection close")
+    last_event_at = state.get("last_event_at")
+    if isinstance(last_event_at, datetime) and event.received_at_utc < last_event_at:
+        raise ValueError("D2A event chronology moves backwards")
+    if event.segment_boundary_reason in {
+        SegmentBoundaryReason.NEW_SUBSCRIPTION,
+        SegmentBoundaryReason.RESUBSCRIPTION,
+    } and event.segment_id != state.get("acknowledged_segment_id"):
+        raise ValueError("D2A subscription segment contradicts acknowledgment evidence")
+    state["last_event_at"] = event.received_at_utc
+
+
 def _derive_runtime_validation(
     summary: Mapping[str, object],
     records: list[dict[str, object]],
@@ -1554,6 +1644,8 @@ def _derive_runtime_validation(
     lifecycle_records: list[Mapping[str, object]] = []
     terminal_records: list[Mapping[str, object]] = []
     durable_campaign_ids: set[str] = set()
+    connection_states: dict[str, dict[str, object]] = {}
+    last_connection_observed_at: datetime | None = None
     counts: Counter[str] = Counter()
     selected_market = str(summary["market_ticker"])
     validation_rebuilder = KalshiWsBookRebuilder()
@@ -1565,12 +1657,13 @@ def _derive_runtime_validation(
         record_type = record["record_type"]
         if record_type == "connection_evidence":
             connection_record = _required_mapping(record, "connection_event")
+            observed_at = _parse_required_time(
+                connection_record.get("observed_at_utc"),
+                "connection observed_at_utc",
+            )
             connection = ConnectionEvidenceEvent(
                 event_type=connection_record["event_type"],
-                observed_at_utc=_parse_required_time(
-                    connection_record.get("observed_at_utc"),
-                    "connection observed_at_utc",
-                ),
+                observed_at_utc=observed_at,
                 connection_id=str(connection_record["connection_id"]),
                 segment_id=str(connection_record["segment_id"]),
                 reason=str(connection_record["reason"]),
@@ -1579,6 +1672,13 @@ def _derive_runtime_validation(
             )
             if connection.to_record() != connection_record:
                 raise ValueError("durable connection evidence contradicts its schema")
+            if (
+                last_connection_observed_at is not None
+                and observed_at < last_connection_observed_at
+            ):
+                raise ValueError("connection evidence chronology moves backwards")
+            last_connection_observed_at = observed_at
+            _update_validation_connection_state(connection_states, connection)
             connection_events.append(connection_record)
             continue
         if record_type == "lifecycle_evidence":
@@ -1615,6 +1715,9 @@ def _derive_runtime_validation(
         event = KalshiWsRawEvent.from_record(_required_mapping(record, "d2a_event"))
         if event.campaign_id != record_campaign_id:
             raise ValueError("D2A campaign identity contradicts durable runtime record")
+        if event.local_row_index != len(raw_events) + 1:
+            raise ValueError("D2A local row indices must be contiguous across the runtime")
+        _validate_event_subscription_state(event, connection_states)
         raw_events.append(event)
         counts["event_count"] += 1
         counts[f"native:{event.native_type or 'unknown'}"] += 1
@@ -2159,6 +2262,79 @@ def _parse_required_time(value: object, field: str) -> datetime:
     return parsed
 
 
+def _reconciled_finalized_segment_record(
+    root: Path,
+    segment_id: str,
+    data_path: Path,
+    checkpoint_path: Path,
+    summary_path: Path,
+    segment_summary: Mapping[str, object],
+) -> dict[str, object]:
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    verified = verify_segment_chain(data_path, segment_id=segment_id)
+    with data_path.open("rb") as handle:
+        closed_file_sha256 = hashlib.file_digest(handle, "sha256").hexdigest()
+    if (
+        segment_summary.get("schema_version") != EVIDENCE_SUMMARY_SCHEMA_VERSION
+        or segment_summary.get("segment_id") != segment_id
+        or segment_summary.get("segment_closed") is not True
+        or checkpoint.get("schema_version") != EVIDENCE_CHECKPOINT_SCHEMA_VERSION
+        or checkpoint.get("segment_id") != segment_id
+        or checkpoint.get("last_committed_local_row_index") != verified.record_count
+        or checkpoint.get("byte_offset") != verified.byte_offset
+        or checkpoint.get("chain_hash") != verified.terminal_chain_hash
+        or segment_summary.get("last_committed_local_row_index") != verified.record_count
+        or segment_summary.get("byte_offset") != verified.byte_offset
+        or segment_summary.get("terminal_chain_hash") != verified.terminal_chain_hash
+        or segment_summary.get("closed_file_sha256") != closed_file_sha256
+    ):
+        raise ValueError("finalized segment artifacts contradict before manifest sync")
+    return {
+        **segment_summary,
+        "data_path": str(data_path.relative_to(root)),
+        "checkpoint_path": str(checkpoint_path.relative_to(root)),
+        "summary_path": str(summary_path.relative_to(root)),
+        "recovery_status": "FINALIZED_BEFORE_MANIFEST_SYNC",
+        "partial_tail_bytes_removed": 0,
+        "snapshot_required_after_recovery": True,
+        "inherited_book_state": False,
+    }
+
+
+def _next_rotated_segment_id(segment_id: str) -> str:
+    match = re.fullmatch(r"(.+\.evidence\.)(\d+)", segment_id)
+    if match is None:
+        raise ValueError("rotated runtime segment id is not incrementable")
+    number = match.group(2)
+    return f"{match.group(1)}{int(number) + 1:0{len(number)}d}"
+
+
+def _write_recovery_segment_start(
+    root: Path,
+    *,
+    segment_id: str,
+    next_segment_id: str,
+    recovered_at_utc: datetime,
+) -> Path:
+    path = root / f"{next_segment_id}.start.json"
+    if path.exists():
+        raise FileExistsError("runtime recovery metadata already exists")
+    _atomic_write_json(
+        path,
+        {
+            "schema_version": EVIDENCE_SEGMENT_START_SCHEMA_VERSION,
+            "segment_id": next_segment_id,
+            "previous_segment_id": segment_id,
+            "segment_created": True,
+            "connection_reset_required": True,
+            "snapshot_required": True,
+            "inherited_book_state": False,
+            "created_at_utc": recovered_at_utc.isoformat(),
+        },
+    )
+    return path
+
+
 def recover_d2_runtime_artifacts(
     input_dir: Path,
     *,
@@ -2172,34 +2348,94 @@ def recover_d2_runtime_artifacts(
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     if summary.get("runtime_schema_version") != D2_RUNTIME_SCHEMA_VERSION:
         raise ValueError("runtime recovery requires the D2 runtime schema")
+    segment_summaries = summary.get("segment_summaries", [])
     open_segments = [
         segment
-        for segment in summary.get("segment_summaries", [])
+        for segment in segment_summaries
         if isinstance(segment, Mapping) and segment.get("segment_closed") is False
     ]
-    if len(open_segments) != 1:
+    if not isinstance(segment_summaries, list) or len(open_segments) != 1:
         raise ValueError("runtime recovery requires exactly one open segment")
     segment = open_segments[0]
+    while True:
+        segment_id = str(segment["segment_id"])
+        data_path = root / str(segment["data_path"])
+        checkpoint_path = root / str(segment["checkpoint_path"])
+        closed_summary_path = data_path.with_name(f"{segment_id}.summary.json")
+        if not closed_summary_path.is_file():
+            break
+        closed_summary = json.loads(closed_summary_path.read_text(encoding="utf-8"))
+        finalized_record = _reconciled_finalized_segment_record(
+            root,
+            segment_id,
+            data_path,
+            checkpoint_path,
+            closed_summary_path,
+            closed_summary,
+        )
+        summary["segment_summaries"] = [
+            finalized_record if item is segment else item
+            for item in summary["segment_summaries"]
+        ]
+        if closed_summary.get("terminal_reason") != "rotation":
+            segment = finalized_record
+            break
+        next_segment_id = _next_rotated_segment_id(segment_id)
+        next_data_path = data_path.with_name(f"{next_segment_id}.events.jsonl")
+        next_checkpoint_path = data_path.with_name(f"{next_segment_id}.checkpoint.json")
+        if not next_data_path.is_file() or not next_checkpoint_path.is_file():
+            raise ValueError("finalized rotation is missing its next open segment")
+        segment = {
+            "segment_id": next_segment_id,
+            "segment_closed": False,
+            "data_path": str(next_data_path.relative_to(root)),
+            "checkpoint_path": str(next_checkpoint_path.relative_to(root)),
+        }
+        summary["segment_summaries"].append(segment)
+
     segment_id = str(segment["segment_id"])
     next_segment_id = f"{summary['campaign_id']}.recovery.next"
     data_path = root / str(segment["data_path"])
     checkpoint_path = root / str(segment["checkpoint_path"])
     closed_summary_path = data_path.with_name(f"{segment_id}.summary.json")
-    recovered = recover_unterminated_segment(
-        data_path=data_path,
-        checkpoint_path=checkpoint_path,
-        summary_path=closed_summary_path,
-        segment_id=segment_id,
-        next_segment_id=next_segment_id,
-        now_utc=lambda: recovered_at_utc,
-    )
+    already_finalized = closed_summary_path.is_file()
+    if already_finalized:
+        closed_summary = json.loads(closed_summary_path.read_text(encoding="utf-8"))
+        next_segment_metadata_path = _write_recovery_segment_start(
+            data_path.parent,
+            segment_id=segment_id,
+            next_segment_id=next_segment_id,
+            recovered_at_utc=recovered_at_utc,
+        )
+        recovered = RecoveryResult(
+            segment_id=segment_id,
+            last_committed_local_row_index=int(
+                closed_summary["last_committed_local_row_index"]
+            ),
+            terminal_chain_hash=str(closed_summary["terminal_chain_hash"]),
+            closed_file_sha256=str(closed_summary["closed_file_sha256"]),
+            partial_tail_bytes_removed=0,
+            next_segment_id=next_segment_id,
+            next_segment_metadata_path=str(next_segment_metadata_path),
+        )
+    else:
+        recovered = recover_unterminated_segment(
+            data_path=data_path,
+            checkpoint_path=checkpoint_path,
+            summary_path=closed_summary_path,
+            segment_id=segment_id,
+            next_segment_id=next_segment_id,
+            now_utc=lambda: recovered_at_utc,
+        )
     closed_summary = json.loads(closed_summary_path.read_text(encoding="utf-8"))
     segment_record = {
         **closed_summary,
         "data_path": str(data_path.relative_to(root)),
         "checkpoint_path": str(checkpoint_path.relative_to(root)),
         "summary_path": str(closed_summary_path.relative_to(root)),
-        "recovery_status": "CRASH_RECOVERED",
+        "recovery_status": (
+            "FINALIZED_BEFORE_MANIFEST_SYNC" if already_finalized else "CRASH_RECOVERED"
+        ),
         "partial_tail_bytes_removed": recovered.partial_tail_bytes_removed,
         "snapshot_required_after_recovery": recovered.snapshot_required,
         "inherited_book_state": recovered.inherited_book_state,

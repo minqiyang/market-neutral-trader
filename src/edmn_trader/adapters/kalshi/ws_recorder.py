@@ -33,6 +33,10 @@ TickCallback = Callable[[datetime], None]
 REQUIRED_PUBLIC_CHANNELS = frozenset({"orderbook_delta", "trade"})
 
 
+class EvidenceCallbackError(RuntimeError):
+    """A durable evidence callback failed; reconnecting would lose evidence."""
+
+
 @dataclass(frozen=True, slots=True)
 class KalshiWsRecorderConfig:
     campaign_id: str
@@ -162,7 +166,7 @@ def record_kalshi_demo_ws_orderbook(
                     )
                 while event_count < config.max_events and monotonic_clock() < deadline:
                     if tick_callback is not None:
-                        tick_callback(clock())
+                        _invoke_evidence_callback(tick_callback, clock())
                     try:
                         raw = websocket.recv(
                             timeout=min(30.0, max(0.1, deadline - monotonic_clock()))
@@ -206,13 +210,13 @@ def record_kalshi_demo_ws_orderbook(
                         received_monotonic_ns=received_monotonic_ns,
                     )
                     row = event.to_record()
-                    event_count += 1
-                    type_counts[message_type] += 1
-                    last_event_time = _row_received_at(row)
                     if config.persist_legacy_raw_events:
                         append_jsonl_record(config.raw_events_path, row)
                     if event_callback is not None:
-                        event_callback(event)
+                        _invoke_evidence_callback(event_callback, event)
+                    event_count += 1
+                    type_counts[message_type] += 1
+                    last_event_time = _row_received_at(row)
                     if progress_callback is not None:
                         progress_callback(
                             _progress(
@@ -230,6 +234,8 @@ def record_kalshi_demo_ws_orderbook(
                         )
         except KalshiWsAuthBlocked as exc:
             return _blocked(config, exc.code)
+        except EvidenceCallbackError:
+            raise
         except Exception as exc:
             if opened:
                 _emit_connection(
@@ -484,7 +490,8 @@ def _emit_connection(
 ) -> None:
     if callback is None:
         return
-    callback(
+    _invoke_evidence_callback(
+        callback,
         ConnectionEvidenceEvent(
             event_type=event_type,
             observed_at_utc=observed_at_utc,
@@ -495,6 +502,13 @@ def _emit_connection(
             previous_segment_id=previous_segment_id,
         )
     )
+
+
+def _invoke_evidence_callback(callback: Callable[[Any], None], value: Any) -> None:
+    try:
+        callback(value)
+    except Exception as exc:
+        raise EvidenceCallbackError(type(exc).__name__) from exc
 
 
 def _matching_count(counts: Mapping[str, int], pattern: str) -> int:

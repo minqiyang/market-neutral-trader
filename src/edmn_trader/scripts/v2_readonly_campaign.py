@@ -106,6 +106,7 @@ SECRET_KEY_PARTS = (
     "wallet",
 )
 ALLOWED_SECRET_LIKE_KEYS = {"credential_presence"}
+PUBLIC_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class SelectionProfile(StrEnum):
@@ -553,7 +554,7 @@ def run_kalshi_ws_smoke(
     generated_at = now or datetime.now(UTC)
     output_dir.mkdir(parents=True, exist_ok=True)
     profile = selection_profile_for_duration(duration_seconds)
-    provenance = collect_runtime_code_provenance(Path.cwd())
+    provenance = collect_runtime_code_provenance(PUBLIC_REPO_ROOT)
     try:
         auth = load_kalshi_ws_auth_config_from_env()
     except KalshiWsAuthBlocked as exc:
@@ -857,7 +858,7 @@ def run_kalshi_ws_campaign(
     generated_at = now or datetime.now(UTC)
     output_dir.mkdir(parents=True, exist_ok=True)
     profile = selection_profile_for_duration(duration_seconds)
-    provenance = collect_runtime_code_provenance(Path.cwd())
+    provenance = collect_runtime_code_provenance(PUBLIC_REPO_ROOT)
     try:
         auth = load_kalshi_ws_auth_config_from_env()
     except KalshiWsAuthBlocked as exc:

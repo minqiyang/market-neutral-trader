@@ -47,6 +47,10 @@ records nested subscription errors as typed rejections.
 Runtime timing includes startup/final disconnect boundaries and start-to-first
 freshness gaps, while persisted HTTP(S) Git provenance strips credential-bearing
 URL components.
+The latest adversarial correction also makes evidence callback failures
+terminal, binds D2A rows to ordered per-connection acknowledgments, rejects
+nonempty run roots and private metadata, collects provenance from the imported
+repository, and recovers finalization-to-manifest crash windows.
 
 This checkpoint is software-only. Tests use mocked WebSocket and lifecycle
 transports. No VPS, credential, campaign, private raw data, production endpoint,

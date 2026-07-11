@@ -17,6 +17,7 @@ from edmn_trader.adapters.kalshi.ws_events import (
     SegmentBoundaryReason,
 )
 from edmn_trader.adapters.kalshi.ws_recorder import (
+    EvidenceCallbackError,
     KalshiWsRecorderConfig,
     _loads,
     record_kalshi_demo_ws_orderbook,
@@ -212,6 +213,50 @@ def test_ws_recorder_records_nested_subscription_rejection(tmp_path: Path) -> No
     assert ConnectionEvidenceType.SUBSCRIPTION_REJECTED in {
         event.event_type for event in connection_events
     }
+
+
+def test_ws_recorder_does_not_reconnect_after_evidence_callback_failure(
+    tmp_path: Path,
+) -> None:
+    factory_calls = 0
+
+    def factory(*_args, **_kwargs):
+        nonlocal factory_calls
+        factory_calls += 1
+        return _FakeWebSocket(
+            [
+                {
+                    "type": "subscribed",
+                    "id": 1,
+                    "msg": {"channels": ["orderbook_delta", "trade"]},
+                }
+            ]
+        )
+
+    def fail_persistence(_event) -> None:
+        raise OSError("synthetic durable write failure")
+
+    with pytest.raises(EvidenceCallbackError, match="OSError"):
+        record_kalshi_demo_ws_orderbook(
+            KalshiWsRecorderConfig(
+                campaign_id="c1",
+                market_tickers=("DEMO-MARKET",),
+                raw_events_path=tmp_path / "unused.jsonl",
+                duration_seconds=5,
+                max_events=1,
+                max_reconnects=3,
+                persist_legacy_raw_events=False,
+            ),
+            KalshiWsAuthConfig(
+                api_key_id="fake",
+                private_key_path=_fake_private_key_path(tmp_path),
+            ),
+            websocket_factory=factory,
+            now=lambda: datetime(2026, 7, 3, 20, 0, tzinfo=UTC),
+            event_callback=fail_persistence,
+        )
+
+    assert factory_calls == 1
 
 
 @pytest.mark.parametrize("raw", ["[]", "null", "1"])

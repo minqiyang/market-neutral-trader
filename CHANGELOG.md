@@ -30,7 +30,11 @@ numbers while the repository is still in early research scaffolding.
   recovery. Full timing and terminal disposition are bound into the append
   chain, including an evidence-only recovery terminal segment. Boundary
   disconnect/freshness intervals are counted, and persisted HTTP(S) Git remote
-  provenance strips credential-bearing URL components.
+  provenance strips credential-bearing URL components. Durable callbacks fail
+  terminally, D2A rows are connection/acknowledgment-bound with contiguous
+  indices, run roots are no-overwrite, private runtime metadata is rejected,
+  imported-package provenance replaces current-directory provenance, and
+  finalized-before-manifest crash windows are recoverable.
   Legacy v1 artifacts remain readable but are not selected for new WebSocket
   runs. Tests are mocked and public live trading remains disabled.
 - Added D2D orthogonal evidence classification, timestamp-derived duration,

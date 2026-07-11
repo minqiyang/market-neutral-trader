@@ -96,6 +96,11 @@ the separate blocked-preflight validator path.
 Boundary timing now counts startup/final disconnects and start-to-first
 freshness intervals. Persisted HTTP(S) Git remotes strip embedded userinfo,
 query, and fragment components before provenance is written.
+The final adversarial correction makes callback failures terminal, binds every
+durable D2A row to an acknowledged open connection, requires contiguous D2A
+indices, derives provenance from the imported package repository, rejects
+nonempty artifact roots and private runtime metadata, and reconciles crashes
+between segment finalization and manifest synchronization, including rotation.
 
 ## D2D evidence classification, durability, and performance
 

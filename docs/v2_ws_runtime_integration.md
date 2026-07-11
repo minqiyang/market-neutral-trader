@@ -94,6 +94,10 @@ attempt clock so a venue outage cannot create a request per WebSocket frame.
 Private account, order, and fill fields are rejected recursively before raw D2A
 persistence. Persisted HTTP(S) Git remotes omit userinfo, query, and fragment
 components so repository provenance cannot retain embedded credentials.
+Provenance is collected from the imported public package repository, never the
+operator's current working directory. New runtime and preflight roots must be
+empty, and selected-market metadata receives the same private account/order
+screening as transport payloads.
 
 Recovery derives runtime counts from the closed chain, including complete tail
 rows written after the last checkpoint. Validator rebuild integrity comes from
@@ -106,6 +110,8 @@ chained terminal record. Recovery closes a separate evidence-only terminal
 segment, without opening transport or inheriting book state.
 If a crash occurs after the normal terminal append but before close, recovery
 preserves that single authoritative terminal instead of adding another.
+Recovery also reconciles a segment finalized immediately before its manifest
+update, including the next open segment created by rotation.
 Durable campaign identity and closed-file hashes are cross-checked against all
 summary artifacts.
 Validator comparison covers every persisted D2D segment-summary field. D2C
@@ -118,6 +124,9 @@ Disconnect accounting covers runtime start through the first connection and
 the final close through terminal time, not only gaps between connections.
 Maximum keepalive, lifecycle, and orderbook quiet ages likewise include the
 interval from runtime start to the first applicable observation.
+Validator subscription evidence is ordered and connection-bound for every D2A
+row, and D2A transport indices must remain globally contiguous. A durable
+callback failure terminates the recorder instead of entering reconnect logic.
 
 ## Safety
 

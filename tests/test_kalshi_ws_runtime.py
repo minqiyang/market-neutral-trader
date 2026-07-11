@@ -15,7 +15,7 @@ from edmn_trader.adapters.kalshi.public_evidence import (
     ConnectionEvidenceEvent,
     ConnectionEvidenceType,
 )
-from edmn_trader.adapters.kalshi.ws_auth import KalshiWsAuthConfig
+from edmn_trader.adapters.kalshi.ws_auth import KalshiWsAuthBlocked, KalshiWsAuthConfig
 from edmn_trader.adapters.kalshi.ws_book_rebuild import KalshiWsBookRebuilder
 from edmn_trader.adapters.kalshi.ws_events import (
     KalshiWsIntegrityTracker,
@@ -79,6 +79,93 @@ def test_runtime_provenance_strips_git_remote_credentials() -> None:
 
     assert provenance.remote == "https://github.com/org/repo.git"
     assert "secret" not in json.dumps(provenance.to_record())
+
+
+def test_public_entrypoint_collects_provenance_from_imported_repository(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    observed_roots: list[Path] = []
+    provenance = RuntimeCodeProvenance(COMMIT, "main", "https://example.test/repo", False)
+
+    def collect(root: Path) -> RuntimeCodeProvenance:
+        observed_roots.append(root)
+        return provenance
+
+    def block_auth():
+        raise KalshiWsAuthBlocked("NO_WS_CREDENTIALS")
+
+    unrelated = tmp_path / "unrelated"
+    unrelated.mkdir()
+    monkeypatch.chdir(unrelated)
+    monkeypatch.setattr(v2_readonly_campaign, "collect_runtime_code_provenance", collect)
+    monkeypatch.setattr(v2_readonly_campaign, "load_kalshi_ws_auth_config_from_env", block_auth)
+
+    v2_readonly_campaign.run_kalshi_ws_smoke(
+        output_dir=tmp_path / "run",
+        campaign_id="d2e-provenance-root",
+        duration_seconds=300,
+        max_markets=1,
+        now=START,
+    )
+
+    assert observed_roots == [v2_readonly_campaign.PUBLIC_REPO_ROOT]
+    assert observed_roots[0] != unrelated
+
+
+def test_preflight_requires_empty_root_and_rejects_private_metadata(tmp_path: Path) -> None:
+    for index, relative_path in enumerate(
+        ("campaign_summary.json", "legacy.json", "evidence_segments/partial.jsonl")
+    ):
+        existing = tmp_path / f"existing-{index}"
+        artifact = existing / relative_path
+        artifact.parent.mkdir(parents=True)
+        artifact.write_text("{}\n", encoding="utf-8")
+        with pytest.raises(FileExistsError, match="empty artifact root"):
+            ws_runtime.write_d2_runtime_preflight_block(
+                output_dir=existing,
+                campaign_id="d2e-no-overwrite",
+                mode="read_only_websocket_smoke",
+                configured_duration_seconds=300,
+                provenance=RuntimeCodeProvenance(
+                    COMMIT, "main", "https://example.test/repo", False
+                ),
+                blocker_code="NO_WS_CREDENTIALS",
+                started_at_utc=START,
+            )
+
+    with pytest.raises(ValueError, match="private account/order data"):
+        ws_runtime.write_d2_runtime_preflight_block(
+            output_dir=tmp_path / "private-metadata",
+            campaign_id="d2e-private-metadata",
+            mode="read_only_websocket_smoke",
+            configured_duration_seconds=300,
+            provenance=RuntimeCodeProvenance(
+                COMMIT, "main", "https://example.test/repo", False
+            ),
+            blocker_code="NO_WS_CREDENTIALS",
+            started_at_utc=START,
+            selected_market_metadata={"metadata": {"order_id": "private"}},
+        )
+
+    with pytest.raises(ValueError, match="private account/order data"):
+        RuntimeEvidenceSession(
+            output_dir=tmp_path / "private-session",
+            campaign_id="d2e-private-session",
+            mode="read_only_websocket_smoke",
+            configured_duration_seconds=300,
+            selected_market_metadata={
+                "ticker": MARKET,
+                "metadata": {"account_id": "private"},
+            },
+            selected_market_selection={"selection_gate_result": "pass"},
+            lifecycle_mode_and_source="selected_market_rest_fallback",
+            pricing_mode_and_source="explicit",
+            provenance=RuntimeCodeProvenance(
+                COMMIT, "main", "https://example.test/repo", False
+            ),
+            started_at_utc=START,
+        )
 
 
 def test_actual_runtime_assembly_uses_d2_writer_and_mocked_transports(
@@ -1037,6 +1124,88 @@ def test_freshness_maximum_includes_start_to_first_observation(tmp_path: Path) -
     assert summary["independent_evidence_classifications"]["transport_keepalive"] == "FAIL"
 
 
+def test_validator_rejects_event_before_connection_subscription_ack(tmp_path: Path) -> None:
+    session = _session_without_connection(tmp_path, configured_duration_seconds=1)
+    tracker = _tracker()
+    session.record_connection_event(
+        ConnectionEvidenceEvent(
+            event_type=ConnectionEvidenceType.CONNECTION_OPEN,
+            observed_at_utc=START,
+            connection_id=tracker.connection_id,
+            segment_id=tracker.segment_id,
+            reason="unacknowledged_connection",
+        )
+    )
+    session.record_event(
+        tracker.record(
+            {"type": "heartbeat", "sid": 41},
+            local_row_index=1,
+            received_at_utc=START,
+            received_monotonic_ns=1,
+        )
+    )
+    session.close(
+        ended_at_utc=START + timedelta(seconds=1),
+        terminal_reason="runtime_blocked:SUBSCRIPTION_REJECTED",
+        stop_requested=False,
+        connection_established=True,
+        subscription_acknowledged=False,
+        blocker_code="SUBSCRIPTION_REJECTED",
+    )
+
+    validation = validate_d2_runtime_artifacts(tmp_path)
+    assert validation["status"] == "fail"
+    assert any(
+        "before subscription acknowledgment" in failure
+        for failure in validation["failures"]
+    )
+
+
+def test_validator_requires_contiguous_d2a_runtime_indices(tmp_path: Path) -> None:
+    session = _session(tmp_path, configured_duration_seconds=1)
+    session.record_event(
+        _tracker().record(
+            {"type": "heartbeat", "sid": 41},
+            local_row_index=2,
+            received_at_utc=START,
+            received_monotonic_ns=1,
+        )
+    )
+    session.close(
+        ended_at_utc=START + timedelta(seconds=1),
+        terminal_reason="bounded_duration_complete",
+        stop_requested=False,
+        connection_established=True,
+        subscription_acknowledged=True,
+        blocker_code=None,
+    )
+
+    validation = validate_d2_runtime_artifacts(tmp_path)
+    assert validation["status"] == "fail"
+    assert any("D2A local row indices" in failure for failure in validation["failures"])
+
+
+def test_validator_rejects_private_account_fields_in_runtime_metadata(tmp_path: Path) -> None:
+    session = _session(tmp_path, configured_duration_seconds=1)
+    session.close(
+        ended_at_utc=START + timedelta(seconds=1),
+        terminal_reason="bounded_duration_complete",
+        stop_requested=False,
+        connection_established=True,
+        subscription_acknowledged=True,
+        blocker_code=None,
+    )
+    for name in ("campaign_summary.json", "campaign_manifest.json", "run_metadata.json"):
+        path = tmp_path / name
+        artifact = json.loads(path.read_text())
+        artifact["selected_market_metadata"]["order_id"] = "private"
+        path.write_text(json.dumps(artifact), encoding="utf-8")
+
+    validation = validate_d2_runtime_artifacts(tmp_path)
+    assert validation["status"] == "fail"
+    assert any("private account/order data" in failure for failure in validation["failures"])
+
+
 def test_closed_and_stale_lifecycle_fail_independently(tmp_path: Path) -> None:
     closed = _session(tmp_path / "closed", configured_duration_seconds=1)
     closed.record_lifecycle(
@@ -1261,6 +1430,109 @@ def test_runtime_recovery_preserves_single_preclose_terminal(
     assert recovery["validation_status"] == "pass"
     assert terminal_count == 1
     assert summary["terminal_reason"] == "bounded_duration_complete"
+
+
+def test_runtime_recovers_after_segment_finalized_before_manifest_sync(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    session = _session(tmp_path, configured_duration_seconds=1)
+    session.record_event(
+        _tracker().record(
+            {"type": "heartbeat", "sid": 41},
+            local_row_index=1,
+            received_at_utc=START,
+            received_monotonic_ns=1,
+        )
+    )
+
+    def crash_after_segment_close():
+        raise RuntimeError("synthetic post-close crash")
+
+    monkeypatch.setattr(session, "_verify_closed_segments", crash_after_segment_close)
+    with pytest.raises(RuntimeError, match="post-close crash"):
+        session.close(
+            ended_at_utc=START + timedelta(seconds=1),
+            terminal_reason="bounded_duration_complete",
+            stop_requested=False,
+            connection_established=True,
+            subscription_acknowledged=True,
+            blocker_code=None,
+        )
+
+    recovery = recover_d2_runtime_artifacts(
+        tmp_path,
+        recovered_at_utc=START + timedelta(seconds=2),
+    )
+    summary = json.loads((tmp_path / "campaign_summary.json").read_text())
+
+    assert recovery["validation_status"] == "pass"
+    assert summary["segment_summaries"][0]["recovery_status"] == (
+        "FINALIZED_BEFORE_MANIFEST_SYNC"
+    )
+
+
+def test_runtime_recovers_rotation_finalized_before_manifest_sync(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    session = RuntimeEvidenceSession(
+        output_dir=tmp_path,
+        campaign_id="d2e-rotation-crash",
+        mode="read_only_websocket_smoke",
+        configured_duration_seconds=300,
+        selected_market_metadata={"ticker": MARKET, "status": "active"},
+        selected_market_selection={"selection_gate_result": "pass"},
+        lifecycle_mode_and_source="selected_market_rest_fallback",
+        pricing_mode_and_source="explicit",
+        provenance=RuntimeCodeProvenance(COMMIT, "main", "https://example.test/repo", False),
+        started_at_utc=START,
+        max_segment_bytes=1,
+    )
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="d2e-rotation-crash",
+        requested_market_tickers=(MARKET,),
+    )
+    tracker.start_connection()
+    tracker.bind_subscription(command_id=1)
+    session.record_connection_event(
+        ConnectionEvidenceEvent(
+            event_type=ConnectionEvidenceType.CONNECTION_OPEN,
+            observed_at_utc=START,
+            connection_id=tracker.connection_id,
+            segment_id=tracker.segment_id,
+            reason="rotation_connection_open",
+        )
+    )
+
+    def crash_before_rotated_manifest(_observed_at_utc: datetime) -> None:
+        raise RuntimeError("synthetic rotation manifest crash")
+
+    monkeypatch.setattr(session, "_write_open_status", crash_before_rotated_manifest)
+    with pytest.raises(RuntimeError, match="rotation manifest crash"):
+        session.record_connection_event(
+            ConnectionEvidenceEvent(
+                event_type=ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED,
+                observed_at_utc=START,
+                connection_id=tracker.connection_id,
+                segment_id=tracker.segment_id,
+                reason="rotation_subscription_acknowledged",
+            )
+        )
+    session._writer._handle.close()
+
+    recovery = recover_d2_runtime_artifacts(
+        tmp_path,
+        recovered_at_utc=START + timedelta(seconds=2),
+    )
+    summary = json.loads((tmp_path / "campaign_summary.json").read_text())
+
+    assert recovery["validation_status"] == "pass"
+    assert len(summary["segment_summaries"]) == 3
+    assert summary["segment_summaries"][0]["terminal_reason"] == "rotation"
+    assert summary["segment_summaries"][0]["recovery_status"] == (
+        "FINALIZED_BEFORE_MANIFEST_SYNC"
+    )
 
 
 def test_validator_rebuilds_d2b_instead_of_trusting_persisted_frame(
@@ -1801,12 +2073,13 @@ def _session(
             "test_subscription_acknowledged",
         ),
     ):
+        segment_number = 1 if event_type is ConnectionEvidenceType.CONNECTION_OPEN else 2
         session.record_connection_event(
             ConnectionEvidenceEvent(
                 event_type=event_type,
                 observed_at_utc=START,
-                connection_id="test-connection",
-                segment_id="test-segment",
+                connection_id="d2e-runtime-test:connection:0001",
+                segment_id=f"d2e-runtime-test:segment:{segment_number:04d}",
                 reason=reason,
             )
         )
