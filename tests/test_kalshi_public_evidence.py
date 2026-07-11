@@ -97,43 +97,33 @@ def test_trade_evidence_file_contains_only_selected_market(
 
 
 def test_account_fill_is_not_public_trade_evidence() -> None:
-    event = _event(
-        _tracker(),
-        {
-            "type": "fill",
-            "msg": {
-                "fill_id": "fill-1",
-                "order_id": "order-1",
-                "market_ticker": MARKET,
+    with pytest.raises(ValueError, match="private account/order data"):
+        _event(
+            _tracker(),
+            {
+                "type": "fill",
+                "msg": {
+                    "fill_id": "fill-1",
+                    "order_id": "order-1",
+                    "market_ticker": MARKET,
+                },
             },
-        },
-    )
-
-    stream = build_public_trade_stream([event], selected_market_tickers=(MARKET,))
-
-    assert stream.status is PublicTradeStreamStatus.QUIET_NO_PUBLIC_TRADES
-    assert stream.trades == ()
-    assert stream.ignored_nontrade_count == 1
+        )
 
 
 def test_account_like_fields_quarantine_mislabeled_trade() -> None:
-    event = _event(
-        _tracker(),
-        {
-            "type": "trade",
-            "msg": {
-                "trade_id": "trade-1",
-                "order_id": "order-1",
-                "market_ticker": MARKET,
+    with pytest.raises(ValueError, match="private account/order data"):
+        _event(
+            _tracker(),
+            {
+                "type": "trade",
+                "msg": {
+                    "trade_id": "trade-1",
+                    "order_id": "order-1",
+                    "market_ticker": MARKET,
+                },
             },
-        },
-    )
-
-    stream = build_public_trade_stream([event], selected_market_tickers=(MARKET,))
-
-    assert stream.trades == ()
-    assert stream.quarantined_count == 1
-    assert stream.status is PublicTradeStreamStatus.QUARANTINED_INPUT
+        )
 
 
 def test_trade_missing_market_identity_is_quarantined() -> None:
@@ -214,6 +204,7 @@ def test_fixture_subscription_includes_orderbook_and_public_trade_channels() -> 
         "params": {
             "channels": ["orderbook_delta", "trade"],
             "market_tickers": [MARKET],
+            "use_yes_price": False,
         },
     }
 
@@ -377,7 +368,7 @@ def test_hard_evidence_flags_cannot_be_overridden() -> None:
         replace(trade, is_account_fill=True)
     with pytest.raises(ValueError, match="init=False"):
         replace(lifecycle, proves_websocket_transport=True)
-    with pytest.raises(ValueError, match="account-only"):
+    with pytest.raises(ValueError, match="private account/order data"):
         replace(
             trade,
             native_trade_payload={

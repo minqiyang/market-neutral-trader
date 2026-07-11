@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import time
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -11,6 +12,15 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Literal
 
+from edmn_trader.adapters.kalshi.ws_runtime import (
+    D2_RUNTIME_SCHEMA_VERSION,
+    validate_d2_runtime_artifacts,
+)
+from edmn_trader.data.evidence_policy import V2_THRESHOLD_POLICY
+from edmn_trader.data.payload_safety import (
+    validate_no_private_account_payload,
+    validate_no_secret_payload,
+)
 from edmn_trader.execution.private_live_gate import attempt_private_live_execution
 
 MonitorFormat = Literal["json", "markdown", "table"]
@@ -49,6 +59,7 @@ def build_monitor_snapshot(input_dir: Path, *, now: datetime | None = None) -> d
     warnings: list[str] = []
     records = _read_records(input_dir, warnings)
     summaries = _read_summaries(input_dir, warnings) if input_dir.exists() else {}
+    summaries = _refresh_d2_validation(input_dir, summaries, warnings)
     live_gate = attempt_private_live_execution().to_record()
 
     run_info = _run_info(input_dir, generated_at, summaries)
@@ -71,6 +82,7 @@ def build_monitor_snapshot(input_dir: Path, *, now: datetime | None = None) -> d
         risk=risk,
         reconciliation=reconciliation,
         data_status=data_status,
+        campaign_snapshot=campaign,
     )
 
     return {
@@ -104,6 +116,92 @@ def build_monitor_snapshot(input_dir: Path, *, now: datetime | None = None) -> d
         },
         "validation": _validation_status(records, summaries),
     }
+
+
+def _refresh_d2_validation(
+    input_dir: Path,
+    summaries: Mapping[str, Mapping[str, object]],
+    warnings: list[str],
+) -> dict[str, dict[str, object]]:
+    campaign = summaries.get("campaign_summary.json", {})
+    if not campaign and any(
+        warning.startswith("CORRUPT_SUMMARY: campaign_summary.json")
+        for warning in warnings
+    ):
+        warnings.append("D2_RUNTIME_VALIDATION_FAILED: campaign summary is unavailable")
+        refreshed = dict(summaries)
+        refreshed["campaign_summary.json"] = {
+            "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
+            "status": "d2_runtime_corrupt",
+        }
+        refreshed["campaign_validation.json"] = {
+            **summaries.get("campaign_validation.json", {}),
+            "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
+            "status": "fail",
+            "overall_evidence_classification": "FAIL",
+            "failures": ["campaign_summary.json is unavailable or unsafe"],
+            "strict_verdict": "STRICT NO-GO",
+        }
+        return refreshed
+    if (
+        campaign.get("runtime_schema_version") != D2_RUNTIME_SCHEMA_VERSION
+        or campaign.get("status") == "d2_runtime_running"
+    ):
+        if campaign.get("status") == "d2_runtime_running":
+            failures: list[str] = []
+            try:
+                validate_no_secret_payload(campaign, path="campaign_summary")
+                validate_no_private_account_payload(campaign, path="campaign_summary")
+            except ValueError as exc:
+                failures.append(str(exc))
+            for field, expected in (
+                ("live_gate_status", "disabled"),
+                ("production_trading_enabled", False),
+                ("executable_order_intent", False),
+                ("production_endpoint_used", False),
+                ("submit_attempts", 0),
+                ("real_money_trading", False),
+                ("replay_qualified", False),
+            ):
+                if campaign.get(field) != expected:
+                    failures.append(f"running campaign safety field invalid: {field}")
+            if failures:
+                warnings.extend(
+                    f"CORRUPT_SUMMARY: campaign_summary.json: {failure}" for failure in failures
+                )
+                refreshed = dict(summaries)
+                refreshed["campaign_summary.json"] = {
+                    "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
+                    "status": "d2_runtime_corrupt",
+                }
+                refreshed["campaign_validation.json"] = {
+                    **summaries.get("campaign_validation.json", {}),
+                    "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
+                    "status": "fail",
+                    "overall_evidence_classification": "FAIL",
+                    "failures": failures,
+                    "strict_verdict": "STRICT NO-GO",
+                }
+                return refreshed
+        return dict(summaries)
+    try:
+        validation = validate_d2_runtime_artifacts(input_dir, persist=False)
+    except Exception as exc:  # The monitor must fail closed at this boundary.
+        validation = {
+            "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
+            "status": "fail",
+            "overall_evidence_classification": "FAIL",
+            "failures": [f"runtime validation raised {type(exc).__name__}: {exc}"],
+            "strict_verdict": "STRICT NO-GO",
+        }
+    if validation.get("status") in {"fail", "blocked"}:
+        warnings.append("D2_RUNTIME_VALIDATION_FAILED: persisted evidence was revalidated")
+    refreshed = dict(summaries)
+    refreshed["campaign_validation.json"] = {
+        **summaries.get("campaign_validation.json", {}),
+        **validation,
+    }
+    return refreshed
 
 
 def render_snapshot(
@@ -160,26 +258,55 @@ def _parser() -> argparse.ArgumentParser:
 def _read_summaries(input_dir: Path, warnings: list[str]) -> dict[str, dict[str, object]]:
     summaries: dict[str, dict[str, object]] = {}
     for name in SUMMARY_FILES:
-        path = input_dir / name
-        if not path.exists():
-            continue
         try:
+            path = _safe_input_path(input_dir, name)
+            if not path.exists():
+                continue
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
             warnings.append(f"CORRUPT_SUMMARY: {name}: {exc}")
             continue
         if isinstance(payload, dict):
+            if name == "campaign_summary.json":
+                try:
+                    validate_no_secret_payload(payload, path=name)
+                    validate_no_private_account_payload(payload, path=name)
+                except ValueError as exc:
+                    warnings.append(f"CORRUPT_SUMMARY: {name}: {exc}")
+                    continue
             summaries[name] = _redact_mapping(payload)
         else:
             warnings.append(f"CORRUPT_SUMMARY: {name}: expected JSON object")
     return summaries
 
 
+def _safe_input_path(input_dir: Path, name: str) -> Path:
+    root = input_dir.resolve()
+    relative = Path(name)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError("summary path must be relative to the input directory")
+    candidate = root / relative
+    resolved = candidate.resolve(strict=False)
+    if resolved == root or root not in resolved.parents:
+        raise ValueError("summary path escapes the input directory")
+    current = root
+    for part in relative.parts:
+        current /= part
+        if current.is_symlink():
+            raise ValueError(f"summary path must not be a symlink: {name}")
+    return candidate
+
+
 def _read_records(input_dir: Path, warnings: list[str]) -> list[dict[str, object]]:
     if not input_dir.exists():
         return []
     records: list[dict[str, object]] = []
-    for path in sorted(input_dir.glob("*.jsonl")):
+    for candidate in sorted(input_dir.glob("*.jsonl")):
+        try:
+            path = _safe_input_path(input_dir, candidate.name)
+        except (OSError, ValueError) as exc:
+            warnings.append(f"CORRUPT_JSONL: {candidate.name}: {exc}")
+            continue
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
         except OSError as exc:
@@ -489,6 +616,20 @@ def _evidence_status(
     records: list[dict[str, object]],
     summaries: Mapping[str, Mapping[str, object]],
 ) -> dict[str, object]:
+    campaign = summaries.get("campaign_summary.json", {})
+    if campaign.get("runtime_schema_version") == "edmn.kalshi.ws.runtime.v2":
+        dimensions = campaign.get("independent_evidence_classifications")
+        return {
+            "runtime_schema_version": campaign.get("runtime_schema_version"),
+            "overall_classification": campaign.get("overall_evidence_classification"),
+            "dimensions": dict(dimensions) if isinstance(dimensions, Mapping) else {},
+            "artifact_integrity_summary": campaign.get("artifact_integrity_summary"),
+            "sequence_summaries": campaign.get("sequence_summaries") or [],
+            "rebuild_summaries": campaign.get("rebuild_summaries") or [],
+            "freshness_dimensions": campaign.get("freshness_dimensions") or {},
+            "replay_qualified": False,
+            "strict_verdict": "STRICT NO-GO",
+        }
     summary = summaries.get("evidence_summary.json", {})
     layers = summary.get("layers")
     if not isinstance(layers, Mapping):
@@ -536,6 +677,17 @@ def _validation_status(
     records: list[dict[str, object]],
     summaries: Mapping[str, Mapping[str, object]],
 ) -> dict[str, object]:
+    campaign_validation = summaries.get("campaign_validation.json", {})
+    if campaign_validation.get("runtime_schema_version") == "edmn.kalshi.ws.runtime.v2":
+        return {
+            "runtime_schema_version": campaign_validation.get("runtime_schema_version"),
+            "status": campaign_validation.get("status"),
+            "overall_evidence_classification": campaign_validation.get(
+                "overall_evidence_classification"
+            ),
+            "artifact_integrity": campaign_validation.get("artifact_integrity"),
+            "failures": campaign_validation.get("failures") or [],
+        }
     validation = summaries.get("validation_summary.json", {})
     daily = _first_record(records, "daily_validation_report")
     return {
@@ -556,7 +708,9 @@ def _campaign_status(
     summaries: Mapping[str, Mapping[str, object]],
     generated_at: datetime,
 ) -> dict[str, object]:
-    campaign = summaries.get("campaign_summary.json", {})
+    campaign = _refresh_running_freshness(
+        summaries.get("campaign_summary.json", {}), generated_at
+    )
     validation = summaries.get("campaign_validation.json", {})
     source_type = campaign.get("source_type") or validation.get("source_type")
     event_count = campaign.get("event_count") or validation.get("event_count") or 0
@@ -567,6 +721,7 @@ def _campaign_status(
     close_time = campaign.get("close_time") or campaign.get("expected_expiration")
     market_closed = _is_closed_market_status(market_status)
     return {
+        "runtime_schema_version": campaign.get("runtime_schema_version"),
         "campaign_id": campaign.get("campaign_id"),
         "status": _campaign_monitor_status(campaign, validation),
         "completion_status": completion_status,
@@ -607,6 +762,18 @@ def _campaign_status(
         "exchange_heartbeat_status": campaign.get("exchange_heartbeat_status") or "UNKNOWN",
         "market_count": campaign.get("market_count"),
         "duration_seconds": campaign.get("duration_seconds"),
+        "configured_duration_seconds": campaign.get("configured_duration_seconds"),
+        "actual_elapsed_seconds": campaign.get("actual_elapsed_seconds"),
+        "connected_elapsed_seconds": campaign.get("connected_elapsed_seconds"),
+        "connection_coverage": campaign.get("connection_coverage"),
+        "threshold_policy_version": campaign.get("threshold_policy_version"),
+        "freshness_dimensions": campaign.get("freshness_dimensions"),
+        "artifact_integrity_summary": campaign.get("artifact_integrity_summary"),
+        "independent_evidence_classifications": campaign.get(
+            "independent_evidence_classifications"
+        ),
+        "sequence_summaries": campaign.get("sequence_summaries") or [],
+        "rebuild_summaries": campaign.get("rebuild_summaries") or [],
         "event_count": event_count,
         "snapshot_count": campaign.get("snapshot_count") or validation.get("snapshot_count") or 0,
         "delta_count": campaign.get("delta_count") or validation.get("delta_count") or 0,
@@ -643,12 +810,89 @@ def _campaign_status(
     }
 
 
+def _refresh_running_freshness(
+    source: Mapping[str, object],
+    generated_at: datetime,
+) -> dict[str, object]:
+    campaign = dict(source)
+    if campaign.get("status") != "d2_runtime_running":
+        return campaign
+    raw = campaign.get("freshness_dimensions")
+    if not isinstance(raw, Mapping):
+        return campaign
+    freshness = dict(raw)
+    elapsed = _staleness_seconds(freshness.get("evaluated_at_utc"), generated_at)
+    if elapsed is not None:
+        for field in (
+            "transport_keepalive_age_seconds",
+            "lifecycle_observation_age_seconds",
+            "orderbook_event_quiet_interval_seconds",
+        ):
+            age = freshness.get(field)
+            if isinstance(age, int | float) and not isinstance(age, bool):
+                freshness[field] = int(age) + elapsed
+    campaign["freshness_dimensions"] = freshness
+    dimensions = campaign.get("independent_evidence_classifications")
+    if isinstance(dimensions, Mapping):
+        refreshed_dimensions = dict(dimensions)
+        keepalive_age = freshness.get("transport_keepalive_age_seconds")
+        if isinstance(keepalive_age, int | float) and keepalive_age > (
+            V2_THRESHOLD_POLICY.maximum_transport_keepalive_age_seconds
+        ):
+            refreshed_dimensions["transport_keepalive"] = "FAIL"
+        lifecycle_age = freshness.get("lifecycle_observation_age_seconds")
+        if isinstance(lifecycle_age, int | float) and lifecycle_age > (
+            V2_THRESHOLD_POLICY.maximum_lifecycle_age_seconds
+        ):
+            refreshed_dimensions["market_lifecycle_validity"] = "FAIL"
+        campaign["independent_evidence_classifications"] = refreshed_dimensions
+    orderbook_age = freshness.get("orderbook_event_quiet_interval_seconds")
+    if isinstance(orderbook_age, int | float):
+        campaign["websocket_message_freshness_status"] = (
+            "QUIET_WARNING"
+            if orderbook_age > V2_THRESHOLD_POLICY.orderbook_quiet_warning_seconds
+            else "FRESH"
+        )
+    return campaign
+
+
 def _campaign_monitor_status(
     campaign: Mapping[str, object],
     validation: Mapping[str, object],
 ) -> str | None:
     if not campaign.get("campaign_id"):
         return None
+    if campaign.get("runtime_schema_version") == "edmn.kalshi.ws.runtime.v2":
+        if campaign.get("blocker_code"):
+            return (
+                "WEBSOCKET_AUTH_BLOCKED"
+                if campaign.get("blocker_code")
+                in {"NO_WS_CREDENTIALS", "WS_CREDENTIAL_STORAGE_UNSAFE", "WS_AUTH_FAILED"}
+                else "D2_RUNTIME_BLOCKED"
+            )
+        dimensions = campaign.get("independent_evidence_classifications")
+        if isinstance(dimensions, Mapping) and any(
+            dimensions.get(field) == "FAIL"
+            for field in (
+                "artifact_integrity",
+                "transport_connectivity",
+                "subscription_status",
+                "rebuild_integrity",
+                "market_lifecycle_validity",
+                "transport_keepalive",
+                "sequence_integrity",
+                "duration_evidence",
+                "process_liveness",
+            )
+        ):
+            return "D2_RUNTIME_EVIDENCE_FAILED"
+        if campaign.get("status") == "d2_runtime_running":
+            return "D2_RUNTIME_RUNNING"
+        return (
+            "D2_RUNTIME_COMPLETE"
+            if validation.get("status") == "pass"
+            else "D2_RUNTIME_VALIDATION_FAILED"
+        )
     if _is_closed_market_status(campaign.get("market_status") or campaign.get("status_at_launch")):
         return "MARKET_CLOSED_OR_FINALIZED"
     if (
@@ -767,6 +1011,7 @@ def _health(
     risk: Mapping[str, object],
     reconciliation: Mapping[str, object],
     data_status: Mapping[str, object],
+    campaign_snapshot: Mapping[str, object] | None = None,
 ) -> str:
     if not input_dir.exists():
         warnings.append("NO_DATA: input directory does not exist")
@@ -774,6 +1019,21 @@ def _health(
     if not records and not summaries:
         warnings.append("NO_DATA: no monitor artifacts found")
         return "NO_DATA"
+    campaign = campaign_snapshot or summaries.get("campaign_summary.json", {})
+    if campaign.get("runtime_schema_version") == "edmn.kalshi.ws.runtime.v2":
+        validation = summaries.get("campaign_validation.json", {})
+        if validation.get("status") in {"fail", "blocked"}:
+            return "BLOCKED"
+        dimensions = campaign.get("independent_evidence_classifications")
+        if not isinstance(dimensions, Mapping):
+            warnings.append("D2_RUNTIME_VALIDATION_FAILED: evidence dimensions are unavailable")
+            return "BLOCKED"
+        if any(value == "FAIL" for value in dimensions.values()):
+            return "BLOCKED"
+        if any(value == "UNKNOWN" for value in dimensions.values()):
+            return "WARNING"
+        if campaign.get("status") in {"d2_runtime_running", "D2_RUNTIME_RUNNING"}:
+            return "WARNING"
     if (
         risk.get("kill_switch")
         or risk.get("decision") == "reject"
@@ -902,7 +1162,7 @@ def _staleness_seconds(value: object, generated_at: datetime) -> int | None:
         return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
-    return max(0, int((generated_at - parsed.astimezone(UTC)).total_seconds()))
+    return max(0, math.ceil((generated_at - parsed.astimezone(UTC)).total_seconds()))
 
 
 def _seconds_since(value: object, generated_at: datetime) -> int | None:
@@ -943,6 +1203,7 @@ def _completed_bounded_campaign(campaign: Mapping[str, object]) -> bool:
         "smoke_complete",
         "recorder_smoke_complete",
         "websocket_smoke_complete",
+        "d2_runtime_complete",
     }
 
 

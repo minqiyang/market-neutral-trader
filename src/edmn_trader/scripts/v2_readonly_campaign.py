@@ -25,11 +25,16 @@ from edmn_trader.adapters.kalshi import (
     KalshiReadOnlyRecorderConfig,
     KalshiResponseError,
     KalshiWsAuthBlocked,
-    KalshiWsRecorderConfig,
     load_kalshi_ws_auth_config_from_env,
     normalize_kalshi_market_metadata,
-    record_kalshi_demo_ws_orderbook,
     record_kalshi_readonly_orderbook,
+)
+from edmn_trader.adapters.kalshi.ws_runtime import (
+    D2_RUNTIME_SCHEMA_VERSION,
+    collect_runtime_code_provenance,
+    run_d2_kalshi_ws_runtime,
+    validate_d2_runtime_artifacts,
+    write_d2_runtime_preflight_block,
 )
 from edmn_trader.data.jsonl import read_jsonl_records, write_jsonl_records
 from edmn_trader.scripts.daily_validation_report import run as run_daily_validation_report
@@ -101,6 +106,7 @@ SECRET_KEY_PARTS = (
     "wallet",
 )
 ALLOWED_SECRET_LIKE_KEYS = {"credential_presence"}
+PUBLIC_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class SelectionProfile(StrEnum):
@@ -123,6 +129,25 @@ def selection_safety_buffer_seconds(profile: SelectionProfile) -> int:
     if profile is SelectionProfile.SEVEN_DAY:
         return DEFAULT_SELECTION_SAFETY_BUFFER_SECONDS
     return SMOKE_SELECTION_SAFETY_BUFFER_SECONDS
+
+
+def _blocked_ws_selection_record(
+    profile: SelectionProfile,
+    discovery: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    discovery = discovery or {}
+    return {
+        "selection_profile": profile.value,
+        "selection_safety_buffer_seconds": selection_safety_buffer_seconds(profile),
+        "selection_gate_result": "reject",
+        "selection_gate_rejection_reason": discovery.get("blocker_code")
+        or "PRE_DISCOVERY_BLOCKED",
+        "market_discovery_pages": discovery.get("pages_fetched", 0),
+        "market_discovery_count": discovery.get("markets_seen", 0),
+        "market_discovery_rejection_counts": discovery.get("rejection_counts", {}),
+        "market_discovery_cursor_remaining": discovery.get("cursor_remaining"),
+        "market_discovery_coverage_complete": discovery.get("coverage_complete"),
+    }
 
 
 def evaluate_market_selection(
@@ -520,6 +545,7 @@ def run_kalshi_ws_smoke(
     duration_seconds: int,
     max_markets: int,
     now: datetime | None = None,
+    use_yes_price: bool = False,
 ) -> dict[str, object]:
     """Run the bounded authenticated read-only Kalshi WS smoke, or block safely."""
 
@@ -528,27 +554,22 @@ def run_kalshi_ws_smoke(
         raise ValueError("max_markets must be at least 1")
     generated_at = now or datetime.now(UTC)
     output_dir.mkdir(parents=True, exist_ok=True)
+    profile = selection_profile_for_duration(duration_seconds)
+    provenance = collect_runtime_code_provenance(PUBLIC_REPO_ROOT)
     try:
         auth = load_kalshi_ws_auth_config_from_env()
     except KalshiWsAuthBlocked as exc:
-        message = "Kalshi Demo WebSocket read-only credentials are missing."
-        if exc.code == "WS_CREDENTIAL_STORAGE_UNSAFE":
-            message = "Kalshi Demo WebSocket credential storage is unsafe."
-        elif exc.code == "WS_PRIVATE_KEY_LOAD_FAILED":
-            message = "Kalshi Demo WebSocket private key could not be loaded."
-        return _write_kalshi_ws_summary(
+        return write_d2_runtime_preflight_block(
             output_dir=output_dir,
             campaign_id=campaign_id,
-            duration_seconds=duration_seconds,
-            max_markets=max_markets,
-            generated_at=generated_at,
-            status="websocket_auth_blocked",
+            mode="read_only_websocket_smoke",
+            configured_duration_seconds=duration_seconds,
+            provenance=provenance,
             blocker_code=exc.code,
-            blocker=f"{exc.code}: {message}",
-            credential_presence={"access_id_present": False, "signing_material_present": False},
+            started_at_utc=generated_at,
+            selected_market_selection=_blocked_ws_selection_record(profile),
         )
 
-    profile = selection_profile_for_duration(duration_seconds)
     discovery = discover_kalshi_demo_ws_market(
         duration_seconds=duration_seconds,
         safety_buffer_seconds=selection_safety_buffer_seconds(profile),
@@ -556,205 +577,37 @@ def run_kalshi_ws_smoke(
         selection_profile=profile,
     )
     market_metadata = discovery.get("market_metadata")
-    if not isinstance(market_metadata, Mapping):
+    market_selection = discovery.get("selection")
+    if not isinstance(market_metadata, Mapping) or not isinstance(market_selection, Mapping):
         blocker_code = str(discovery["blocker_code"])
-        return _write_kalshi_ws_summary(
+        return write_d2_runtime_preflight_block(
             output_dir=output_dir,
             campaign_id=campaign_id,
-            duration_seconds=duration_seconds,
-            max_markets=max_markets,
-            generated_at=generated_at,
-            status="websocket_blocked",
+            mode="read_only_websocket_smoke",
+            configured_duration_seconds=duration_seconds,
+            provenance=provenance,
             blocker_code=blocker_code,
-            blocker=blocker_code,
-            credential_presence=auth.credential_presence,
-            discovery=discovery,
+            started_at_utc=generated_at,
+            selected_market_selection=_blocked_ws_selection_record(profile, discovery),
         )
-    market = str(market_metadata.get("ticker") or market_metadata["market_ticker"])
-
-    recorder = record_kalshi_demo_ws_orderbook(
-        KalshiWsRecorderConfig(
-            campaign_id=campaign_id,
-            market_tickers=(market,),
-            raw_events_path=output_dir / "kalshi_ws_raw_events.jsonl",
-            duration_seconds=duration_seconds,
-        ),
-        auth,
-    )
-    status = "websocket_smoke_complete" if recorder.blocker_code is None else "websocket_blocked"
-    return _write_kalshi_ws_summary(
+    return run_d2_kalshi_ws_runtime(
         output_dir=output_dir,
         campaign_id=campaign_id,
+        mode="read_only_websocket_smoke",
         duration_seconds=duration_seconds,
-        max_markets=max_markets,
-        generated_at=generated_at,
-        status=status,
-        blocker_code=recorder.blocker_code,
-        blocker=recorder.blocker_code,
-        credential_presence=auth.credential_presence,
-        market_tickers=[market],
-        market_selection=discovery.get("selection"),
-        discovery=discovery,
-        connection_established=recorder.connection_established,
-        subscription_acknowledged=recorder.subscription_acknowledged,
-        source_type=recorder.source_type,
-        event_count=recorder.event_count,
-        snapshot_count=recorder.snapshot_count,
-        delta_count=recorder.delta_count,
-        trade_count=recorder.trade_count,
-        status_update_count=recorder.status_update_count,
-        heartbeat_count=recorder.heartbeat_count,
-        error_count=recorder.error_count,
-        disconnect_count=recorder.disconnect_count,
-        reconnect_count=recorder.reconnect_count,
-        gap_count=recorder.gap_count,
-        last_event_time=recorder.last_event_time,
-        stale_seconds=recorder.stale_seconds,
-        raw_event_path=recorder.raw_event_path,
-        raw_event_sha256=recorder.raw_event_sha256,
+        market_metadata=market_metadata,
+        market_selection=market_selection,
+        auth=auth,
+        provenance=provenance,
+        use_yes_price=use_yes_price,
     )
-
-
-def _write_kalshi_ws_summary(
-    *,
-    output_dir: Path,
-    campaign_id: str,
-    duration_seconds: int,
-    max_markets: int,
-    generated_at: datetime,
-    status: str,
-    blocker_code: str | None,
-    blocker: str | None,
-    credential_presence: dict[str, bool],
-    market_tickers: list[str] | None = None,
-    market_selection: object = None,
-    discovery: Mapping[str, object] | None = None,
-    connection_established: bool = False,
-    subscription_acknowledged: bool = False,
-    source_type: str = "WEBSOCKET_SNAPSHOT",
-    event_count: int = 0,
-    snapshot_count: int = 0,
-    delta_count: int = 0,
-    trade_count: int = 0,
-    status_update_count: int = 0,
-    heartbeat_count: int = 1,
-    error_count: int = 1,
-    disconnect_count: int = 0,
-    reconnect_count: int = 0,
-    gap_count: int = 0,
-    last_event_time: str | None = None,
-    stale_seconds: int | None = None,
-    raw_event_path: str | None = None,
-    raw_event_sha256: str | None = None,
-    mode: str = "read_only_websocket_smoke",
-) -> dict[str, object]:
-    market_tickers = market_tickers or []
-    lifecycle = (
-        dict(market_selection)
-        if isinstance(market_selection, Mapping)
-        else _default_lifecycle_record(
-            market_tickers[0] if market_tickers else "UNSELECTED",
-            generated_at,
-            duration_seconds,
-        )
-    )
-    heartbeat = {
-        "record_type": "campaign_heartbeat",
-        "campaign_id": campaign_id,
-        "venue": "kalshi_demo",
-        "market": market_tickers[0] if market_tickers else "UNSELECTED",
-        "sequence": 1,
-        "observed_at": generated_at.isoformat(),
-        "received_at": generated_at.isoformat(),
-        "source_type": source_type,
-        "live_gate_status": "disabled",
-        "submit_attempt": False,
-        "production_endpoint_used": False,
-        "status": status,
-        "blocker_code": blocker_code,
-    }
-    write_jsonl_records(output_dir / "campaign_heartbeat.jsonl", [heartbeat])
-    summary = {
-        "schema_version": SCHEMA_VERSION,
-        "campaign_id": campaign_id,
-        "status": status,
-        "artifact_root": str(output_dir),
-        "venue": "kalshi_demo",
-        "market": market_tickers[0] if market_tickers else "UNSELECTED",
-        "market_tickers": market_tickers,
-        "market_count": len(market_tickers),
-        "max_markets": max_markets,
-        "source_type": source_type,
-        "generated_at_utc": generated_at.isoformat(),
-        "planned_end_utc": (generated_at + timedelta(seconds=duration_seconds)).isoformat(),
-        "duration_seconds": duration_seconds,
-        "interval_seconds": None,
-        "mode": mode,
-        "live_gate_status": "disabled",
-        "production_endpoint_used": False,
-        "submit_attempt_count": 0,
-        "submit_attempts": 0,
-        "real_money_trading": False,
-        "connection_established": connection_established,
-        "subscription_acknowledged": subscription_acknowledged,
-        "event_count": event_count,
-        "snapshot_count": snapshot_count,
-        "delta_count": delta_count,
-        "trade_count": trade_count,
-        "status_update_count": status_update_count,
-        "heartbeat_count": heartbeat_count,
-        "error_count": error_count,
-        "disconnect_count": disconnect_count,
-        "reconnect_count": reconnect_count,
-        "gap_count": gap_count,
-        "last_event_time": last_event_time,
-        "stale_seconds": stale_seconds,
-        "rebuild_frame_count": 0,
-        "validation_status": "blocked" if blocker_code else "pass",
-        "blocker_code": blocker_code,
-        "blocker": blocker,
-        "credential_presence": credential_presence,
-        "market_discovery_pages": (discovery or {}).get("pages_fetched"),
-        "market_discovery_count": (discovery or {}).get("markets_seen"),
-        "market_discovery_cursor_remaining": (discovery or {}).get("cursor_remaining"),
-        "market_discovery_rejection_counts": (discovery or {}).get("rejection_counts", {}),
-        "raw_event_path": raw_event_path,
-        "raw_event_sha256": raw_event_sha256,
-        "evidence_classification": "LAYER1_WS_CAMPAIGN_INCOMPLETE",
-        "manifest_path": str(output_dir / "campaign_manifest.json"),
-        "validation_report_path": str(output_dir / "campaign_validation.json"),
-        "raw_data_path_redacted": f"[LOCAL_PRIVATE_DATA_ROOT]/{output_dir.name}",
-        **lifecycle,
-        "supervisor_liveness_status": "UNKNOWN",
-        "campaign_process_liveness_status": "UNKNOWN",
-        "websocket_message_freshness_status": "UNKNOWN",
-        "exchange_heartbeat_status": "UNKNOWN",
-    }
-    _write_json(output_dir / "campaign_summary.json", summary)
-    validation = validate_campaign(input_dir=output_dir)
-    summary = {
-        **summary,
-        "validation_status": validation["status"],
-        "evidence_classification": validation["evidence_classification"],
-    }
-    _write_json(output_dir / "campaign_summary.json", summary)
-    _write_campaign_manifest(output_dir, summary, validation=validation)
-    _write_run_metadata(output_dir, summary, validation=validation)
-    return {
-        "campaign_id": campaign_id,
-        "artifact_root": str(output_dir),
-        "validation_status": validation["status"],
-        "evidence_classification": validation["evidence_classification"],
-        "blocker": blocker,
-        "blocker_code": blocker_code,
-        "live_gate_status": "disabled",
-        "submit_attempt_count": 0,
-    }
 
 
 def validate_campaign(*, input_dir: Path) -> dict[str, object]:
     failures: list[str] = []
     summary = _read_json(input_dir / "campaign_summary.json", failures)
+    if summary.get("runtime_schema_version") == D2_RUNTIME_SCHEMA_VERSION:
+        return validate_d2_runtime_artifacts(input_dir)
     heartbeats = _read_jsonl(input_dir / "campaign_heartbeat.jsonl", failures)
     recorder_events = _read_optional_jsonl(input_dir / "kalshi_readonly_events.jsonl", failures)
     rebuild_frames = _read_optional_jsonl(input_dir / "rebuild_frames.jsonl", failures)
@@ -916,6 +769,7 @@ def _run_mode_command(argv: list[str]) -> dict[str, object]:
     )
     parser.add_argument("--duration-seconds", type=int, required=True)
     parser.add_argument("--max-markets", type=int, default=1)
+    parser.add_argument("--use-yes-price", action="store_true")
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--campaign-id")
     args = parser.parse_args(argv)
@@ -926,12 +780,14 @@ def _run_mode_command(argv: list[str]) -> dict[str, object]:
             campaign_id=campaign_id,
             duration_seconds=args.duration_seconds,
             max_markets=args.max_markets,
+            use_yes_price=args.use_yes_price,
         )
     return run_kalshi_ws_smoke(
         output_dir=args.output_dir,
         campaign_id=campaign_id,
         duration_seconds=args.duration_seconds,
         max_markets=args.max_markets,
+        use_yes_price=args.use_yes_price,
     )
 
 
@@ -1002,27 +858,27 @@ def run_kalshi_ws_campaign(
     duration_seconds: int,
     max_markets: int,
     now: datetime | None = None,
+    use_yes_price: bool = False,
 ) -> dict[str, object]:
     _validate_duration(duration_seconds, allow_seven_day=True)
     generated_at = now or datetime.now(UTC)
     output_dir.mkdir(parents=True, exist_ok=True)
+    profile = selection_profile_for_duration(duration_seconds)
+    provenance = collect_runtime_code_provenance(PUBLIC_REPO_ROOT)
     try:
         auth = load_kalshi_ws_auth_config_from_env()
     except KalshiWsAuthBlocked as exc:
-        return _write_kalshi_ws_summary(
+        return write_d2_runtime_preflight_block(
             output_dir=output_dir,
             campaign_id=campaign_id,
-            duration_seconds=duration_seconds,
-            max_markets=max_markets,
-            generated_at=generated_at,
-            status="websocket_auth_blocked",
-            blocker_code=exc.code,
-            blocker=exc.code,
-            credential_presence={"access_id_present": False, "signing_material_present": False},
             mode="read_only_websocket_campaign",
+            configured_duration_seconds=duration_seconds,
+            provenance=provenance,
+            blocker_code=exc.code,
+            started_at_utc=generated_at,
+            selected_market_selection=_blocked_ws_selection_record(profile),
         )
 
-    profile = selection_profile_for_duration(duration_seconds)
     discovery = discover_kalshi_demo_ws_market(
         duration_seconds=duration_seconds,
         safety_buffer_seconds=selection_safety_buffer_seconds(profile),
@@ -1030,100 +886,31 @@ def run_kalshi_ws_campaign(
         selection_profile=profile,
     )
     market_metadata = discovery.get("market_metadata")
-    if not isinstance(market_metadata, Mapping):
+    market_selection = discovery.get("selection")
+    if not isinstance(market_metadata, Mapping) or not isinstance(market_selection, Mapping):
         blocker_code = str(discovery["blocker_code"])
-        return _write_kalshi_ws_summary(
+        return write_d2_runtime_preflight_block(
             output_dir=output_dir,
             campaign_id=campaign_id,
-            duration_seconds=duration_seconds,
-            max_markets=max_markets,
-            generated_at=generated_at,
-            status="websocket_blocked",
+            mode="read_only_websocket_campaign",
+            configured_duration_seconds=duration_seconds,
+            provenance=provenance,
             blocker_code=blocker_code,
-            blocker=blocker_code,
-            credential_presence=auth.credential_presence,
-            mode="read_only_websocket_campaign",
-            discovery=discovery,
+            started_at_utc=generated_at,
+            selected_market_selection=_blocked_ws_selection_record(profile, discovery),
         )
-    market = str(market_metadata.get("ticker") or market_metadata["market_ticker"])
-
-    def checkpoint(progress: dict[str, object]) -> None:
-        _write_kalshi_ws_summary(
-            output_dir=output_dir,
-            campaign_id=campaign_id,
-            duration_seconds=duration_seconds,
-            max_markets=max_markets,
-            generated_at=generated_at,
-            status="websocket_campaign_running",
-            blocker_code=None,
-            blocker=None,
-            credential_presence=auth.credential_presence,
-            market_tickers=[market],
-            market_selection=discovery.get("selection"),
-            discovery=discovery,
-            mode="read_only_websocket_campaign",
-            **progress,
-        )
-
-    _write_kalshi_ws_summary(
+    return run_d2_kalshi_ws_runtime(
         output_dir=output_dir,
         campaign_id=campaign_id,
-        duration_seconds=duration_seconds,
-        max_markets=max_markets,
-        generated_at=generated_at,
-        status="websocket_campaign_running",
-        blocker_code=None,
-        blocker=None,
-        credential_presence=auth.credential_presence,
-        market_tickers=[market],
-        market_selection=discovery.get("selection"),
-        discovery=discovery,
         mode="read_only_websocket_campaign",
-    )
-    recorder = record_kalshi_demo_ws_orderbook(
-        KalshiWsRecorderConfig(
-            campaign_id=campaign_id,
-            market_tickers=(market,),
-            raw_events_path=output_dir / "kalshi_ws_raw_events.jsonl",
-            duration_seconds=duration_seconds,
-            max_events=1_000_000,
-            max_reconnects=1_000,
-        ),
-        auth,
-        progress_callback=checkpoint,
-    )
-    status = "websocket_campaign_complete" if recorder.blocker_code is None else "websocket_blocked"
-    return _write_kalshi_ws_summary(
-        output_dir=output_dir,
-        campaign_id=campaign_id,
         duration_seconds=duration_seconds,
-        max_markets=max_markets,
-        generated_at=generated_at,
-        status=status,
-        blocker_code=recorder.blocker_code,
-        blocker=recorder.blocker_code,
-        credential_presence=auth.credential_presence,
-        market_tickers=[market],
-        market_selection=discovery.get("selection"),
-        discovery=discovery,
-        connection_established=recorder.connection_established,
-        subscription_acknowledged=recorder.subscription_acknowledged,
-        source_type=recorder.source_type,
-        event_count=recorder.event_count,
-        snapshot_count=recorder.snapshot_count,
-        delta_count=recorder.delta_count,
-        trade_count=recorder.trade_count,
-        status_update_count=recorder.status_update_count,
-        heartbeat_count=recorder.heartbeat_count,
-        error_count=recorder.error_count,
-        disconnect_count=recorder.disconnect_count,
-        reconnect_count=recorder.reconnect_count,
-        gap_count=recorder.gap_count,
-        last_event_time=recorder.last_event_time,
-        stale_seconds=recorder.stale_seconds,
-        raw_event_path=recorder.raw_event_path,
-        raw_event_sha256=recorder.raw_event_sha256,
-        mode="read_only_websocket_campaign",
+        market_metadata=market_metadata,
+        market_selection=market_selection,
+        auth=auth,
+        provenance=provenance,
+        use_yes_price=use_yes_price,
+        max_events=1_000_000,
+        max_reconnects=1_000,
     )
 
 

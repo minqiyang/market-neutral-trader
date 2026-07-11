@@ -170,3 +170,17 @@ Rationale: one available signal must not hide another unknown dimension, and
 event callbacks must remain O(1) with respect to file length. Atomic
 checkpoint-bounded integrity supports deterministic recovery without claiming
 uncheckpointed or missing history.
+
+## 2026-07-11: Require the D2 contract at the runtime entrypoint
+
+Decision: new Kalshi read-only WebSocket smoke and campaign runs use
+`edmn.kalshi.ws.runtime.v2`. The runtime composes D2A admission, D2B rebuild,
+D2C public evidence, and D2D persistence/classification before emitting
+operator summaries. The legacy campaign schema remains read-only compatibility
+input and is not a selectable WebSocket writer.
+
+Rationale: reviewed modules do not produce operational evidence while a runtime
+can bypass them. Binding the contract at the entrypoint prevents configured
+duration, local row order, snapshot counts, REST lifecycle, or generic monitor
+health from being promoted into unsupported sequence, rebuild, transport,
+duration, or replay claims.

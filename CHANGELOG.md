@@ -16,6 +16,42 @@ numbers while the repository is still in early research scaffolding.
   conservative early-close rejection, structured reasons, and manifest
   provenance. Smoke and seven-day behavior remain separate; Demo-only and
   disabled-live-gate boundaries are unchanged.
+- Wired D2A-D2D into the reviewed Kalshi read-only WebSocket runtime. New smoke
+  and campaign runs emit `edmn.kalshi.ws.runtime.v2` artifacts with D2A
+  admission, D2B rebuild hashes, D2C public/lifecycle/connection evidence, D2D
+  append-chain durability, timestamp-derived timing, threshold provenance,
+  independently derived validator dimensions, command/channel-bound
+  per-connection subscription acknowledgment, selection-policy provenance,
+  admitted selected-market freshness, all-segment classification, detached
+  provenance, checkpoint count/offset validation, exact threshold-policy
+  validation, independent D2B replay validation, bounded lifecycle retries,
+  recursive private-account field rejection, typed nested subscription
+  rejection, monitor fail-closed behavior, rotation, and tail-reconciling crash
+  recovery. Full timing and terminal disposition are bound into the append
+  chain, including an evidence-only recovery terminal segment. Boundary
+  disconnect/freshness intervals are counted, and persisted HTTP(S) Git remote
+  provenance strips credential-bearing URL components. Durable callbacks fail
+  terminally, D2A rows are connection/acknowledgment-bound with contiguous
+  indices, run roots are no-overwrite, private runtime metadata is rejected,
+  imported-package provenance replaces current-directory provenance, and
+  finalized-before-manifest crash windows are recoverable. Split channel
+  acknowledgments validate correctly, connection windows are interval-bound,
+  frame-hash summary memory is constant-size, and open-status writes are
+  checkpoint/segment/interval bounded. Launch selection and explicit pricing
+  are checkpoint-bound, channel acknowledgments are raw-grounded, trade SIDs
+  cannot reset orderbook state, terminal/recovery validation streams under a
+  100k memory gate, and missing orderbook freshness remains unknown. Typed-only
+  acknowledgments fail, manifest paths are root-contained, segment artifacts
+  are recursively inventoried by path, partial rotation successors fail closed,
+  and running monitor snapshots retain observed critical evidence without
+  allowing stale keepalive or late raw acknowledgment to pass.
+  The monitor revalidates completed D2 roots without rewriting the report,
+  rejects unsafe fixed metadata, and recovery records bind partial-tail counts
+  to pre/post file sizes while preflighting all manifested symlink paths.
+  Nested private fields, control-frame pricing contradictions, and noncanonical
+  launch provenance now fail closed before evidence can be presented as valid.
+  Legacy v1 artifacts remain readable but are not selected for new WebSocket
+  runs. Tests are mocked and public live trading remains disabled.
 - Added D2D orthogonal evidence classification, timestamp-derived duration,
   exact UTF-8 append chains, atomic fsynced checkpoints/summaries, closed-file
   hashing, byte/time rotation, partial-tail crash recovery, fresh-segment reset

@@ -8,6 +8,7 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+from edmn_trader.adapters.kalshi.public_evidence import ConnectionEvidenceType
 from edmn_trader.adapters.kalshi.ws_auth import KalshiWsAuthConfig
 from edmn_trader.adapters.kalshi.ws_events import (
     KALSHI_WS_RAW_SCHEMA_VERSION,
@@ -16,6 +17,7 @@ from edmn_trader.adapters.kalshi.ws_events import (
     SegmentBoundaryReason,
 )
 from edmn_trader.adapters.kalshi.ws_recorder import (
+    EvidenceCallbackError,
     KalshiWsRecorderConfig,
     _loads,
     record_kalshi_demo_ws_orderbook,
@@ -26,7 +28,11 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
     key_path = _fake_private_key_path(tmp_path)
     websocket = _FakeWebSocket(
         [
-            {"type": "subscribed", "id": 1},
+            {
+                "type": "subscribed",
+                "id": 1,
+                "msg": {"channels": ["orderbook_delta", "trade"]},
+            },
             {
                 "type": "orderbook_snapshot",
                 "sid": 11,
@@ -78,8 +84,9 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
             "id": 1,
             "cmd": "subscribe",
             "params": {
-                "channels": ["orderbook_delta", "trade"],
-                "market_tickers": ["DEMO-MARKET"],
+                    "channels": ["orderbook_delta", "trade"],
+                    "market_tickers": ["DEMO-MARKET"],
+                    "use_yes_price": False,
             },
         }
     ]
@@ -91,9 +98,18 @@ def test_ws_recorder_reconnects_after_read_failure_with_existing_rows(
 ) -> None:
     key_path = _fake_private_key_path(tmp_path)
     websockets = [
-        _FailingWebSocket([{"type": "subscribed", "id": 1}]),
+        _FailingWebSocket(
+            [
+                {
+                    "type": "subscribed",
+                    "id": 1,
+                    "msg": {"channels": ["orderbook_delta", "trade"]},
+                }
+            ]
+        ),
         _FakeWebSocket([{"type": "orderbook_delta", "market_ticker": "DEMO-MARKET"}]),
     ]
+    connection_events = []
 
     result = record_kalshi_demo_ws_orderbook(
         KalshiWsRecorderConfig(
@@ -107,10 +123,11 @@ def test_ws_recorder_reconnects_after_read_failure_with_existing_rows(
         KalshiWsAuthConfig(api_key_id="fake", private_key_path=key_path),
         websocket_factory=lambda *_args, **_kwargs: websockets.pop(0),
         now=lambda: datetime(2026, 7, 3, 20, 0, tzinfo=UTC),
+        connection_callback=connection_events.append,
     )
 
     assert result.status == "ok"
-    assert result.subscription_acknowledged is True
+    assert result.subscription_acknowledged is False
     assert result.event_count == 2
     assert result.delta_count == 1
     assert result.reconnect_count == 1
@@ -123,6 +140,170 @@ def test_ws_recorder_reconnects_after_read_failure_with_existing_rows(
     assert records[1]["segment_boundary_reason"] == SegmentBoundaryReason.RESUBSCRIPTION
     assert records[1]["admission_status"] == AdmissionStatus.EXCLUDED
     assert records[1]["exclusion_reason"] == ExclusionReason.DELTA_BEFORE_SNAPSHOT
+    assert [event.event_type for event in connection_events] == [
+        ConnectionEvidenceType.CONNECTION_OPEN,
+        ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED,
+        ConnectionEvidenceType.CONNECTION_ERROR,
+        ConnectionEvidenceType.CONNECTION_CLOSE,
+        ConnectionEvidenceType.RECONNECT,
+        ConnectionEvidenceType.RESUBSCRIPTION,
+        ConnectionEvidenceType.CONNECTION_CLOSE,
+    ]
+    assert connection_events[4].previous_connection_id == connection_events[0].connection_id
+
+
+def test_ws_recorder_does_not_promote_partial_or_unbound_subscription_ack(
+    tmp_path: Path,
+) -> None:
+    websocket = _FakeWebSocket(
+        [
+            {
+                "type": "subscribed",
+                "id": 99,
+                "msg": {"channels": ["orderbook_delta", "trade"]},
+            },
+            {
+                "type": "subscribed",
+                "id": 1,
+                "msg": {"channel": "orderbook_delta"},
+            },
+        ]
+    )
+
+    result = record_kalshi_demo_ws_orderbook(
+        KalshiWsRecorderConfig(
+            campaign_id="c1",
+            market_tickers=("DEMO-MARKET",),
+            raw_events_path=tmp_path / "raw.jsonl",
+            duration_seconds=1,
+            max_events=2,
+        ),
+        KalshiWsAuthConfig(
+            api_key_id="fake",
+            private_key_path=_fake_private_key_path(tmp_path),
+        ),
+        websocket_factory=lambda *_args, **_kwargs: websocket,
+        now=lambda: datetime(2026, 7, 3, 20, 0, tzinfo=UTC),
+    )
+
+    assert result.subscription_acknowledged is False
+
+
+def test_ws_recorder_records_nested_subscription_rejection(tmp_path: Path) -> None:
+    connection_events = []
+    result = record_kalshi_demo_ws_orderbook(
+        KalshiWsRecorderConfig(
+            campaign_id="c1",
+            market_tickers=("DEMO-MARKET",),
+            raw_events_path=tmp_path / "raw.jsonl",
+            duration_seconds=1,
+            max_events=1,
+        ),
+        KalshiWsAuthConfig(
+            api_key_id="fake",
+            private_key_path=_fake_private_key_path(tmp_path),
+        ),
+        websocket_factory=lambda *_args, **_kwargs: _FakeWebSocket(
+            [{"type": "error", "id": 1, "msg": {"code": "invalid_subscription"}}]
+        ),
+        now=lambda: datetime(2026, 7, 3, 20, 0, tzinfo=UTC),
+        connection_callback=connection_events.append,
+    )
+
+    assert result.subscription_acknowledged is False
+    assert ConnectionEvidenceType.SUBSCRIPTION_REJECTED in {
+        event.event_type for event in connection_events
+    }
+
+
+def test_ws_recorder_does_not_reconnect_after_evidence_callback_failure(
+    tmp_path: Path,
+) -> None:
+    factory_calls = 0
+
+    def factory(*_args, **_kwargs):
+        nonlocal factory_calls
+        factory_calls += 1
+        return _FakeWebSocket(
+            [
+                {
+                    "type": "subscribed",
+                    "id": 1,
+                    "msg": {"channels": ["orderbook_delta", "trade"]},
+                }
+            ]
+        )
+
+    def fail_persistence(_event) -> None:
+        raise OSError("synthetic durable write failure")
+
+    with pytest.raises(EvidenceCallbackError, match="OSError"):
+        record_kalshi_demo_ws_orderbook(
+            KalshiWsRecorderConfig(
+                campaign_id="c1",
+                market_tickers=("DEMO-MARKET",),
+                raw_events_path=tmp_path / "unused.jsonl",
+                duration_seconds=5,
+                max_events=1,
+                max_reconnects=3,
+                persist_legacy_raw_events=False,
+            ),
+            KalshiWsAuthConfig(
+                api_key_id="fake",
+                private_key_path=_fake_private_key_path(tmp_path),
+            ),
+            websocket_factory=factory,
+            now=lambda: datetime(2026, 7, 3, 20, 0, tzinfo=UTC),
+            event_callback=fail_persistence,
+        )
+
+    assert factory_calls == 1
+
+
+def test_subscription_ack_event_is_not_persisted_before_completing_raw_frame(
+    tmp_path: Path,
+) -> None:
+    persisted_events = 0
+    connection_events = []
+
+    def fail_on_second_raw(_event) -> None:
+        nonlocal persisted_events
+        persisted_events += 1
+        if persisted_events == 2:
+            raise OSError("synthetic second acknowledgment write failure")
+
+    with pytest.raises(EvidenceCallbackError, match="OSError"):
+        record_kalshi_demo_ws_orderbook(
+            KalshiWsRecorderConfig(
+                campaign_id="split-ack-failure",
+                market_tickers=("DEMO-MARKET",),
+                raw_events_path=tmp_path / "unused.jsonl",
+                duration_seconds=5,
+                max_events=2,
+                persist_legacy_raw_events=False,
+            ),
+            KalshiWsAuthConfig(
+                api_key_id="fake",
+                private_key_path=_fake_private_key_path(tmp_path),
+            ),
+            websocket_factory=lambda *_args, **_kwargs: _FakeWebSocket(
+                [
+                    {
+                        "type": "subscribed",
+                        "id": 1,
+                        "msg": {"channel": "orderbook_delta"},
+                    },
+                    {"type": "subscribed", "id": 1, "msg": {"channel": "trade"}},
+                ]
+            ),
+            now=lambda: datetime(2026, 7, 3, 20, 0, tzinfo=UTC),
+            event_callback=fail_on_second_raw,
+            connection_callback=connection_events.append,
+        )
+
+    assert ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED not in {
+        event.event_type for event in connection_events
+    }
 
 
 @pytest.mark.parametrize("raw", ["[]", "null", "1"])

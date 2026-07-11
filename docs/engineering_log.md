@@ -28,6 +28,106 @@ event tickers, caches core events, bounds retries, and explicitly reports
 incomplete coverage. Auxiliary image metadata remains outside lifecycle
 completeness.
 
+## D2E runtime integration
+
+D2A-D2D originally merged as independently verified software contracts, while
+the operational `kalshi-ws-smoke` entrypoint still wrote the historical
+campaign schema. D2E fixes that assembly gap rather than weakening the Real5M
+evidence gate.
+
+The recorder now exposes D2A events and typed connection observations to one
+runtime session. Each event is admitted once, rebuilt once, checked for public
+trade evidence once, and appended once to a segment-local D2D chain. This keeps
+event callbacks O(1) with respect to file size. Terminal validation is allowed
+to scan closed files to verify chain, checkpoint, nested D2A schema, and
+closed-file hash.
+
+Runtime timing comes from UTC evidence boundaries and connection windows, not
+the requested duration. Lifecycle fallback is periodically refreshed through
+an injectable selected-market provider; tests use only local mocks. Sequence,
+rebuild, lifecycle, keepalive, duration, process, supervisor, backup, and replay
+dimensions remain independent. A quiet book can warn without becoming a
+transport failure, and unknown keepalive or sequence semantics cannot become
+an overall pass.
+
+The legacy campaign reader remains for historical inspection. New WebSocket
+runs use the versioned D2 runtime writer, including preflight-blocked runs, so a
+future operator cannot silently fall back to `v2.readonly_campaign.v1`.
+
+The first independent adversarial review found three correctness issues and two
+coverage/provenance gaps. Correction round 1 made acknowledgments
+connection-local, prevented excluded markets from refreshing selected-market
+evidence, made the validator rederive critical counts and dimensions from the
+append chain, made monitor health honor validator failure, preserved the
+evaluated selection policy, and added mocked reconnect, canary, nested-secret,
+wrong-market, and summary-tamper regressions. The dead legacy WebSocket writer
+was removed; the historical reader remains.
+
+Correction round 2 followed a fresh detached-worktree review. Provenance now
+names detached HEAD explicitly; subscription acknowledgment proves the command
+and full public channel set; sequence and rebuild aggregation cannot inherit a
+historical pass across an unknown current segment; blocked discovery preserves
+selection policy; and crash recovery emits synchronized, validator-consumable
+terminal artifacts without restart. Each correction has a focused regression.
+
+Correction round 3 tightened the remaining validator and runtime boundaries:
+checkpoint row counts and byte offsets must agree across the chain, checkpoint,
+manifest, and segment summary; threshold values/version/source commit must
+match the reviewed policy; failed lifecycle polls remain rate-limited; and
+nested private account/order/fill fields are rejected before D2A persistence.
+
+The continuation pass closed the final detached-review gaps: recovery now
+reconciles complete post-checkpoint rows from durable records, validation
+replays D2A through a fresh D2B rebuilder, private-field matching covers common
+containers/prefixes, lifecycle shutdown respects the same retry interval, and
+nested subscription errors emit typed rejection evidence.
+Validator and recovery now share the same durable derivation of aggregate
+sequence, rebuild-hash, freshness, connection, and lifecycle summaries, so
+counter reconciliation cannot leave semantic evidence stale.
+Requested/configured timing and terminal disposition are no longer summary
+inputs to validation: a chained terminal record binds the complete timing
+contract, and crash recovery writes an evidence-only terminal segment.
+The final recovery window preserves an already-chained terminal when only
+segment close was interrupted. Validator checks bind campaign identity and the
+persisted segment-summary close hash back to durable records and file bytes.
+The final semantic pass compares complete segment summaries, regenerates D2C
+public trades, reconstructs typed lifecycle/connection evidence, and preserves
+the separate blocked-preflight validator path.
+Boundary timing now counts startup/final disconnects and start-to-first
+freshness intervals. Persisted HTTP(S) Git remotes strip embedded userinfo,
+query, and fragment components before provenance is written.
+The final adversarial correction makes callback failures terminal, binds every
+durable D2A row to an acknowledged open connection, requires contiguous D2A
+indices, derives provenance from the imported package repository, rejects
+nonempty artifact roots and private runtime metadata, and reconciles crashes
+between segment finalization and manifest synchronization, including rotation.
+The follow-up correction accepts a finalized rotation even if its successor
+was not fully created, distinguishes split subscription-control acknowledgments
+from data frames, validates unique in-bound connection windows, replaces
+unbounded frame-hash lists with a constant-size hash chain, and rate-limits
+open-status rewrites to checkpoints, segment changes, or 60-second intervals.
+The final evidence-integrity pass isolates orderbook SID state from public
+trade channels, persists raw acknowledgment frames before typed PASS evidence,
+and reconstructs channel coverage during validation. A checkpointed launch
+record now binds selection/time-to-close metadata and explicit legacy-side
+pricing (`use_yes_price=false`). Validator and recovery replay records as a
+stream, with a 100k/64 MiB gate, and no-book freshness remains unknown.
+The last containment pass removes typed-only subscription fallback, requires a
+complete raw channel acknowledgment for each connection, rejects manifest path
+escapes and symlink escapes, validates a complete segment-file inventory, and
+fails closed on partially created rotation successors. The final review pass
+also binds acknowledgment chronology, recursive lexical artifact identity,
+symlink-root recovery, and observed running-monitor transport/freshness state.
+Running status now blocks observed lifecycle, sequence, rebuild, or stale
+keepalive failures and never retroactively grounds a typed acknowledgment.
+The final boundary audit recursively screens private account/order fields
+through nested sequences, revalidates completed roots from the monitor without
+rewriting reports, binds recovery tail counts to pre/post file sizes, and
+preflights all manifest evidence paths for symlink aliases before mutation.
+It also makes control-frame pricing/identity contradictions visible in rebuild
+summaries and validates canonical branch, remote, commit, and dirty-state
+provenance from the durable launch record.
+
 ## D2D evidence classification, durability, and performance
 
 D2D turns the D2A-D2C fixture contracts into an explicit software evidence

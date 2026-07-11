@@ -5,23 +5,36 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from edmn_trader.adapters.kalshi.public_evidence import (
+    ConnectionEvidenceEvent,
+    ConnectionEvidenceType,
+)
 from edmn_trader.adapters.kalshi.ws_auth import (
     KALSHI_DEMO_WS_URL,
     KalshiWsAuthBlocked,
     KalshiWsAuthConfig,
     build_kalshi_ws_headers,
 )
-from edmn_trader.adapters.kalshi.ws_events import KalshiWsIntegrityTracker
+from edmn_trader.adapters.kalshi.ws_events import KalshiWsIntegrityTracker, KalshiWsRawEvent
 from edmn_trader.data.jsonl import append_jsonl_record, write_jsonl_records
 
 WebSocketFactory = Callable[..., Any]
 ProgressCallback = Callable[[dict[str, object]], None]
+EventCallback = Callable[[KalshiWsRawEvent], None]
+ConnectionCallback = Callable[[ConnectionEvidenceEvent], None]
+TickCallback = Callable[[datetime], None]
+REQUIRED_PUBLIC_CHANNELS = frozenset({"orderbook_delta", "trade"})
+
+
+class EvidenceCallbackError(RuntimeError):
+    """A durable evidence callback failed; reconnecting would lose evidence."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +45,8 @@ class KalshiWsRecorderConfig:
     duration_seconds: int
     max_events: int = 500
     max_reconnects: int = 0
+    persist_legacy_raw_events: bool = True
+    use_yes_price: bool = False
     url: str = KALSHI_DEMO_WS_URL
 
     def __post_init__(self) -> None:
@@ -45,6 +60,10 @@ class KalshiWsRecorderConfig:
             raise ValueError("max_events must be positive")
         if self.max_reconnects < 0:
             raise ValueError("max_reconnects must be non-negative")
+        if not isinstance(self.persist_legacy_raw_events, bool):
+            raise ValueError("persist_legacy_raw_events must be Boolean")
+        if not isinstance(self.use_yes_price, bool):
+            raise ValueError("use_yes_price must be Boolean")
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,8 +99,17 @@ def record_kalshi_demo_ws_orderbook(
     websocket_factory: WebSocketFactory | None = None,
     now: Callable[[], datetime] | None = None,
     progress_callback: ProgressCallback | None = None,
+    event_callback: EventCallback | None = None,
+    connection_callback: ConnectionCallback | None = None,
+    tick_callback: TickCallback | None = None,
+    monotonic: Callable[[], float] | None = None,
+    monotonic_ns: Callable[[], int] | None = None,
 ) -> KalshiWsRecorderResult:
     clock = now or (lambda: datetime.now(UTC))
+    monotonic_clock = monotonic or time.monotonic
+    monotonic_ns_clock = monotonic_ns or time.monotonic_ns
+    if not config.persist_legacy_raw_events and event_callback is None:
+        raise ValueError("D2 runtime persistence requires an event callback")
     timestamp_ms = int(clock().timestamp() * 1000)
     try:
         headers = build_kalshi_ws_headers(auth, timestamp_ms=timestamp_ms)
@@ -89,79 +117,194 @@ def record_kalshi_demo_ws_orderbook(
         return _blocked(config, exc.code)
 
     factory = websocket_factory or _websockets_connect
-    rows: list[dict[str, object]] = []
-    subscription_acknowledged = False
+    event_count = 0
+    type_counts: Counter[str] = Counter()
+    last_event_time: str | None = None
+    all_subscriptions_acknowledged = True
+    current_subscription_acknowledged = False
+    acknowledged_channels: set[str] = set()
     reconnect_count = 0
     integrity_tracker = KalshiWsIntegrityTracker(
         campaign_id=config.campaign_id,
         requested_market_tickers=config.market_tickers,
     )
-    deadline = time.monotonic() + config.duration_seconds
-    write_jsonl_records(config.raw_events_path, [])
-    while len(rows) < config.max_events and time.monotonic() < deadline:
+    deadline = monotonic_clock() + config.duration_seconds
+    if config.persist_legacy_raw_events:
+        write_jsonl_records(config.raw_events_path, [])
+    previous_connection_id: str | None = None
+    previous_segment_id: str | None = None
+    while event_count < config.max_events and monotonic_clock() < deadline:
+        opened = False
         try:
             headers = build_kalshi_ws_headers(auth, timestamp_ms=int(clock().timestamp() * 1000))
             with factory(config.url, additional_headers=headers, open_timeout=10) as websocket:
                 integrity_tracker.start_connection()
-                websocket.send(_subscription_payload(config.market_tickers))
+                opened = True
+                current_subscription_acknowledged = False
+                acknowledged_channels.clear()
+                _emit_connection(
+                    connection_callback,
+                    event_type=(
+                        ConnectionEvidenceType.CONNECTION_OPEN
+                        if reconnect_count == 0
+                        else ConnectionEvidenceType.RECONNECT
+                    ),
+                    observed_at_utc=clock(),
+                    tracker=integrity_tracker,
+                    reason="initial_connect" if reconnect_count == 0 else "read_reconnect",
+                    previous_connection_id=previous_connection_id,
+                    previous_segment_id=previous_segment_id,
+                )
+                websocket.send(
+                    _subscription_payload(
+                        config.market_tickers,
+                        use_yes_price=config.use_yes_price,
+                    )
+                )
                 integrity_tracker.bind_subscription(command_id=1)
-                while len(rows) < config.max_events and time.monotonic() < deadline:
+                if reconnect_count:
+                    _emit_connection(
+                        connection_callback,
+                        event_type=ConnectionEvidenceType.RESUBSCRIPTION,
+                        observed_at_utc=clock(),
+                        tracker=integrity_tracker,
+                        reason="subscription_rebound_after_reconnect",
+                        previous_connection_id=previous_connection_id,
+                        previous_segment_id=previous_segment_id,
+                    )
+                while event_count < config.max_events and monotonic_clock() < deadline:
+                    if tick_callback is not None:
+                        _invoke_evidence_callback(tick_callback, clock())
                     try:
                         raw = websocket.recv(
-                            timeout=min(30.0, max(0.1, deadline - time.monotonic()))
+                            timeout=min(30.0, max(0.1, deadline - monotonic_clock()))
                         )
                     except TimeoutError:
                         continue
                     received_at = clock()
-                    received_monotonic_ns = time.monotonic_ns()
+                    received_monotonic_ns = monotonic_ns_clock()
                     payload = _loads(raw)
                     message_type = _message_type(payload)
-                    subscription_acknowledged = subscription_acknowledged or _is_subscription_ack(
-                        payload,
-                        message_type,
+                    acknowledged_channels.update(
+                        subscription_ack_channels(payload, message_type)
                     )
-                    row = integrity_tracker.record(
+                    acknowledged = REQUIRED_PUBLIC_CHANNELS <= acknowledged_channels
+                    rejected = _is_subscription_rejection(payload, message_type)
+                    event = integrity_tracker.record(
                         payload,
-                        local_row_index=len(rows) + 1,
+                        local_row_index=event_count + 1,
                         received_at_utc=received_at,
                         received_monotonic_ns=received_monotonic_ns,
-                    ).to_record()
-                    rows.append(row)
-                    append_jsonl_record(config.raw_events_path, row)
+                    )
+                    row = event.to_record()
+                    if config.persist_legacy_raw_events:
+                        append_jsonl_record(config.raw_events_path, row)
+                    if event_callback is not None:
+                        _invoke_evidence_callback(event_callback, event)
+                    if acknowledged and not current_subscription_acknowledged:
+                        current_subscription_acknowledged = True
+                        _emit_connection(
+                            connection_callback,
+                            event_type=ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED,
+                            observed_at_utc=received_at,
+                            tracker=integrity_tracker,
+                            reason="selected_market_channels_acknowledged",
+                            previous_connection_id=previous_connection_id,
+                            previous_segment_id=previous_segment_id,
+                        )
+                    if rejected:
+                        _emit_connection(
+                            connection_callback,
+                            event_type=ConnectionEvidenceType.SUBSCRIPTION_REJECTED,
+                            observed_at_utc=received_at,
+                            tracker=integrity_tracker,
+                            reason="selected_market_channels_rejected",
+                            previous_connection_id=previous_connection_id,
+                            previous_segment_id=previous_segment_id,
+                        )
+                    event_count += 1
+                    type_counts[message_type] += 1
+                    last_event_time = _row_received_at(row)
                     if progress_callback is not None:
                         progress_callback(
                             _progress(
-                                rows,
-                                acknowledged=subscription_acknowledged,
+                                event_count=event_count,
+                                type_counts=type_counts,
+                                last_event_time=last_event_time,
+                                acknowledged=(
+                                    all_subscriptions_acknowledged
+                                    and current_subscription_acknowledged
+                                ),
                                 raw_events_path=config.raw_events_path,
                                 reconnect_count=reconnect_count,
+                                include_raw_hash=config.persist_legacy_raw_events,
                             )
                         )
         except KalshiWsAuthBlocked as exc:
             return _blocked(config, exc.code)
+        except EvidenceCallbackError:
+            raise
         except Exception as exc:
-            if rows and reconnect_count < config.max_reconnects:
+            if opened:
+                _emit_connection(
+                    connection_callback,
+                    event_type=ConnectionEvidenceType.CONNECTION_ERROR,
+                    observed_at_utc=clock(),
+                    tracker=integrity_tracker,
+                    reason=type(exc).__name__,
+                    previous_connection_id=previous_connection_id,
+                    previous_segment_id=previous_segment_id,
+                )
+            if event_count and reconnect_count < config.max_reconnects:
+                previous_connection_id = integrity_tracker.connection_id
+                previous_segment_id = integrity_tracker.segment_id
                 reconnect_count += 1
                 time.sleep(min(5.0, reconnect_count))
                 continue
-            code = "SUBSCRIPTION_REJECTED" if rows else "AUTH_SIGNATURE_FAILED"
+            code = "SUBSCRIPTION_REJECTED" if event_count else "AUTH_SIGNATURE_FAILED"
             if str(exc):
-                code = "WEBSOCKET_READ_FAILED" if rows else code
+                code = "WEBSOCKET_READ_FAILED" if event_count else code
             return _write_result(
                 config,
-                rows,
+                event_count=event_count,
+                type_counts=type_counts,
+                last_event_time=last_event_time,
                 blocker_code=code,
-                acknowledged=subscription_acknowledged,
+                acknowledged=(
+                    all_subscriptions_acknowledged
+                    and current_subscription_acknowledged
+                ),
                 reconnect_count=reconnect_count,
             )
+        finally:
+            if opened:
+                _emit_connection(
+                    connection_callback,
+                    event_type=ConnectionEvidenceType.CONNECTION_CLOSE,
+                    observed_at_utc=clock(),
+                    tracker=integrity_tracker,
+                    reason="connection_context_closed",
+                    previous_connection_id=previous_connection_id,
+                    previous_segment_id=previous_segment_id,
+                )
+                all_subscriptions_acknowledged &= current_subscription_acknowledged
 
-    if not rows:
-        return _write_result(config, rows, blocker_code="NO_MESSAGES_RECEIVED", acknowledged=False)
+    if not event_count:
+        return _write_result(
+            config,
+            event_count=0,
+            type_counts=type_counts,
+            last_event_time=None,
+            blocker_code="NO_MESSAGES_RECEIVED",
+            acknowledged=False,
+        )
     return _write_result(
         config,
-        rows,
+        event_count=event_count,
+        type_counts=type_counts,
+        last_event_time=last_event_time,
         blocker_code=None,
-        acknowledged=subscription_acknowledged,
+        acknowledged=all_subscriptions_acknowledged,
         reconnect_count=reconnect_count,
     )
 
@@ -174,7 +317,11 @@ def _websockets_connect(*args: object, **kwargs: object) -> object:
     return connect(*args, **kwargs)
 
 
-def _subscription_payload(market_tickers: tuple[str, ...]) -> str:
+def _subscription_payload(
+    market_tickers: tuple[str, ...],
+    *,
+    use_yes_price: bool = False,
+) -> str:
     return json.dumps(
         {
             "id": 1,
@@ -182,6 +329,7 @@ def _subscription_payload(market_tickers: tuple[str, ...]) -> str:
             "params": {
                 "channels": ["orderbook_delta", "trade"],
                 "market_tickers": list(market_tickers),
+                "use_yes_price": use_yes_price,
             },
         },
         sort_keys=True,
@@ -209,46 +357,77 @@ def _message_type(payload: Mapping[str, object]) -> str:
     return "unknown"
 
 
-def _is_subscription_ack(payload: Mapping[str, object], message_type: str) -> bool:
+def subscription_ack_channels(
+    payload: Mapping[str, object],
+    message_type: str,
+) -> set[str]:
     lowered = message_type.lower()
-    if "subscribed" in lowered or lowered in {"ack", "ok"}:
-        return True
-    return str(payload.get("cmd") or "").lower() == "subscribe" and not payload.get("error")
+    if payload.get("id") != 1 or not (
+        "subscribed" in lowered or lowered == "ack"
+    ):
+        return set()
+    nested = payload.get("msg")
+    source = nested if isinstance(nested, Mapping) else payload
+    channels: set[str] = set()
+    channel = source.get("channel")
+    if isinstance(channel, str):
+        channels.add(channel)
+    channel_list = source.get("channels")
+    if isinstance(channel_list, list):
+        channels.update(str(item) for item in channel_list if isinstance(item, str))
+    return channels & REQUIRED_PUBLIC_CHANNELS
+
+
+def _is_subscription_rejection(payload: Mapping[str, object], message_type: str) -> bool:
+    if payload.get("id") != 1:
+        return False
+    lowered = message_type.lower()
+    nested = payload.get("msg")
+    nested_error = (
+        nested.get("error") or nested.get("code") or nested.get("message")
+        if isinstance(nested, Mapping)
+        else None
+    )
+    return (
+        "reject" in lowered
+        or lowered == "error" and bool(payload.get("error") or nested_error or nested)
+        or str(payload.get("cmd") or "").lower() == "subscribe" and bool(payload.get("error"))
+    )
 
 
 def _write_result(
     config: KalshiWsRecorderConfig,
-    rows: list[dict[str, object]],
     *,
+    event_count: int,
+    type_counts: Mapping[str, int],
+    last_event_time: str | None,
     blocker_code: str | None,
     acknowledged: bool,
     reconnect_count: int = 0,
 ) -> KalshiWsRecorderResult:
-    if not config.raw_events_path.exists():
-        write_jsonl_records(config.raw_events_path, rows)
-    sha = _sha256(config.raw_events_path) if rows else None
-    counts = [
-        _message_type(payload)
-        for row in rows
-        if (payload := _row_payload(row)) is not None
-    ]
-    last_event = _row_received_at(rows[-1]) if rows else None
+    if config.persist_legacy_raw_events and not config.raw_events_path.exists():
+        write_jsonl_records(config.raw_events_path, [])
+    sha = (
+        _sha256(config.raw_events_path)
+        if event_count and config.persist_legacy_raw_events
+        else None
+    )
     return KalshiWsRecorderResult(
         status="blocked" if blocker_code else "ok",
         blocker_code=blocker_code,
-        connection_established=bool(rows) or blocker_code == "NO_MESSAGES_RECEIVED",
+        connection_established=bool(event_count) or blocker_code == "NO_MESSAGES_RECEIVED",
         subscription_acknowledged=acknowledged,
-        event_count=len(rows),
-        snapshot_count=sum("orderbook_snapshot" in item for item in counts),
-        delta_count=sum("orderbook_delta" in item for item in counts),
-        trade_count=sum(item == "trade" for item in counts),
-        status_update_count=sum("status" in item for item in counts),
-        heartbeat_count=sum("heartbeat" in item for item in counts),
-        error_count=sum("error" in item for item in counts) + (1 if blocker_code else 0),
+        event_count=event_count,
+        snapshot_count=_matching_count(type_counts, "orderbook_snapshot"),
+        delta_count=_matching_count(type_counts, "orderbook_delta"),
+        trade_count=type_counts.get("trade", 0),
+        status_update_count=_matching_count(type_counts, "status"),
+        heartbeat_count=_matching_count(type_counts, "heartbeat"),
+        error_count=_matching_count(type_counts, "error") + (1 if blocker_code else 0),
         disconnect_count=0,
         reconnect_count=reconnect_count,
         gap_count=0,
-        last_event_time=last_event,
+        last_event_time=last_event_time,
         stale_seconds=None,
         raw_event_path=str(config.raw_events_path),
         raw_event_sha256=sha,
@@ -279,37 +458,74 @@ def _blocked(config: KalshiWsRecorderConfig, code: str) -> KalshiWsRecorderResul
 
 
 def _progress(
-    rows: list[dict[str, object]],
     *,
+    event_count: int,
+    type_counts: Mapping[str, int],
+    last_event_time: str | None,
     acknowledged: bool,
     raw_events_path: Path,
     reconnect_count: int = 0,
+    include_raw_hash: bool = True,
 ) -> dict[str, object]:
-    counts = [
-        _message_type(payload)
-        for row in rows
-        if (payload := _row_payload(row)) is not None
-    ]
     return {
         "connection_established": True,
         "subscription_acknowledged": acknowledged,
-        "event_count": len(rows),
-        "snapshot_count": sum("orderbook_snapshot" in item for item in counts),
-        "delta_count": sum("orderbook_delta" in item for item in counts),
-        "trade_count": sum(item == "trade" for item in counts),
-        "status_update_count": sum("status" in item for item in counts),
-        "heartbeat_count": sum("heartbeat" in item for item in counts),
-        "error_count": sum("error" in item for item in counts),
+        "event_count": event_count,
+        "snapshot_count": _matching_count(type_counts, "orderbook_snapshot"),
+        "delta_count": _matching_count(type_counts, "orderbook_delta"),
+        "trade_count": type_counts.get("trade", 0),
+        "status_update_count": _matching_count(type_counts, "status"),
+        "heartbeat_count": _matching_count(type_counts, "heartbeat"),
+        "error_count": _matching_count(type_counts, "error"),
         "reconnect_count": reconnect_count,
-        "last_event_time": _row_received_at(rows[-1]) if rows else None,
+        "last_event_time": last_event_time,
         "source_type": _source_type(
-            sum("orderbook_snapshot" in item for item in counts),
-            sum("orderbook_delta" in item for item in counts),
-            sum(item == "trade" for item in counts),
+            _matching_count(type_counts, "orderbook_snapshot"),
+            _matching_count(type_counts, "orderbook_delta"),
+            type_counts.get("trade", 0),
         ),
         "raw_event_path": str(raw_events_path),
-        "raw_event_sha256": _sha256(raw_events_path) if rows else None,
+        "raw_event_sha256": (
+            _sha256(raw_events_path) if include_raw_hash and event_count else None
+        ),
     }
+
+
+def _emit_connection(
+    callback: ConnectionCallback | None,
+    *,
+    event_type: ConnectionEvidenceType,
+    observed_at_utc: datetime,
+    tracker: KalshiWsIntegrityTracker,
+    reason: str,
+    previous_connection_id: str | None,
+    previous_segment_id: str | None,
+) -> None:
+    if callback is None:
+        return
+    _invoke_evidence_callback(
+        callback,
+        ConnectionEvidenceEvent(
+            event_type=event_type,
+            observed_at_utc=observed_at_utc,
+            connection_id=tracker.connection_id,
+            segment_id=tracker.segment_id,
+            reason=reason,
+            previous_connection_id=previous_connection_id,
+            previous_segment_id=previous_segment_id,
+        )
+    )
+
+
+def _invoke_evidence_callback(callback: Callable[[Any], None], value: Any) -> None:
+    try:
+        callback(value)
+    except Exception as exc:
+        raise EvidenceCallbackError(type(exc).__name__) from exc
+
+
+def _matching_count(counts: Mapping[str, int], pattern: str) -> int:
+    return sum(count for message_type, count in counts.items() if pattern in message_type)
 
 
 def _sha256(path: Path) -> str:

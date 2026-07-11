@@ -11,7 +11,10 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from edmn_trader.data.payload_safety import validate_no_secret_payload
+from edmn_trader.data.payload_safety import (
+    validate_no_private_account_payload,
+    validate_no_secret_payload,
+)
 
 KALSHI_WS_RAW_SCHEMA_VERSION = "edmn.kalshi.ws.raw.v2"
 KALSHI_WS_RECORD_TYPE = "kalshi_demo_ws_message"
@@ -117,6 +120,7 @@ class KalshiWsRawEvent:
         if self.received_monotonic_ns < 0:
             raise ValueError("received_monotonic_ns must be non-negative")
         copied_payload = deepcopy(dict(self.original_payload))
+        validate_no_private_account_payload(copied_payload, path="original_payload")
         if self.payload_sha256 != payload_sha256(copied_payload):
             raise ValueError("payload_sha256 does not match original_payload")
         native_type = _native_str(copied_payload, "type")
@@ -278,6 +282,7 @@ class LegacyKalshiWsRawEvent:
             raise ValueError("legacy local sequence cannot become native sequence evidence")
         copied_payload = deepcopy(dict(self.original_payload))
         validate_no_secret_payload(copied_payload)
+        validate_no_private_account_payload(copied_payload)
         object.__setattr__(self, "requested_market_tickers", tuple(self.requested_market_tickers))
         object.__setattr__(self, "original_payload", copied_payload)
 
@@ -304,6 +309,7 @@ def parse_kalshi_ws_raw_record(
         )
     payload = _expect_mapping(record, "payload")
     validate_no_secret_payload(payload)
+    validate_no_private_account_payload(payload)
     return LegacyKalshiWsRawEvent(
         campaign_id=_expect_str(record, "campaign_id"),
         requested_market_tickers=tuple(_expect_str_list(record, "market_tickers")),
@@ -344,6 +350,18 @@ class KalshiWsIntegrityTracker:
         self._subscription_sid: str | int | None = None
         self._snapshot_market_tickers: set[str] = set()
         self._last_native_seq: int | None = None
+
+    @property
+    def connection_id(self) -> str:
+        if self._connection_id is None:
+            raise RuntimeError("no active connection")
+        return self._connection_id
+
+    @property
+    def segment_id(self) -> str:
+        if self._segment_id is None:
+            raise RuntimeError("no active segment")
+        return self._segment_id
 
     def start_connection(self) -> None:
         self._connection_number += 1
@@ -386,13 +404,14 @@ class KalshiWsIntegrityTracker:
         if received_monotonic_ns < 0:
             raise ValueError("received_monotonic_ns must be non-negative")
         validate_no_secret_payload(payload)
+        validate_no_private_account_payload(payload)
 
         native_type = _native_str(payload, "type")
         native_market_ticker = _native_str(payload, "market_ticker")
         is_orderbook = native_type in {"orderbook_snapshot", "orderbook_delta"}
         has_requested_market = native_market_ticker in self.requested_market_tickers
         native_sid = _native_identifier(payload, "sid")
-        if native_sid is not None:
+        if is_orderbook and native_sid is not None:
             if self._subscription_sid is not None and native_sid != self._subscription_sid:
                 self._start_segment(SegmentBoundaryReason.SID_CHANGE)
             self._subscription_sid = native_sid
@@ -445,7 +464,7 @@ class KalshiWsIntegrityTracker:
             payload_sha256=payload_sha256(original_payload),
             channel=_native_channel(payload, native_type),
             subscription_id=_native_identifier(payload, "id"),
-            subscription_sid=self._subscription_sid,
+            subscription_sid=(self._subscription_sid if is_orderbook else native_sid),
             subscription_command_id=self._subscription_command_id,
             admission_status=admission_status,
             exclusion_reason=exclusion_reason,
@@ -506,6 +525,7 @@ def payload_sha256(payload: Mapping[str, Any]) -> str:
     """Hash canonical UTF-8 JSON for the exact parsed native payload."""
 
     validate_no_secret_payload(payload)
+    validate_no_private_account_payload(payload)
     encoded = json.dumps(
         payload,
         ensure_ascii=False,

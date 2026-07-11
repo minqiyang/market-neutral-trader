@@ -17,6 +17,60 @@ requires complete event metadata, rejects sports/match-like and early-close
 markets, and persists profile provenance in the manifest. This remains Kalshi
 Demo read-only with the public live gate disabled and no order-write behavior.
 
+## D2E runtime integration notice
+
+D2E closes the fail-closed runtime assembly gap found by the owner-controlled
+Real5M preflight. New `kalshi-ws-smoke` and `kalshi-ws-campaign` runs select
+`edmn.kalshi.ws.runtime.v2`, route D2A envelopes through D2B/D2C, persist exact
+runtime records through D2D, and expose independent timing, freshness,
+sequence, rebuild, lifecycle, durability, and safety dimensions to the
+validator and monitor. Legacy `v2.readonly_campaign.v1` remains readable but
+is not selected for new WebSocket runs.
+
+The D2 validator derives critical counts and dimensions from append-chained
+runtime records, the monitor blocks on validator failure, subscription
+acknowledgment is connection-local across reconnects, and excluded markets
+cannot refresh selected-market freshness. Runtime artifacts also preserve the
+evaluated smoke/canary/seven-day selection record.
+
+Fresh review correction round 2 additionally requires every applicable
+connection segment to carry its own sequence/rebuild evidence, binds channel
+acknowledgment to command `1` and both public channels, supports detached-HEAD
+deployment provenance, preserves blocked-discovery policy metadata, and makes
+crash-recovered artifacts validator/monitor consumable without relaunch.
+Correction round 3 also cross-checks checkpoint counts/offsets, validates the
+exact threshold policy, rate-limits failed lifecycle polling attempts, and
+rejects nested private account/order/fill fields before persistence.
+The continuation pass also reconciles complete crash-tail rows, independently
+replays D2B during validation, applies the lifecycle limiter at shutdown, and
+records nested subscription errors as typed rejections.
+Runtime timing includes startup/final disconnect boundaries and start-to-first
+freshness gaps, while persisted HTTP(S) Git provenance strips credential-bearing
+URL components.
+The latest adversarial correction also makes evidence callback failures
+terminal, binds D2A rows to ordered per-connection acknowledgments, rejects
+nonempty run roots and private metadata, collects provenance from the imported
+repository, and recovers finalization-to-manifest crash windows.
+Runtime memory and open-status writes are bounded: per-frame hashes stay in the
+chain while summaries keep only an aggregate/latest hash, and open metadata is
+updated on checkpoints, segment changes, or 60-second intervals. Split channel
+acknowledgments and rotation crashes before successor creation are covered.
+The durable launch checkpoint binds market selection, lifecycle deadline,
+channels, code provenance, and explicit pricing semantics. Validation derives
+subscription PASS from persisted raw acknowledgments, keeps trade SIDs from
+resetting orderbook state, streams terminal/recovery replay under the 100k
+memory gate, and reports no-book freshness as unknown.
+Typed connection acknowledgment cannot substitute for durable raw channel
+frames or precede them. Segment paths are root-contained, every distinct nested
+segment artifact is inventoried, partial rotation successors block recovery
+before mutation, and running monitor snapshots expose and act on observed
+transport, lifecycle, sequence, and rebuild state.
+
+This checkpoint is software-only. Tests use mocked WebSocket and lifecycle
+transports. No VPS, credential, campaign, private raw data, production endpoint,
+order path, or real market network was used. Replay qualification remains
+unknown/false and the public live gate remains disabled.
+
 ## D2D classifier and durability notice
 
 As of 2026-07-10, Phase 0A has passed and `origin/main` remains the authoritative
@@ -104,10 +158,9 @@ gates.
 
 ## Last completed stage
 
-Stage 52 private live gate design and disabled public guard, Round 8B public
-lifecycle gates, Round 8C-D1 bounded Demo market discovery, merged D2A raw
-WebSocket evidence, merged D2B native incremental rebuild PR #121, and merged
-D2C public evidence PR #122.
+D2A-D2D are merged. D2E integrates those contracts into the reviewed read-only
+runtime entrypoint with mocked end-to-end coverage and retains the disabled-live
+boundary. Deployment and any Real5M authorization remain separate owner gates.
 
 ## Current delivery checkpoint
 
@@ -137,7 +190,7 @@ reconciliation, Stage 51 long-term paper/demo validation framework, and Stage
 52 private live gate design and disabled public guard. The
 ledger records purpose, known commit hashes, files/modules
 added, validation commands, status, next-stage boundary, and safety status for
-each completed stage. Stage 35-52 and D2A-D2C are complete. D2D is the active
+each completed stage. Stage 35-52 and D2A-D2D are complete. D2E is the active
 separate delivery and mandatory stop boundary for the autonomous software
 program. No seven-day recorder launch is authorized by this handoff.
 
@@ -1534,14 +1587,15 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended action
 
-Independent adversarial review of the focused D2D PR, followed by correction,
+Independent adversarial review of the focused D2E PR, followed by correction,
 100k benchmark verification, merge, and merged-main verification. Then stop at
 the external owner gates; do not deploy or run a market campaign.
 
 ## Exact next prompt suggestion
 
-Review the D2D classifier, timing, append-chain, checkpoint, rotation, recovery,
-and benchmark contracts against synthetic fixtures only. After merged-main
+Review the D2E runtime assembly, D2D classifier, timing, append-chain,
+checkpoint, rotation, recovery, and benchmark contracts against synthetic
+fixtures only. After merged-main
 verification, stop before deployment, market network, campaign, credentials,
 retention deletion, or any order path.
 
@@ -1564,3 +1618,14 @@ deadlines, fetches event metadata for seven-day discovery, rejects unsafe
 early-close and sports/match candidates by default, preserves lifecycle fields
 in manifests, and separates data integrity from market-lifecycle evidence
 validity. Validation remains Demo/read-only with the public live gate disabled.
+
+## D2E next boundary
+
+After D2E merge and clean merged-main verification, the next task is a fresh
+Phase 0B deployment-governance run for the merged D2E commit. It may deploy and
+run software-only validation/benchmarks, but must stop before credentials or
+market network. Any future Real5M requires a new explicit owner authorization;
+the prior authorization was not consumed.
+
+Exact next prompt title:
+`Phase 0B-Resume D2E Deployment Governance and VPS Synthetic Acceptance`.

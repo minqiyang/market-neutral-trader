@@ -68,6 +68,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   recovery, retention-metadata, and synthetic benchmark contract.
 - `docs/d2d_100k_benchmark.md`: redacted synthetic 100k performance results,
   memory/checkpoint gates, provenance limitation, and 1M deferral.
+- `docs/v2_ws_runtime_integration.md`: D2E runtime assembly, versioned artifact
+  contract, lifecycle polling, durability, recovery, reader compatibility, and
+  no-replay/no-live safety boundaries.
 - `docs/v2_lifecycle_gate_v2.md`: conservative long-horizon lifecycle deadline
   policy, event metadata requirements, and evidence-validity boundary.
 - `docs/v2_monitor_contract.md`: V2 monitor lifecycle, liveness, and stale
@@ -117,8 +120,12 @@ context, then read only the files needed for the requested stage. Use `rg` and
   selected-market public trade stream, REST lifecycle fallback, typed
   connection evidence, and independent freshness dimensions.
 - `src/edmn_trader/adapters/kalshi/ws_recorder.py`: read-only Kalshi Demo
-  WebSocket recorder. It subscribes to selected-market orderbook and public
-  trade channels and emits D2A envelopes without orderbook rebuild behavior.
+  WebSocket transport loop. It subscribes to selected-market orderbook and
+  public trade channels and sends D2A and connection callbacks to the D2E
+  runtime without retaining a campaign-sized in-memory event list.
+- `src/edmn_trader/adapters/kalshi/ws_runtime.py`: D2E runtime assembly for D2A
+  admission, D2B rebuild, D2C public evidence, D2D segmented persistence,
+  timing/classification, terminal validation, and fail-closed crash recovery.
 - `src/edmn_trader/data/evidence_classifier.py`: D2D orthogonal evidence
   dimensions, overall classification, exact timing, freshness maxima, and
   threshold provenance.
@@ -126,6 +133,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   atomic checkpoint/summary writes, close hashing, rotation, and recovery.
 - `src/edmn_trader/data/evidence_benchmark.py`: streaming synthetic durability
   benchmark and merge-gate result model.
+- `src/edmn_trader/data/evidence_policy.py`: reviewed
+  `edmn.v2.thresholds.v1` prospective runtime threshold contract.
 - `src/edmn_trader/adapters/kalshi/demo_connector.py`: Stage 49 guarded
   Kalshi Demo request preview and Demo submit path mocked in tests. Read for
   manual approval, risk, paper ledger, Demo allowlist, and audit-redaction
@@ -371,6 +380,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `tests/test_kalshi_ws_recorder.py`: fixture-only recorder integration tests
   for v2 envelope output, connection/segment boundaries, and pre-snapshot
   delta exclusion.
+- `tests/test_kalshi_ws_runtime.py`: mocked D2E runtime coverage for actual
+  entrypoint assembly, D2 artifact validation/monitoring, lifecycle freshness,
+  sequence/rebuild isolation, pricing modes, rotation, tamper detection, and
+  partial-tail crash recovery.
 - `tests/test_polymarket_market_recorder.py`: Stage 41 Polymarket US
   market-channel recorder guardrail coverage for opt-in, US-public-only config,
   mocked HTTP recording, raw event JSONL, normalized snapshot JSONL, and

@@ -234,6 +234,88 @@ def test_pricing_metadata_conflict_quarantines_the_rest_of_segment() -> None:
     assert result.frame is None
 
 
+@pytest.mark.parametrize(
+    ("sid", "market_ticker"),
+    [(99, None), (41, OTHER_MARKET)],
+)
+def test_control_frame_identity_mismatch_is_quarantined(
+    sid: int,
+    market_ticker: str | None,
+) -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    rebuilder.apply(_ack(tracker, use_yes_price=False))
+    payload: dict[str, object] = {
+        "type": "subscribed",
+        "id": 1,
+        "sid": sid,
+        "msg": {"channel": "orderbook_delta", "use_yes_price": False},
+    }
+    if market_ticker is not None:
+        payload["market_ticker"] = market_ticker
+
+    result = rebuilder.apply(
+        tracker.record(
+            payload,
+            local_row_index=2,
+            received_at_utc=RECEIVED_AT,
+            received_monotonic_ns=1002,
+        )
+    )
+
+    assert result.disposition is RebuildDisposition.QUARANTINED
+    assert result.reason is RebuildReason.IDENTITY_MISMATCH
+
+
+def test_error_control_frame_identity_mismatch_is_quarantined() -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    rebuilder.apply(_ack(tracker, use_yes_price=False))
+
+    result = rebuilder.apply(
+        tracker.record(
+            {
+                "type": "error",
+                "id": 1,
+                "sid": 99,
+                "msg": {"channel": "orderbook_delta", "error": "rejected"},
+            },
+            local_row_index=2,
+            received_at_utc=RECEIVED_AT,
+            received_monotonic_ns=1002,
+        )
+    )
+
+    assert result.disposition is RebuildDisposition.QUARANTINED
+    assert result.reason is RebuildReason.IDENTITY_MISMATCH
+
+
+def test_control_frame_market_id_mismatch_is_quarantined() -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    snapshot = _snapshot(tracker, yes=[["0.42", "3"]], no=[])
+    rebuilder.apply(snapshot)
+
+    result = rebuilder.apply(
+        tracker.record(
+            {
+                "type": "ack",
+                "id": 1,
+                "sid": 41,
+                "market_ticker": MARKET,
+                "market_id": "different-market-id",
+                "msg": {"channel": "orderbook_delta"},
+            },
+            local_row_index=2,
+            received_at_utc=RECEIVED_AT,
+            received_monotonic_ns=1002,
+        )
+    )
+
+    assert result.disposition is RebuildDisposition.QUARANTINED
+    assert result.reason is RebuildReason.IDENTITY_MISMATCH
+
+
 def test_late_subscription_metadata_cannot_reprice_an_existing_book() -> None:
     tracker = _tracker()
     rebuilder = KalshiWsBookRebuilder()

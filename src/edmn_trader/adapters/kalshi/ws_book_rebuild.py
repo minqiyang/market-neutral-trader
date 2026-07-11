@@ -33,6 +33,7 @@ class PricingMode(StrEnum):
 
 class PricingModeSource(StrEnum):
     D2A_SUBSCRIPTION_METADATA = "D2A_SUBSCRIPTION_METADATA"
+    RECORDER_EXPLICIT_SUBSCRIPTION = "RECORDER_EXPLICIT_SUBSCRIPTION"
     RECORDER_DEFAULT_ASSUMPTION = "RECORDER_DEFAULT_ASSUMPTION"
 
 
@@ -182,6 +183,8 @@ class _SegmentMetadata:
     pricing_mode_source: PricingModeSource | None = None
     subscription_id: str | int | None = None
     subscription_sid: str | int | None = None
+    market_tickers: set[str] = field(default_factory=set)
+    market_ids: dict[str, str] = field(default_factory=dict)
     invalidation_reason: RebuildReason | None = None
 
 
@@ -194,9 +197,16 @@ class _RebuildFailure(ValueError):
 class KalshiWsBookRebuilder:
     """Apply D2A envelopes to independent native book states."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        explicit_pricing_mode: PricingMode | None = None,
+    ) -> None:
         self._states: dict[NativeBookKey, NativeBookState] = {}
         self._segment_metadata: dict[tuple[str, str], _SegmentMetadata] = {}
+        self._explicit_pricing_mode = (
+            PricingMode(explicit_pricing_mode) if explicit_pricing_mode is not None else None
+        )
 
     def apply(self, record: Mapping[str, Any] | KalshiWsRawEvent) -> RebuildResult:
         parsed = self._parse_record(record)
@@ -219,6 +229,17 @@ class KalshiWsBookRebuilder:
                 disposition=RebuildDisposition.EXCLUDED,
                 reason=RebuildReason.D2A_ROW_EXCLUDED,
                 key=key,
+            )
+        if not is_orderbook and event.native_type not in {
+            "subscribed",
+            "ack",
+            "ok",
+            "error",
+            "rejected",
+        }:
+            return RebuildResult(
+                disposition=RebuildDisposition.IGNORED_NON_ORDERBOOK,
+                reason=None,
             )
         metadata_reason = self._observe_segment_metadata(event)
         if metadata_reason is not None:
@@ -341,10 +362,20 @@ class KalshiWsBookRebuilder:
 
     def _observe_segment_metadata(self, event: KalshiWsRawEvent) -> RebuildReason | None:
         key = (event.connection_id, event.segment_id)
-        metadata = self._segment_metadata.setdefault(key, _SegmentMetadata())
+        metadata = self._segment_metadata.setdefault(
+            key,
+            _SegmentMetadata(
+                pricing_mode=self._explicit_pricing_mode,
+                pricing_mode_source=(
+                    PricingModeSource.RECORDER_EXPLICIT_SUBSCRIPTION
+                    if self._explicit_pricing_mode is not None
+                    else None
+                ),
+            ),
+        )
         if metadata.invalidation_reason is not None:
             return metadata.invalidation_reason
-        for field_name in ("subscription_id", "subscription_sid"):
+        for field_name in ("subscription_id",):
             observed = getattr(event, field_name)
             current = getattr(metadata, field_name)
             if observed is not None and current is not None and observed != current:
@@ -352,6 +383,29 @@ class KalshiWsBookRebuilder:
                 return metadata.invalidation_reason
             if current is None and observed is not None:
                 setattr(metadata, field_name, observed)
+        observed_sid = event.subscription_sid
+        if (
+            observed_sid is not None
+            and metadata.subscription_sid is not None
+            and observed_sid != metadata.subscription_sid
+        ):
+            metadata.invalidation_reason = RebuildReason.IDENTITY_MISMATCH
+            return metadata.invalidation_reason
+        if metadata.subscription_sid is None and observed_sid is not None:
+            metadata.subscription_sid = observed_sid
+        observed_market = event.native_market_ticker
+        if observed_market is not None and observed_market not in event.requested_market_tickers:
+            metadata.invalidation_reason = RebuildReason.IDENTITY_MISMATCH
+            return metadata.invalidation_reason
+        if observed_market is not None:
+            metadata.market_tickers.add(observed_market)
+            observed_market_id = event.native_market_id
+            if observed_market_id is not None:
+                current_market_id = metadata.market_ids.get(observed_market)
+                if current_market_id is not None and current_market_id != observed_market_id:
+                    metadata.invalidation_reason = RebuildReason.IDENTITY_MISMATCH
+                    return metadata.invalidation_reason
+                metadata.market_ids.setdefault(observed_market, observed_market_id)
         pricing_values = _pricing_values(event.original_payload)
         if not pricing_values:
             return None

@@ -935,13 +935,47 @@ def test_kalshi_ws_smoke_truthfully_blocks_without_credentials(
     assert (tmp_path / "campaign_manifest.json").exists()
     assert (tmp_path / "run_metadata.json").exists()
     validation = json.loads((tmp_path / "campaign_validation.json").read_text(encoding="utf-8"))
-    assert validation["source_type"] == "WEBSOCKET_SNAPSHOT"
+    assert validation["runtime_schema_version"] == "edmn.kalshi.ws.runtime.v2"
+    assert validation["schema_version"] == "edmn.kalshi.ws.runtime.v2"
+    assert validation["source_type"] == "WEBSOCKET_NO_ORDERBOOK"
     assert validation["event_count"] == 0
+    rerun_validation = validate_campaign(input_dir=tmp_path)
+    assert rerun_validation["status"] == "blocked"
+    assert rerun_validation["blocker_code"] == "NO_WS_CREDENTIALS"
+    manifest = json.loads((tmp_path / "campaign_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["runtime_schema_version"] == "edmn.kalshi.ws.runtime.v2"
+    assert manifest["schema_version"] != "v2.readonly_campaign.v1"
     snapshot = build_monitor_snapshot(tmp_path, now=datetime(2026, 7, 3, 18, 0, tzinfo=UTC))
     rendered = render_snapshot(snapshot, "table")
     assert snapshot["campaign"]["status"] == "WEBSOCKET_AUTH_BLOCKED"
-    assert snapshot["campaign"]["source_type"] == "WEBSOCKET_SNAPSHOT"
+    assert snapshot["campaign"]["source_type"] == "WEBSOCKET_NO_ORDERBOOK"
     assert "validation=blocked" in rendered
+    canonical_validation = dict(validation)
+    validation.update(
+        campaign_id="tampered",
+        event_count=99,
+        overall_evidence_classification="PASS",
+    )
+    (tmp_path / "campaign_validation.json").write_text(
+        json.dumps(validation) + "\n",
+        encoding="utf-8",
+    )
+    assert validate_campaign(input_dir=tmp_path)["status"] == "fail"
+    (tmp_path / "campaign_validation.json").write_text(
+        json.dumps(canonical_validation) + "\n",
+        encoding="utf-8",
+    )
+    for name in ("campaign_summary.json", "campaign_manifest.json", "run_metadata.json"):
+        path = tmp_path / name
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["actual_elapsed_seconds"] = "999"
+        payload["overall_evidence_classification"] = "PASS"
+        payload["independent_evidence_classifications"] = {
+            field: "PASS"
+            for field in payload["independent_evidence_classifications"]
+        }
+        path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    assert validate_campaign(input_dir=tmp_path)["status"] == "fail"
 
 
 def test_validator_classifies_websocket_smoke_only_when_ws_events_exist(
