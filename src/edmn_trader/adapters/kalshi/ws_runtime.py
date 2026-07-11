@@ -670,6 +670,10 @@ class RuntimeEvidenceSession:
     def record_event(self, event: KalshiWsRawEvent) -> None:
         if event.campaign_id != self.campaign_id:
             raise ValueError("D2A event campaign does not match runtime campaign")
+        validate_no_private_account_payload(
+            event.original_payload,
+            path="d2a_event.original_payload",
+        )
         self._sample_freshness(event.received_at_utc)
         rebuild = self._rebuilder.apply(event)
         trade_stream = build_public_trade_stream(
@@ -2058,6 +2062,12 @@ def _iter_runtime_records(path: Path) -> Iterator[dict[str, object]]:
                 d2a_event = record.get("d2a_event")
                 if not isinstance(d2a_event, Mapping):
                     raise ValueError("durable raw record is missing its D2A envelope")
+                validate_no_private_account_payload(
+                    d2a_event.get("original_payload")
+                    if isinstance(d2a_event.get("original_payload"), Mapping)
+                    else {},
+                    path="d2a_event.original_payload",
+                )
                 KalshiWsRawEvent.from_record(d2a_event)
             yield record
 

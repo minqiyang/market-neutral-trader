@@ -120,6 +120,7 @@ class KalshiWsRawEvent:
         if self.received_monotonic_ns < 0:
             raise ValueError("received_monotonic_ns must be non-negative")
         copied_payload = deepcopy(dict(self.original_payload))
+        validate_no_private_account_payload(copied_payload, path="original_payload")
         if self.payload_sha256 != payload_sha256(copied_payload):
             raise ValueError("payload_sha256 does not match original_payload")
         native_type = _native_str(copied_payload, "type")
