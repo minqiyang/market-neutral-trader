@@ -17,6 +17,17 @@ and records its profile and conservative deadline in campaign evidence. The
 change reuses the existing selector, discovery, manifest, validator, and Demo
 WebSocket path without adding an execution path or a second framework.
 
+## Round 8J-B discovery reliability
+
+The first canary scan exposed an event-hydration N+1 path and a schema mismatch:
+the official core event response supplies category and title but not the
+locally assumed `event_type`. Hundreds of per-event requests also occurred
+between market pages, so a later page failure made the partial scan
+non-authoritative. Discovery now pages markets first, deduplicates and batches
+event tickers, caches core events, bounds retries, and explicitly reports
+incomplete coverage. Auxiliary image metadata remains outside lifecycle
+completeness.
+
 ## D2D evidence classification, durability, and performance
 
 D2D turns the D2A-D2C fixture contracts into an explicit software evidence

@@ -120,6 +120,21 @@ class KalshiDemoMarketDataClient:
         payload = self._get_json(f"/events/{quote(clean_ticker, safe='')}", params={})
         return _object_payload(payload, key="event", resource="event")
 
+    def list_events(self, *, tickers: tuple[str, ...], limit: int = 200) -> dict[str, Any]:
+        """Return public Demo events for a bounded ticker batch."""
+
+        if not tickers:
+            raise ValueError("tickers must not be empty")
+        if limit < 1 or limit > 200:
+            raise ValueError("limit must be between 1 and 200")
+        clean_tickers = tuple(_validate_ticker(ticker) for ticker in tickers)
+        payload = self._get_json(
+            "/events",
+            params={"limit": limit, "tickers": ",".join(clean_tickers)},
+        )
+        _validate_events_payload(payload)
+        return payload
+
     def get_market_orderbook(self, ticker: str, *, depth: int | None = None) -> dict[str, Any]:
         """Return the raw fixed-point orderbook for one Kalshi Demo market."""
 
@@ -225,6 +240,17 @@ def _validate_markets_payload(payload: dict[str, Any]) -> None:
     if cursor is not None and not isinstance(cursor, str):
         msg = "Kalshi markets response cursor must be a string when present"
         raise KalshiResponseError(msg)
+
+
+def _validate_events_payload(payload: dict[str, Any]) -> None:
+    events = payload.get("events")
+    if not isinstance(events, list):
+        raise KalshiResponseError("Kalshi events response must contain an events list")
+    cursor = payload.get("cursor")
+    if cursor is not None and not isinstance(cursor, str):
+        raise KalshiResponseError(
+            "Kalshi events response cursor must be a string when present"
+        )
 
 
 def _object_payload(payload: dict[str, Any], *, key: str, resource: str) -> dict[str, Any]:

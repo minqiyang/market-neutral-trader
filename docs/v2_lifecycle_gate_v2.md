@@ -22,11 +22,19 @@ required end, and structured rejection reason.
 
 Selection is explicit across three profiles. Smoke uses a 900-second buffer.
 The 1,800-second canary uses a 3,600-second buffer, requires complete event
-metadata, rejects sports and match-like events, and rejects any
+category/title metadata from the core event endpoint, rejects sports and
+match-like events, and rejects any
 `can_close_early=true` candidate. Seven-day selection uses at least an
 86,400-second buffer and retains the stricter long-horizon rules. The manifest
 records the selected profile and buffer. None of these profiles implies
 seven-day evidence before the corresponding bounded run completes.
+
+Discovery fetches bounded market pages before event hydration, deduplicates
+event tickers, hydrates core events in bounded batches, and caches them for the
+run. Missing batch members may use a candidate-local single-event fallback.
+Rate limits and transient server/transport failures receive at most three
+attempts; an exhausted page or batch marks coverage incomplete rather than
+claiming that no eligible market exists.
 
 Validation reports separate `DATA_INTEGRITY_PASS` from
 `CAMPAIGN_EVIDENCE_INVALID_MARKET_LIFECYCLE`; clean JSONL/hash/artifact

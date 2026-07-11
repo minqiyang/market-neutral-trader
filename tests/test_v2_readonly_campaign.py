@@ -201,7 +201,6 @@ def test_selection_profiles_are_explicit_and_distinct() -> None:
 def test_canary_requires_complete_event_metadata() -> None:
     incomplete = _market_metadata(event_metadata_fetched=True, event_title=None)
     missing_category = _market_metadata(event_category=None, category=None)
-    missing_type = _market_metadata(event_type=None, market_type=None)
 
     assert evaluate_market_selection(
         incomplete, selected_at_utc=NOW, duration_seconds=CANARY_SECONDS
@@ -209,9 +208,6 @@ def test_canary_requires_complete_event_metadata() -> None:
     assert evaluate_market_selection(
         missing_category, selected_at_utc=NOW, duration_seconds=CANARY_SECONDS
     )["selection_gate_rejection_reason"] == "EVENT_CATEGORY_MISSING"
-    assert evaluate_market_selection(
-        missing_type, selected_at_utc=NOW, duration_seconds=CANARY_SECONDS
-    )["selection_gate_rejection_reason"] == "EVENT_METADATA_INCOMPLETE"
 
 
 @pytest.mark.parametrize(
@@ -396,6 +392,240 @@ def test_market_discovery_paginates_and_selects_active_market() -> None:
     assert all(request.url.host == "external-api.demo.kalshi.co" for request in requests)
 
 
+def test_market_discovery_deduplicates_event_hydration_for_shared_events() -> None:
+    requests: list[httpx.Request] = []
+    markets = [_market_metadata(ticker=f"DEMO-EVENT-{index}") for index in range(1_000)]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(200, json={"markets": markets, "cursor": ""})
+        if request.url.path.endswith("/events"):
+            return httpx.Response(
+                200,
+                json={
+                    "events": [{
+                        "event_ticker": "DEMO-EVENT",
+                        "category": "Finance",
+                        "title": "Long-horizon finance event",
+                    }],
+                    "cursor": "",
+                },
+            )
+        return httpx.Response(
+            200,
+            json={"orderbook_fp": {"yes_dollars": [["0.4000", "2.00"]], "no_dollars": []}},
+        )
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+    )
+
+    assert result["blocker_code"] is None
+    assert result["diagnostics"]["unique_event_tickers"] == 1
+    assert result["diagnostics"]["event_batch_requests"] == 1
+    assert sum(request.url.path.endswith("/events") for request in requests) == 1
+
+
+def test_market_discovery_batches_distinct_event_tickers() -> None:
+    markets = [
+        _market_metadata(ticker=f"DEMO-{index}-MARKET", event_ticker=f"DEMO-{index}")
+        for index in range(120)
+    ]
+    batch_sizes: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(200, json={"markets": markets, "cursor": ""})
+        if request.url.path.endswith("/events"):
+            tickers = request.url.params["tickers"].split(",")
+            batch_sizes.append(len(tickers))
+            return httpx.Response(
+                200,
+                json={
+                    "events": [
+                        {
+                            "event_ticker": ticker,
+                            "category": "Finance",
+                            "title": "Long-horizon finance event",
+                        }
+                        for ticker in tickers
+                    ],
+                    "cursor": "",
+                },
+            )
+        return httpx.Response(
+            200,
+            json={"orderbook_fp": {"yes_dollars": [["0.4000", "2.00"]], "no_dollars": []}},
+        )
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+    )
+
+    assert result["blocker_code"] is None
+    assert batch_sizes == [50, 50, 20]
+    assert result["diagnostics"]["event_batch_requests"] == 3
+
+
+def test_market_discovery_retries_429_with_a_bounded_attempt_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("edmn_trader.scripts.v2_readonly_campaign.time.sleep", lambda _x: None)
+    event_attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal event_attempts
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(200, json={"markets": [_market_metadata()], "cursor": ""})
+        if request.url.path.endswith("/events"):
+            event_attempts += 1
+            if event_attempts < 3:
+                return httpx.Response(429, json={"code": "rate_limited"})
+            return httpx.Response(
+                200,
+                json={
+                    "events": [{
+                        "event_ticker": "DEMO-EVENT",
+                        "category": "Finance",
+                        "title": "Long-horizon finance event",
+                    }],
+                    "cursor": "",
+                },
+            )
+        return httpx.Response(
+            200,
+            json={"orderbook_fp": {"yes_dollars": [["0.4000", "2.00"]], "no_dollars": []}},
+        )
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+    )
+
+    assert result["blocker_code"] is None
+    assert event_attempts == 3
+    assert result["diagnostics"]["retry_count"] == 2
+    assert result["diagnostics"]["http_status_counts"]["429"] == 2
+
+
+def test_market_discovery_marks_exhausted_batch_rate_limit_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("edmn_trader.scripts.v2_readonly_campaign.time.sleep", lambda _x: None)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(200, json={"markets": [_market_metadata()], "cursor": ""})
+        return httpx.Response(429, json={"code": "rate_limited"})
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+    )
+
+    assert result["blocker_code"] == "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR"
+    assert result["diagnostics"]["coverage_complete"] is False
+    assert result["diagnostics"]["http_status_counts"]["429"] == 3
+
+
+@pytest.mark.parametrize(("status", "expected_attempts"), ((503, 3), (400, 1), (401, 1), (403, 1)))
+def test_market_discovery_http_retry_policy_is_bounded(
+    status: int,
+    expected_attempts: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("edmn_trader.scripts.v2_readonly_campaign.time.sleep", lambda _x: None)
+    event_attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal event_attempts
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(200, json={"markets": [_market_metadata()], "cursor": ""})
+        event_attempts += 1
+        return httpx.Response(status, json={"code": "redacted_error"})
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+    )
+
+    assert result["blocker_code"] == "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR"
+    assert event_attempts == expected_attempts
+    assert result["diagnostics"]["http_status_counts"][str(status)] == expected_attempts
+
+
+def test_missing_batched_event_uses_candidate_local_single_fallback() -> None:
+    markets = [
+        _market_metadata(ticker="GOOD-MARKET", event_ticker="GOOD-EVENT"),
+        _market_metadata(ticker="MISSING-MARKET", event_ticker="MISSING-EVENT"),
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(200, json={"markets": markets, "cursor": ""})
+        if request.url.path.endswith("/events"):
+            return httpx.Response(
+                200,
+                json={
+                    "events": [{
+                        "event_ticker": "GOOD-EVENT",
+                        "category": "Finance",
+                        "title": "Long-horizon finance event",
+                    }],
+                    "cursor": "",
+                },
+            )
+        if request.url.path.endswith("/events/MISSING-EVENT"):
+            return httpx.Response(404, json={"code": "not_found"})
+        return httpx.Response(
+            200,
+            json={"orderbook_fp": {"yes_dollars": [["0.4000", "2.00"]], "no_dollars": []}},
+        )
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+    )
+
+    assert result["blocker_code"] is None
+    assert result["market_metadata"]["ticker"] == "GOOD-MARKET"
+    assert result["diagnostics"]["single_event_fallback_requests"] == 1
+    assert result["diagnostics"]["candidate_local_failure_count"] == 1
+
+
+def test_event_batch_schema_failure_marks_coverage_incomplete() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(200, json={"markets": [_market_metadata()], "cursor": ""})
+        return httpx.Response(200, json={"unexpected": []})
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+    )
+
+    assert result["blocker_code"] == "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR"
+    assert result["diagnostics"]["coverage_complete"] is False
+    assert result["diagnostics"]["parse_schema_failure_count"] == 1
+
+
 def test_market_discovery_fetches_event_metadata_for_seven_day_selection() -> None:
     requests: list[httpx.Request] = []
 
@@ -415,15 +645,16 @@ def test_market_discovery_fetches_event_metadata_for_seven_day_selection() -> No
                     "cursor": "",
                 },
             )
-        if request.url.path.endswith("/events/DEMO-EVENT"):
+        if request.url.path.endswith("/events"):
             return httpx.Response(
                 200,
                 json={
-                    "event": {
+                    "events": [{
                         "event_ticker": "DEMO-EVENT",
                         "category": "Finance",
                         "title": "Long-horizon event",
-                    }
+                    }],
+                    "cursor": "",
                 },
             )
         return httpx.Response(
@@ -441,7 +672,7 @@ def test_market_discovery_fetches_event_metadata_for_seven_day_selection() -> No
     assert result["blocker_code"] is None
     assert result["market_metadata"]["event_metadata_fetched"] is True
     assert result["market_metadata"]["event_category"] == "Finance"
-    assert any(request.url.path.endswith("/events/DEMO-EVENT") for request in requests)
+    assert any(request.url.path.endswith("/events") for request in requests)
 
 
 def test_market_discovery_fetches_complete_event_metadata_for_canary() -> None:
@@ -451,15 +682,16 @@ def test_market_discovery_fetches_complete_event_metadata_for_canary() -> None:
                 200,
                 json={"markets": [_market_metadata()], "cursor": ""},
             )
-        if request.url.path.endswith("/events/DEMO-EVENT"):
+        if request.url.path.endswith("/events"):
             return httpx.Response(
                 200,
                 json={
-                    "event": {
+                    "events": [{
                         "event_ticker": "DEMO-EVENT",
                         "category": "Finance",
                         "title": "Long-horizon event",
-                    }
+                    }],
+                    "cursor": "",
                 },
             )
         return httpx.Response(
@@ -483,8 +715,14 @@ def test_canary_discovery_never_marks_incomplete_event_fetch_successful() -> Non
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/markets"):
             return httpx.Response(200, json={"markets": [_market_metadata()], "cursor": ""})
-        if request.url.path.endswith("/events/DEMO-EVENT"):
-            return httpx.Response(200, json={"event": {"category": "Finance"}})
+        if request.url.path.endswith("/events"):
+            return httpx.Response(
+                200,
+                json={
+                    "events": [{"event_ticker": "DEMO-EVENT", "category": "Finance"}],
+                    "cursor": "",
+                },
+            )
         return httpx.Response(500)
 
     result = discover_kalshi_demo_ws_market(
@@ -495,7 +733,7 @@ def test_canary_discovery_never_marks_incomplete_event_fetch_successful() -> Non
     )
 
     assert result["blocker_code"] == "DEMO_NO_ELIGIBLE_MARKET"
-    assert result["rejection_counts"] == {"EVENT_METADATA_FETCH_FAILED": 1}
+    assert result["rejection_counts"] == {"EVENT_METADATA_INCOMPLETE": 1}
 
 
 def test_market_discovery_rejects_incomplete_event_metadata() -> None:
@@ -505,8 +743,11 @@ def test_market_discovery_rejects_incomplete_event_metadata() -> None:
                 200,
                 json={"markets": [_market_metadata()], "cursor": ""},
             )
-        if request.url.path.endswith("/events/DEMO-EVENT"):
-            return httpx.Response(200, json={"event": {"event_ticker": "DEMO-EVENT"}})
+        if request.url.path.endswith("/events"):
+            return httpx.Response(
+                200,
+                json={"events": [{"event_ticker": "DEMO-EVENT"}], "cursor": ""},
+            )
         return httpx.Response(500)
 
     result = discover_kalshi_demo_ws_market(
@@ -517,7 +758,7 @@ def test_market_discovery_rejects_incomplete_event_metadata() -> None:
     )
 
     assert result["blocker_code"] == "DEMO_NO_ELIGIBLE_MARKET"
-    assert result["rejection_counts"] == {"EVENT_METADATA_MISSING": 1}
+    assert result["rejection_counts"] == {"EVENT_METADATA_INCOMPLETE": 1}
 
 
 def test_market_discovery_rejects_finalized_and_empty_results_explicitly() -> None:
@@ -549,8 +790,14 @@ def test_market_discovery_rejects_finalized_and_empty_results_explicitly() -> No
 @pytest.mark.parametrize(
     ("response", "blocker_code"),
     (
-        (httpx.Response(503, json={"code": "unavailable"}), "DEMO_MARKET_DISCOVERY_HTTP_ERROR"),
-        (httpx.Response(200, content=b"not-json"), "DEMO_MARKET_DISCOVERY_PARSE_ERROR"),
+        (
+            httpx.Response(503, json={"code": "unavailable"}),
+            "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR",
+        ),
+        (
+            httpx.Response(200, content=b"not-json"),
+            "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR",
+        ),
     ),
 )
 def test_market_discovery_does_not_collapse_http_or_parse_errors(

@@ -89,6 +89,35 @@ def test_get_event_uses_read_only_event_endpoint() -> None:
     assert "authorization" not in requests[0].headers
 
 
+def test_list_events_batches_tickers_on_read_only_endpoint() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "events": [
+                    {"event_ticker": "DEMO-A"},
+                    {"event_ticker": "DEMO-B"},
+                ],
+                "cursor": "",
+            },
+        )
+
+    client = KalshiDemoMarketDataClient(
+        http_client=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    response = client.list_events(tickers=("DEMO-A", "DEMO-B"))
+
+    assert len(response["events"]) == 2
+    assert len(requests) == 1
+    assert requests[0].method == "GET"
+    assert requests[0].url.path == "/trade-api/v2/events"
+    assert requests[0].url.params["tickers"] == "DEMO-A,DEMO-B"
+    assert "authorization" not in requests[0].headers
+
+
 def test_get_market_orderbook_uses_read_only_orderbook_endpoint() -> None:
     requests: list[httpx.Request] = []
     payload = _load_fixture("kalshi_orderbook_response.json")

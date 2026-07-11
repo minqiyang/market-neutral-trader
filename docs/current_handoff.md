@@ -1,5 +1,14 @@
 # Current Handoff
 
+## Round 8J-B discovery reliability
+
+Demo discovery now performs bounded market pagination before deduplicated,
+batched core-event hydration. It caches events per run, uses single-event
+fallback only for missing batch members, bounds retryable failures, and marks
+incomplete coverage explicitly. Core event completeness is category plus title;
+the official event schema does not require `event_type`. The canary lifecycle
+rules themselves remain unchanged.
+
 ## Round 8J-A canary profile
 
 The public lifecycle selector now distinguishes `smoke`, `canary`, and

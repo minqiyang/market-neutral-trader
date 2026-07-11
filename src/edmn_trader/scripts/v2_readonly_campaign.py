@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import sys
 import time
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
+
+import httpx
 
 from edmn_trader.adapters.kalshi import (
     KalshiClientError,
@@ -42,7 +46,9 @@ DEFAULT_SELECTION_SAFETY_BUFFER_SECONDS = 86_400
 SMOKE_SELECTION_SAFETY_BUFFER_SECONDS = 900
 CANARY_SELECTION_SAFETY_BUFFER_SECONDS = 3_600
 MARKET_DISCOVERY_PAGE_LIMIT = 1_000
-MAX_MARKET_DISCOVERY_PAGES = 5
+MAX_MARKET_DISCOVERY_PAGES = 10
+EVENT_DISCOVERY_BATCH_SIZE = 50
+DISCOVERY_MAX_ATTEMPTS = 3
 OPEN_MARKET_STATUSES = {"open", "trading"}
 MARKET_STATUS_REJECTION_REASONS = {
     "initialized": "MARKET_STATUS_UNOPENED",
@@ -1339,16 +1345,29 @@ def discover_kalshi_demo_ws_market(
     max_pages: int = MAX_MARKET_DISCOVERY_PAGES,
     selection_profile: SelectionProfile | str | None = None,
 ) -> dict[str, object]:
-    """Find one lifecycle-eligible Demo market without hiding discovery failures."""
+    """Find one lifecycle-eligible Demo market with bounded complete discovery."""
 
     active_client = client or KalshiDemoMarketDataClient()
     owns_client = client is None
     cursor: str | None = None
+    pages_attempted = 0
     pages_fetched = 0
-    markets_seen = 0
     rejection_counts: Counter[str] = Counter()
-    orderbook_http_error = False
-    orderbook_parse_error = False
+    diagnostics: dict[str, Any] = {
+        "coverage_complete": False,
+        "event_batch_requests": 0,
+        "single_event_fallback_requests": 0,
+        "orderbook_requests": 0,
+        "retry_count": 0,
+        "rate_limit_count": 0,
+        "server_error_count": 0,
+        "http_status_counts": {},
+        "timeout_count": 0,
+        "connection_error_count": 0,
+        "parse_schema_failure_count": 0,
+        "candidate_local_failure_count": 0,
+    }
+    normalized_markets: list[dict[str, object]] = []
     profile = (
         SelectionProfile(selection_profile)
         if selection_profile is not None
@@ -1357,151 +1376,225 @@ def discover_kalshi_demo_ws_market(
     require_event_metadata = profile is not SelectionProfile.SMOKE
     try:
         for _ in range(max_pages):
-            try:
-                payload = active_client.list_markets(
+            pages_attempted += 1
+            payload, error = _discovery_request(
+                lambda cursor=cursor: active_client.list_markets(
                     limit=MARKET_DISCOVERY_PAGE_LIMIT,
                     cursor=cursor,
                     status="open",
-                )
-            except KalshiHTTPError:
+                ),
+                diagnostics,
+            )
+            if error or not isinstance(payload, Mapping):
                 return _market_discovery_blocker(
-                    "DEMO_MARKET_DISCOVERY_HTTP_ERROR",
+                    "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR",
                     pages_fetched=pages_fetched,
-                    markets_seen=markets_seen,
+                    markets_seen=len(normalized_markets),
                     rejection_counts=rejection_counts,
+                    cursor_remaining=bool(cursor),
+                    diagnostics={**diagnostics, "pages_attempted": pages_attempted},
                 )
-            except KalshiResponseError:
-                return _market_discovery_blocker(
-                    "DEMO_MARKET_DISCOVERY_PARSE_ERROR",
-                    pages_fetched=pages_fetched,
-                    markets_seen=markets_seen,
-                    rejection_counts=rejection_counts,
-                )
-            except KalshiClientError:
-                return _market_discovery_blocker(
-                    "DEMO_MARKET_DISCOVERY_HTTP_ERROR",
-                    pages_fetched=pages_fetched,
-                    markets_seen=markets_seen,
-                    rejection_counts=rejection_counts,
-                )
-
             pages_fetched += 1
             raw_markets = payload.get("markets", [])
-            normalized_markets = [
+            normalized_markets.extend(
                 normalize_kalshi_market_metadata(item)
                 for item in raw_markets
                 if isinstance(item, Mapping)
-            ]
-            markets_seen += len(normalized_markets)
-            normalized_markets.sort(key=lambda item: not _has_current_quote_indicator(item))
-            for market_metadata in normalized_markets:
-                candidate_metadata = market_metadata
-                selection = evaluate_market_selection(
-                    candidate_metadata,
-                    selected_at_utc=selected_at_utc,
-                    duration_seconds=duration_seconds,
-                    safety_buffer_seconds=safety_buffer_seconds,
-                    selection_reason="kalshi_demo_paginated_market_discovery",
-                    require_non_empty_orderbook=False,
-                    selection_profile=SelectionProfile.SMOKE,
-                )
-                rejection = selection.get("selection_gate_rejection_reason")
-                if rejection:
-                    rejection_counts[str(rejection)] += 1
-                    continue
-                if require_event_metadata:
-                    try:
-                        candidate_metadata = _with_event_metadata(
-                            active_client, candidate_metadata
-                        )
-                    except (KalshiClientError, KalshiResponseError):
-                        rejection_counts[
-                            "EVENT_METADATA_FETCH_FAILED"
-                            if profile is SelectionProfile.CANARY
-                            else "EVENT_METADATA_MISSING"
-                        ] += 1
-                        continue
-                    selection = evaluate_market_selection(
-                        candidate_metadata,
-                        selected_at_utc=selected_at_utc,
-                        duration_seconds=duration_seconds,
-                        safety_buffer_seconds=safety_buffer_seconds,
-                        selection_reason="kalshi_demo_paginated_market_discovery",
-                        require_non_empty_orderbook=False,
-                        require_event_metadata=True,
-                        selection_profile=profile,
-                    )
-                    rejection = selection.get("selection_gate_rejection_reason")
-                    if rejection:
-                        rejection_counts[str(rejection)] += 1
-                        continue
-                ticker = candidate_metadata.get("ticker") or candidate_metadata.get(
-                    "market_ticker"
-                )
-                if not isinstance(ticker, str) or not ticker:
-                    rejection_counts["MISSING_MARKET_METADATA"] += 1
-                    continue
-                try:
-                    orderbook = active_client.get_market_orderbook(ticker)
-                except KalshiEmptyOrderBookError:
-                    rejection_counts["EMPTY_ORDERBOOK"] += 1
-                    continue
-                except KalshiHTTPError:
-                    rejection_counts["ORDERBOOK_HTTP_ERROR"] += 1
-                    orderbook_http_error = True
-                    continue
-                except KalshiResponseError:
-                    rejection_counts["ORDERBOOK_PARSE_ERROR"] += 1
-                    orderbook_parse_error = True
-                    continue
-                except KalshiClientError:
-                    rejection_counts["ORDERBOOK_HTTP_ERROR"] += 1
-                    orderbook_http_error = True
-                    continue
-                book = orderbook["orderbook_fp"]
-                level_count = len(book["yes_dollars"]) + len(book["no_dollars"])
-                selected_metadata = {**candidate_metadata, "orderbook_level_count": level_count}
-                selected = evaluate_market_selection(
-                    selected_metadata,
-                    selected_at_utc=selected_at_utc,
-                    duration_seconds=duration_seconds,
-                    safety_buffer_seconds=safety_buffer_seconds,
-                    selection_reason="kalshi_demo_paginated_market_discovery",
-                    require_event_metadata=require_event_metadata,
-                    selection_profile=profile,
-                )
-                return {
-                    "market_metadata": selected_metadata,
-                    "selection": selected,
-                    "blocker_code": None,
-                    "pages_fetched": pages_fetched,
-                    "markets_seen": markets_seen,
-                    "rejection_counts": dict(sorted(rejection_counts.items())),
-                    "cursor_remaining": bool(payload.get("cursor")),
-                }
+            )
 
             next_cursor = payload.get("cursor")
             cursor = next_cursor if isinstance(next_cursor, str) and next_cursor else None
             if cursor is None:
                 break
+
+        candidates: list[dict[str, object]] = []
+        for market_metadata in normalized_markets:
+            basic = evaluate_market_selection(
+                market_metadata,
+                selected_at_utc=selected_at_utc,
+                duration_seconds=duration_seconds,
+                safety_buffer_seconds=safety_buffer_seconds,
+                selection_reason="kalshi_demo_paginated_market_discovery",
+                require_non_empty_orderbook=False,
+                selection_profile=SelectionProfile.SMOKE,
+            )
+            rejection = basic.get("selection_gate_rejection_reason")
+            if rejection:
+                rejection_counts[str(rejection)] += 1
+            else:
+                candidates.append(market_metadata)
+
+        event_cache: dict[str, Mapping[str, object]] = {}
+        if require_event_metadata:
+            event_tickers = sorted(
+                {
+                    str(candidate.get("event_ticker"))
+                    for candidate in candidates
+                    if candidate.get("event_ticker")
+                }
+            )
+            diagnostics["unique_event_tickers"] = len(event_tickers)
+            for start in range(0, len(event_tickers), EVENT_DISCOVERY_BATCH_SIZE):
+                chunk = tuple(event_tickers[start : start + EVENT_DISCOVERY_BATCH_SIZE])
+                diagnostics["event_batch_requests"] += 1
+                payload, error = _discovery_request(
+                    lambda chunk=chunk: active_client.list_events(tickers=chunk),
+                    diagnostics,
+                )
+                if error or not isinstance(payload, Mapping):
+                    return _market_discovery_blocker(
+                        "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR",
+                        pages_fetched=pages_fetched,
+                        markets_seen=len(normalized_markets),
+                        rejection_counts=rejection_counts,
+                        cursor_remaining=bool(cursor),
+                        diagnostics={**diagnostics, "pages_attempted": pages_attempted},
+                    )
+                for event in payload.get("events", []):
+                    if isinstance(event, Mapping) and event.get("event_ticker"):
+                        event_cache[str(event["event_ticker"])] = event
+
+            missing = [ticker for ticker in event_tickers if ticker not in event_cache]
+            for ticker in missing:
+                diagnostics["single_event_fallback_requests"] += 1
+                event, error = _discovery_request(
+                    lambda ticker=ticker: active_client.get_event(ticker), diagnostics
+                )
+                if error == "HTTP_404":
+                    diagnostics["candidate_local_failure_count"] += 1
+                    continue
+                if error or not isinstance(event, Mapping):
+                    return _market_discovery_blocker(
+                        "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR",
+                        pages_fetched=pages_fetched,
+                        markets_seen=len(normalized_markets),
+                        rejection_counts=rejection_counts,
+                        cursor_remaining=bool(cursor),
+                        diagnostics={**diagnostics, "pages_attempted": pages_attempted},
+                    )
+                event_cache[ticker] = event
+
+        lifecycle_candidates: list[tuple[dict[str, object], dict[str, object]]] = []
+        for market_metadata in candidates:
+            candidate_metadata = market_metadata
+            if require_event_metadata:
+                event_ticker = str(market_metadata.get("event_ticker") or "")
+                event = event_cache.get(event_ticker)
+                if event is None:
+                    rejection_counts["EVENT_METADATA_FETCH_FAILED"] += 1
+                    continue
+                try:
+                    candidate_metadata = _merge_event_metadata(market_metadata, event)
+                except KalshiResponseError:
+                    rejection_counts["EVENT_METADATA_INCOMPLETE"] += 1
+                    continue
+            selection = evaluate_market_selection(
+                candidate_metadata,
+                selected_at_utc=selected_at_utc,
+                duration_seconds=duration_seconds,
+                safety_buffer_seconds=safety_buffer_seconds,
+                selection_reason="kalshi_demo_paginated_market_discovery",
+                require_non_empty_orderbook=False,
+                require_event_metadata=require_event_metadata,
+                selection_profile=profile,
+            )
+            rejection = selection.get("selection_gate_rejection_reason")
+            if rejection:
+                rejection_counts[str(rejection)] += 1
+            else:
+                lifecycle_candidates.append((candidate_metadata, selection))
+
+        lifecycle_candidates.sort(
+            key=lambda item: (
+                _as_bool(item[0].get("can_close_early")),
+                -int(item[1].get("time_to_lifecycle_deadline_at_launch_seconds") or 0),
+                not _has_current_quote_indicator(item[0]),
+            )
+        )
+        diagnostics.update(
+            {
+                "normalized_open_count": sum(
+                    market.get("status") in OPEN_MARKET_STATUSES
+                    for market in normalized_markets
+                ),
+                "metadata_complete_count": len(lifecycle_candidates),
+                "non_sports_count": sum(
+                    not _is_sports_market(candidate)
+                    for candidate, _selection in lifecycle_candidates
+                ),
+            }
+        )
+        for candidate_metadata, _selection in lifecycle_candidates:
+            ticker = candidate_metadata.get("ticker") or candidate_metadata.get("market_ticker")
+            if not isinstance(ticker, str) or not ticker:
+                rejection_counts["MISSING_MARKET_METADATA"] += 1
+                continue
+            diagnostics["orderbook_requests"] += 1
+            orderbook, error = _discovery_request(
+                lambda ticker=ticker: active_client.get_market_orderbook(ticker), diagnostics
+            )
+            if error in {"EMPTY_ORDERBOOK", "HTTP_404", "RESPONSE_SCHEMA_ERROR"}:
+                rejection_counts[error] += 1
+                diagnostics["candidate_local_failure_count"] += 1
+                continue
+            if error or not isinstance(orderbook, Mapping):
+                return _market_discovery_blocker(
+                    "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR",
+                    pages_fetched=pages_fetched,
+                    markets_seen=len(normalized_markets),
+                    rejection_counts=rejection_counts,
+                    cursor_remaining=bool(cursor),
+                    diagnostics={**diagnostics, "pages_attempted": pages_attempted},
+                )
+            book = orderbook["orderbook_fp"]
+            level_count = len(book["yes_dollars"]) + len(book["no_dollars"])
+            selected_metadata = {**candidate_metadata, "orderbook_level_count": level_count}
+            selected = evaluate_market_selection(
+                selected_metadata,
+                selected_at_utc=selected_at_utc,
+                duration_seconds=duration_seconds,
+                safety_buffer_seconds=safety_buffer_seconds,
+                selection_reason="kalshi_demo_paginated_market_discovery",
+                require_event_metadata=require_event_metadata,
+                selection_profile=profile,
+            )
+            diagnostics.update(
+                {
+                    "coverage_complete": True,
+                    "pages_attempted": pages_attempted,
+                    "unique_event_tickers": diagnostics.get("unique_event_tickers", 0),
+                    "eligible_count": 1,
+                }
+            )
+            return {
+                "market_metadata": selected_metadata,
+                "selection": selected,
+                "blocker_code": None,
+                "pages_fetched": pages_fetched,
+                "markets_seen": len(normalized_markets),
+                "rejection_counts": dict(sorted(rejection_counts.items())),
+                "cursor_remaining": bool(cursor),
+                "diagnostics": diagnostics,
+            }
     finally:
         if owns_client:
             active_client.close()
 
-    if markets_seen == 0:
-        blocker_code = "DEMO_NO_OPEN_MARKETS"
-    elif orderbook_http_error:
-        blocker_code = "DEMO_MARKET_DISCOVERY_HTTP_ERROR"
-    elif orderbook_parse_error:
-        blocker_code = "DEMO_MARKET_DISCOVERY_PARSE_ERROR"
-    else:
-        blocker_code = "DEMO_NO_ELIGIBLE_MARKET"
+    diagnostics.update(
+        {
+            "coverage_complete": True,
+            "pages_attempted": pages_attempted,
+            "eligible_count": 0,
+        }
+    )
+    blocker_code = "DEMO_NO_OPEN_MARKETS" if not normalized_markets else "DEMO_NO_ELIGIBLE_MARKET"
     return _market_discovery_blocker(
         blocker_code,
         pages_fetched=pages_fetched,
-        markets_seen=markets_seen,
+        markets_seen=len(normalized_markets),
         rejection_counts=rejection_counts,
         cursor_remaining=cursor is not None,
+        diagnostics=diagnostics,
     )
 
 
@@ -1512,17 +1605,21 @@ def _with_event_metadata(
     event_ticker = market_metadata.get("event_ticker")
     if not isinstance(event_ticker, str) or not event_ticker:
         raise KalshiResponseError("selected market has no event_ticker")
-    event = client.get_event(event_ticker)
-    event_type = event.get("event_type") or market_metadata.get("market_type")
-    if not event.get("category") or not event.get("title") or not event_type:
-        raise KalshiResponseError("event metadata missing category, title, or type")
+    return _merge_event_metadata(market_metadata, client.get_event(event_ticker))
+
+
+def _merge_event_metadata(
+    market_metadata: Mapping[str, object], event: Mapping[str, object]
+) -> dict[str, object]:
+    if not event.get("category") or not event.get("title"):
+        raise KalshiResponseError("event metadata missing category or title")
     return {
         **market_metadata,
         "event_metadata_fetched": True,
         "event_category": event.get("category"),
         "event_title": event.get("title"),
         "event_subtitle": event.get("sub_title") or event.get("subtitle"),
-        "event_type": event_type,
+        "event_type": event.get("event_type"),
         "series_ticker": event.get("series_ticker"),
     }
 
@@ -1534,6 +1631,7 @@ def _market_discovery_blocker(
     markets_seen: int,
     rejection_counts: Mapping[str, int],
     cursor_remaining: bool = False,
+    diagnostics: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     return {
         "market_metadata": None,
@@ -1543,7 +1641,56 @@ def _market_discovery_blocker(
         "markets_seen": markets_seen,
         "rejection_counts": dict(sorted(rejection_counts.items())),
         "cursor_remaining": cursor_remaining,
+        "diagnostics": dict(diagnostics or {}),
     }
+
+
+def _discovery_request(
+    operation: Callable[[], Any], diagnostics: dict[str, Any]
+) -> tuple[Any | None, str | None]:
+    for attempt in range(1, DISCOVERY_MAX_ATTEMPTS + 1):
+        try:
+            result = operation()
+            _increment_status(diagnostics, 200)
+            return result, None
+        except KalshiEmptyOrderBookError:
+            return None, "EMPTY_ORDERBOOK"
+        except KalshiHTTPError as exc:
+            _increment_status(diagnostics, exc.status_code)
+            code = f"HTTP_{exc.status_code}"
+            retryable = exc.status_code == 429 or exc.status_code >= 500
+            if retryable and attempt < DISCOVERY_MAX_ATTEMPTS:
+                diagnostics["retry_count"] += 1
+                time.sleep((0.1 * (2 ** (attempt - 1))) + random.uniform(0, 0.05))
+                continue
+            return None, code
+        except KalshiResponseError:
+            diagnostics["parse_schema_failure_count"] += 1
+            return None, "RESPONSE_SCHEMA_ERROR"
+        except KalshiClientError as exc:
+            cause = exc.__cause__
+            if isinstance(cause, httpx.TimeoutException):
+                diagnostics["timeout_count"] += 1
+                code = "TRANSPORT_TIMEOUT"
+            else:
+                diagnostics["connection_error_count"] += 1
+                code = "CONNECTION_ERROR"
+            if attempt < DISCOVERY_MAX_ATTEMPTS:
+                diagnostics["retry_count"] += 1
+                time.sleep(0.1 * (2 ** (attempt - 1)))
+                continue
+            return None, code
+    return None, "CONNECTION_ERROR"
+
+
+def _increment_status(diagnostics: dict[str, Any], status_code: int) -> None:
+    counts = diagnostics["http_status_counts"]
+    key = str(status_code)
+    counts[key] = counts.get(key, 0) + 1
+    if status_code == 429:
+        diagnostics["rate_limit_count"] += 1
+    if status_code >= 500:
+        diagnostics["server_error_count"] += 1
 
 
 def _has_current_quote_indicator(market_metadata: Mapping[str, object]) -> bool:
@@ -1784,19 +1931,12 @@ def _event_metadata_fetched(market_metadata: Mapping[str, object]) -> bool:
         market_metadata.get("event_metadata_fetched") is True
         and bool(_event_category(market_metadata))
         and bool(market_metadata.get("event_title"))
-        and bool(_event_type(market_metadata))
     )
 
 
 def _event_category(market_metadata: Mapping[str, object]) -> str:
     return str(
         market_metadata.get("event_category") or market_metadata.get("category") or ""
-    ).strip()
-
-
-def _event_type(market_metadata: Mapping[str, object]) -> str:
-    return str(
-        market_metadata.get("event_type") or market_metadata.get("market_type") or ""
     ).strip()
 
 
