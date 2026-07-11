@@ -1573,6 +1573,31 @@ def test_validator_rejects_unlisted_segment_artifact(tmp_path: Path) -> None:
     assert any("unlisted files" in item for item in validation["failures"])
 
 
+@pytest.mark.parametrize("metadata_name", ["campaign_manifest.json", "run_metadata.json"])
+def test_validator_rejects_fixed_metadata_symlink_escape(
+    tmp_path: Path,
+    metadata_name: str,
+) -> None:
+    session = _session(tmp_path, configured_duration_seconds=1)
+    session.close(
+        ended_at_utc=START + timedelta(seconds=1),
+        terminal_reason="bounded_duration_complete",
+        stop_requested=False,
+        connection_established=True,
+        subscription_acknowledged=True,
+        blocker_code=None,
+    )
+    outside = tmp_path.parent / f"{tmp_path.name}-metadata.json"
+    outside.write_text("{}\n", encoding="utf-8")
+    (tmp_path / metadata_name).unlink()
+    (tmp_path / metadata_name).symlink_to(outside)
+
+    validation = validate_d2_runtime_artifacts(tmp_path)
+
+    assert validation["status"] == "fail"
+    assert any(metadata_name in item for item in validation["failures"])
+
+
 @pytest.mark.parametrize("alias_kind", ["nested", "symlink", "directory_symlink"])
 def test_validator_rejects_nested_or_alias_segment_artifact(
     tmp_path: Path,
@@ -2130,6 +2155,29 @@ def test_running_monitor_does_not_pass_stale_keepalive_on_lifecycle_write(
     assert stalled_monitor["run_info"]["health"] == "BLOCKED"
 
 
+def test_running_monitor_rounds_fractional_staleness_up(tmp_path: Path) -> None:
+    session = _session(tmp_path, configured_duration_seconds=300)
+    session.record_event(
+        _tracker().record(
+            {"type": "heartbeat", "sid": 41, "seq": 1},
+            local_row_index=1,
+            received_at_utc=START + timedelta(seconds=60),
+            received_monotonic_ns=1,
+        )
+    )
+
+    monitor = build_monitor_snapshot(
+        tmp_path,
+        now=START + timedelta(seconds=180, microseconds=100_000),
+    )
+
+    assert monitor["campaign"]["freshness_dimensions"][
+        "transport_keepalive_age_seconds"
+    ] == 121
+    assert monitor["campaign"]["status"] == "D2_RUNTIME_EVIDENCE_FAILED"
+    assert monitor["run_info"]["health"] == "BLOCKED"
+
+
 def test_validator_rejects_segment_root_symlink(tmp_path: Path) -> None:
     session = _session(tmp_path, configured_duration_seconds=1)
     session.close(
@@ -2218,7 +2266,10 @@ def test_runtime_recovery_rejects_dangling_partial_successor_before_mutation(
     assert not (tmp_path / "runtime_recovery.json").exists()
 
 
-@pytest.mark.parametrize("missing_artifact", ["start", "recovery"])
+@pytest.mark.parametrize(
+    "missing_artifact",
+    ["start", "timestamp", "recovery", "recovery_symlink", "extra"],
+)
 def test_validator_requires_untampered_recovery_metadata(
     tmp_path: Path,
     missing_artifact: str,
@@ -2230,20 +2281,96 @@ def test_validator_requires_untampered_recovery_metadata(
         recovered_at_utc=START + timedelta(seconds=10),
     )
     assert recovery["validation_status"] == "pass"
-    if missing_artifact == "start":
+    if missing_artifact in {"start", "timestamp"}:
         summary = json.loads((tmp_path / "campaign_summary.json").read_text())
         recovered_segment = next(
             segment
             for segment in summary["segment_summaries"]
             if segment.get("recovery_status") == "CRASH_RECOVERED"
         )
-        (tmp_path / recovered_segment["next_segment_metadata_path"]).unlink()
+        start_path = tmp_path / recovered_segment["next_segment_metadata_path"]
+        if missing_artifact == "start":
+            start_path.unlink()
+        else:
+            start = json.loads(start_path.read_text())
+            start["created_at_utc"] = (START + timedelta(hours=1)).isoformat()
+            start_path.write_text(json.dumps(start) + "\n", encoding="utf-8")
+    elif missing_artifact == "recovery_symlink":
+        outside = tmp_path.parent / f"{tmp_path.name}-recovery.json"
+        outside.write_text("{}\n", encoding="utf-8")
+        recovery_path = tmp_path / "runtime_recovery.json"
+        recovery_path.unlink()
+        recovery_path.symlink_to(outside)
+    elif missing_artifact == "extra":
+        recovery_path = tmp_path / "runtime_recovery.json"
+        recovery_payload = json.loads(recovery_path.read_text())
+        recovery_payload["account_number"] = "must-not-persist"
+        recovery_path.write_text(json.dumps(recovery_payload) + "\n", encoding="utf-8")
     else:
         (tmp_path / "runtime_recovery.json").unlink()
 
     validation = validate_d2_runtime_artifacts(tmp_path)
     assert validation["status"] == "fail"
     assert any("runtime recovery metadata" in item for item in validation["failures"])
+
+
+def test_runtime_recovery_is_retry_safe_after_metadata_write_failure(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    session = _session(tmp_path, configured_duration_seconds=300)
+    session._writer._handle.close()
+    original_write = ws_runtime._atomic_write_json
+    failed = False
+
+    def fail_recovery_write(path: Path, payload: dict[str, object]) -> None:
+        nonlocal failed
+        if path.name == "runtime_recovery.json" and not failed:
+            failed = True
+            raise RuntimeError("synthetic recovery metadata crash")
+        original_write(path, payload)
+
+    monkeypatch.setattr(ws_runtime, "_atomic_write_json", fail_recovery_write)
+    with pytest.raises(RuntimeError, match="recovery metadata crash"):
+        recover_d2_runtime_artifacts(
+            tmp_path,
+            recovered_at_utc=START + timedelta(seconds=10),
+        )
+    monkeypatch.setattr(ws_runtime, "_atomic_write_json", original_write)
+
+    recovery = recover_d2_runtime_artifacts(
+        tmp_path,
+        recovered_at_utc=START + timedelta(seconds=20),
+    )
+
+    assert recovery["validation_status"] == "pass"
+
+
+def test_validator_rejects_unknown_runtime_record_type(tmp_path: Path) -> None:
+    session = _session(tmp_path, configured_duration_seconds=1)
+    session.close(
+        ended_at_utc=START + timedelta(seconds=1),
+        terminal_reason="bounded_duration_complete",
+        stop_requested=False,
+        connection_established=True,
+        subscription_acknowledged=True,
+        blocker_code=None,
+    )
+    summary = json.loads((tmp_path / "campaign_summary.json").read_text())
+    records = list(
+        ws_runtime._iter_runtime_records(
+            tmp_path / summary["segment_summaries"][0]["data_path"]
+        )
+    )
+    records.append(
+        {
+            "record_type": "future_extension",
+            "campaign_id": summary["campaign_id"],
+        }
+    )
+
+    with pytest.raises(ValueError, match="unsupported durable runtime record type"):
+        ws_runtime._derive_runtime_validation(summary, records)
 
 
 def test_runtime_recovers_immediate_zero_record_crash(tmp_path: Path) -> None:

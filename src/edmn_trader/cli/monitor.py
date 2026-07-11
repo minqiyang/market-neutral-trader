@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import time
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -1033,7 +1034,7 @@ def _staleness_seconds(value: object, generated_at: datetime) -> int | None:
         return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
-    return max(0, int((generated_at - parsed.astimezone(UTC)).total_seconds()))
+    return max(0, math.ceil((generated_at - parsed.astimezone(UTC)).total_seconds()))
 
 
 def _seconds_since(value: object, generated_at: datetime) -> int | None:
