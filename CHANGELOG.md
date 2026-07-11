@@ -6,6 +6,11 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added an explicit 30-minute read-only canary selection profile with a
+  one-hour safety buffer, complete event metadata, non-sports/match screening,
+  conservative early-close rejection, structured reasons, and manifest
+  provenance. Smoke and seven-day behavior remain separate; Demo-only and
+  disabled-live-gate boundaries are unchanged.
 - Added D2D orthogonal evidence classification, timestamp-derived duration,
   exact UTF-8 append chains, atomic fsynced checkpoints/summaries, closed-file
   hashing, byte/time rotation, partial-tail crash recovery, fresh-segment reset

@@ -20,8 +20,13 @@ future configuration allows that category. The manifest preserves the raw
 lifecycle fields, normalized status, event metadata, lifecycle deadline,
 required end, and structured rejection reason.
 
-Five-minute smoke and 30-minute canary profiles remain bounded duration
-profiles with their own safety buffer. They do not imply seven-day evidence.
+Selection is explicit across three profiles. Smoke uses a 900-second buffer.
+The 1,800-second canary uses a 3,600-second buffer, requires complete event
+metadata, rejects sports and match-like events, and rejects any
+`can_close_early=true` candidate. Seven-day selection uses at least an
+86,400-second buffer and retains the stricter long-horizon rules. The manifest
+records the selected profile and buffer. None of these profiles implies
+seven-day evidence before the corresponding bounded run completes.
 
 Validation reports separate `DATA_INTEGRITY_PASS` from
 `CAMPAIGN_EVIDENCE_INVALID_MARKET_LIFECYCLE`; clean JSONL/hash/artifact

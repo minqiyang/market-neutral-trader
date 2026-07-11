@@ -8,6 +8,15 @@ on correctness, staged delivery, risk boundaries, deterministic tests, and the
 ability to explain how a trading research platform is built from safe
 foundations.
 
+## Round 8J-A canary selection profile
+
+The bounded 30-minute canary now has an explicit profile rather than inheriting
+short-smoke selection. It requires complete event metadata, rejects sports and
+match-like events, uses a one-hour safety buffer, rejects early-close markets,
+and records its profile and conservative deadline in campaign evidence. The
+change reuses the existing selector, discovery, manifest, validator, and Demo
+WebSocket path without adding an execution path or a second framework.
+
 ## D2D evidence classification, durability, and performance
 
 D2D turns the D2A-D2C fixture contracts into an explicit software evidence

@@ -1,5 +1,13 @@
 # Current Handoff
 
+## Round 8J-A canary profile
+
+The public lifecycle selector now distinguishes `smoke`, `canary`, and
+`seven_day` profiles. A 1,800-second canary uses a 3,600-second safety buffer,
+requires complete event metadata, rejects sports/match-like and early-close
+markets, and persists profile provenance in the manifest. This remains Kalshi
+Demo read-only with the public live gate disabled and no order-write behavior.
+
 ## D2D classifier and durability notice
 
 As of 2026-07-10, Phase 0A has passed and `origin/main` remains the authoritative

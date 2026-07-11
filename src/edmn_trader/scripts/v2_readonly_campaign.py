@@ -10,6 +10,7 @@ from collections import Counter
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from enum import StrEnum
 from pathlib import Path
 
 from edmn_trader.adapters.kalshi import (
@@ -32,13 +33,14 @@ from edmn_trader.scripts.rebuild_orderbooks import run as run_rebuild_orderbooks
 
 MAX_SMOKE_SECONDS = 1_800
 EXTENDED_WS_SMOKE_SECONDS = 900
+CANARY_SECONDS = 1_800
 SEVEN_DAY_SECONDS = 604_800
 SCHEMA_VERSION = "v2.readonly_campaign.v1"
 SOURCE_TYPES = {"SYNTHETIC", "REST", "WEBSOCKET_SNAPSHOT", "WEBSOCKET_DELTA"}
 WEBSOCKET_SOURCE_TYPES = {"WEBSOCKET_SNAPSHOT", "WEBSOCKET_DELTA"}
 DEFAULT_SELECTION_SAFETY_BUFFER_SECONDS = 86_400
 SMOKE_SELECTION_SAFETY_BUFFER_SECONDS = 900
-LONG_HORIZON_MIN_SECONDS = SEVEN_DAY_SECONDS
+CANARY_SELECTION_SAFETY_BUFFER_SECONDS = 3_600
 MARKET_DISCOVERY_PAGE_LIMIT = 1_000
 MAX_MARKET_DISCOVERY_PAGES = 5
 OPEN_MARKET_STATUSES = {"open", "trading"}
@@ -95,26 +97,60 @@ SECRET_KEY_PARTS = (
 ALLOWED_SECRET_LIKE_KEYS = {"credential_presence"}
 
 
+class SelectionProfile(StrEnum):
+    SMOKE = "smoke"
+    CANARY = "canary"
+    SEVEN_DAY = "seven_day"
+
+
+def selection_profile_for_duration(duration_seconds: int) -> SelectionProfile:
+    if duration_seconds == CANARY_SECONDS:
+        return SelectionProfile.CANARY
+    if duration_seconds >= SEVEN_DAY_SECONDS:
+        return SelectionProfile.SEVEN_DAY
+    return SelectionProfile.SMOKE
+
+
+def selection_safety_buffer_seconds(profile: SelectionProfile) -> int:
+    if profile is SelectionProfile.CANARY:
+        return CANARY_SELECTION_SAFETY_BUFFER_SECONDS
+    if profile is SelectionProfile.SEVEN_DAY:
+        return DEFAULT_SELECTION_SAFETY_BUFFER_SECONDS
+    return SMOKE_SELECTION_SAFETY_BUFFER_SECONDS
+
+
 def evaluate_market_selection(
     market_metadata: Mapping[str, object] | None,
     *,
     selected_at_utc: datetime,
     duration_seconds: int,
-    safety_buffer_seconds: int = DEFAULT_SELECTION_SAFETY_BUFFER_SECONDS,
+    safety_buffer_seconds: int | None = None,
     selection_reason: str = "read_only_campaign_selection",
     require_non_empty_orderbook: bool = True,
     require_event_metadata: bool = False,
     allow_sports_long_horizon: bool = False,
+    selection_profile: SelectionProfile | str | None = None,
 ) -> dict[str, object]:
+    profile = (
+        SelectionProfile(selection_profile)
+        if selection_profile is not None
+        else selection_profile_for_duration(duration_seconds)
+    )
+    effective_safety_buffer = (
+        safety_buffer_seconds
+        if safety_buffer_seconds is not None
+        else selection_safety_buffer_seconds(profile)
+    )
     if market_metadata is None:
         return _market_lifecycle_record(
             {},
             selected_at_utc=selected_at_utc,
             duration_seconds=duration_seconds,
-            safety_buffer_seconds=safety_buffer_seconds,
+            safety_buffer_seconds=effective_safety_buffer,
             selection_reason=selection_reason,
             result="reject",
             reason="MISSING_MARKET_METADATA",
+            selection_profile=profile,
         )
 
     status = str(market_metadata.get("status") or "").strip().lower()
@@ -125,7 +161,7 @@ def evaluate_market_selection(
         reason = "MARKET_STATUS_UNKNOWN"
 
     campaign_required_end = selected_at_utc + timedelta(
-        seconds=duration_seconds + safety_buffer_seconds
+        seconds=duration_seconds + effective_safety_buffer
     )
     expected_expiration = _first_metadata_time(market_metadata, *EXPECTED_EXPIRATION_FIELDS)
     occurrence_time = _first_metadata_time(market_metadata, *OCCURRENCE_FIELDS)
@@ -133,23 +169,36 @@ def evaluate_market_selection(
     lifecycle_deadline = _earliest_metadata_time(
         market_metadata, *CONSERVATIVE_LIFECYCLE_TIME_FIELDS
     )
-    long_horizon = duration_seconds >= LONG_HORIZON_MIN_SECONDS
+    long_horizon = profile is SelectionProfile.SEVEN_DAY
+    event_metadata_required = require_event_metadata or profile is not SelectionProfile.SMOKE
 
-    if reason is None and require_event_metadata and not _event_metadata_fetched(market_metadata):
-        reason = "EVENT_METADATA_MISSING"
+    if reason is None and event_metadata_required and not _event_category(market_metadata):
+        reason = "EVENT_CATEGORY_MISSING"
+    if reason is None and event_metadata_required and not _event_metadata_fetched(market_metadata):
+        reason = (
+            "EVENT_METADATA_INCOMPLETE"
+            if profile is SelectionProfile.CANARY
+            else "EVENT_METADATA_MISSING"
+        )
+    if reason is None and profile is SelectionProfile.CANARY and _as_bool(
+        market_metadata.get("can_close_early")
+    ):
+        reason = "CAN_CLOSE_EARLY_UNSAFE_FOR_CANARY"
     if reason is None and _as_bool(market_metadata.get("can_close_early")):
         if expected_expiration is None and early_close_deadline is None:
             reason = "CAN_CLOSE_EARLY_UNSAFE_FOR_DURATION"
     if reason is None and expected_expiration is not None:
         if expected_expiration <= campaign_required_end:
             reason = "EXPECTED_EXPIRATION_TOO_SHORT"
-    if reason is None and long_horizon and occurrence_time is not None:
+    if reason is None and profile is not SelectionProfile.SMOKE and occurrence_time is not None:
         if occurrence_time <= campaign_required_end:
             reason = "EVENT_OCCURRENCE_TOO_EARLY"
     if reason is None and lifecycle_deadline is None:
         reason = "MISSING_CLOSE_TIME"
     if reason is None and lifecycle_deadline <= campaign_required_end:
-        if (
+        if profile is SelectionProfile.CANARY:
+            reason = "CANARY_LIFECYCLE_DEADLINE_TOO_SHORT"
+        elif (
             _parse_time(market_metadata.get("close_time")) == lifecycle_deadline
             and expected_expiration is None
             and occurrence_time is None
@@ -158,8 +207,16 @@ def evaluate_market_selection(
             reason = "TIME_TO_CLOSE_TOO_SHORT"
         else:
             reason = "CONSERVATIVE_LIFECYCLE_DEADLINE_TOO_SHORT"
-    if reason is None and long_horizon and _is_sports_market(market_metadata):
-        if not allow_sports_long_horizon:
+    if reason is None and profile is SelectionProfile.CANARY and _is_sports_market(
+        market_metadata
+    ):
+        reason = "SPORTS_UNSUITABLE_FOR_CANARY"
+    if reason is None and profile is SelectionProfile.CANARY and _is_match_event(
+        market_metadata
+    ):
+        reason = "MATCH_EVENT_UNSUITABLE_FOR_CANARY"
+    if reason is None and long_horizon and not allow_sports_long_horizon:
+        if _is_sports_market(market_metadata) or _is_match_event(market_metadata):
             reason = "SPORTS_MATCH_UNSUITABLE_FOR_LONG_CAMPAIGN"
 
     if reason is None and require_non_empty_orderbook and _is_empty_orderbook(market_metadata):
@@ -169,10 +226,11 @@ def evaluate_market_selection(
         market_metadata,
         selected_at_utc=selected_at_utc,
         duration_seconds=duration_seconds,
-        safety_buffer_seconds=safety_buffer_seconds,
+        safety_buffer_seconds=effective_safety_buffer,
         selection_reason=selection_reason,
         result="pass" if reason is None else "reject",
         reason=reason,
+        selection_profile=profile,
     )
 
 
@@ -484,10 +542,12 @@ def run_kalshi_ws_smoke(
             credential_presence={"access_id_present": False, "signing_material_present": False},
         )
 
+    profile = selection_profile_for_duration(duration_seconds)
     discovery = discover_kalshi_demo_ws_market(
         duration_seconds=duration_seconds,
-        safety_buffer_seconds=SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
+        safety_buffer_seconds=selection_safety_buffer_seconds(profile),
         selected_at_utc=generated_at,
+        selection_profile=profile,
     )
     market_metadata = discovery.get("market_metadata")
     if not isinstance(market_metadata, Mapping):
@@ -882,12 +942,14 @@ def plan_kalshi_ws_campaign(
     if max_markets < 1:
         raise ValueError("max_markets must be at least 1")
     generated_at = now or datetime.now(UTC)
+    profile = selection_profile_for_duration(duration_seconds)
     lifecycle = evaluate_market_selection(
         market_metadata,
         selected_at_utc=generated_at,
         duration_seconds=duration_seconds,
         selection_reason="kalshi_ws_campaign_requires_selected_market_metadata",
-        require_event_metadata=duration_seconds >= LONG_HORIZON_MIN_SECONDS,
+        require_event_metadata=profile is not SelectionProfile.SMOKE,
+        selection_profile=profile,
     )
     selected_market = str(lifecycle.get("market_ticker") or "OWNER_SELECTED")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -954,10 +1016,12 @@ def run_kalshi_ws_campaign(
             mode="read_only_websocket_campaign",
         )
 
+    profile = selection_profile_for_duration(duration_seconds)
     discovery = discover_kalshi_demo_ws_market(
         duration_seconds=duration_seconds,
-        safety_buffer_seconds=DEFAULT_SELECTION_SAFETY_BUFFER_SECONDS,
+        safety_buffer_seconds=selection_safety_buffer_seconds(profile),
         selected_at_utc=generated_at,
+        selection_profile=profile,
     )
     market_metadata = discovery.get("market_metadata")
     if not isinstance(market_metadata, Mapping):
@@ -1141,6 +1205,7 @@ def _write_campaign_manifest(
         "event_category": summary.get("event_category"),
         "event_title": summary.get("event_title"),
         "event_subtitle": summary.get("event_subtitle"),
+        "event_type": summary.get("event_type"),
         "event_metadata_fetched": summary.get("event_metadata_fetched"),
         "category": summary.get("category"),
         "market_type": summary.get("market_type"),
@@ -1168,6 +1233,7 @@ def _write_campaign_manifest(
             "time_to_lifecycle_deadline_at_launch_seconds"
         ),
         "lifecycle_deadline": summary.get("lifecycle_deadline"),
+        "selection_profile": summary.get("selection_profile"),
         "selection_safety_buffer_seconds": summary.get("selection_safety_buffer_seconds"),
         "selection_reason": summary.get("selection_reason"),
         "selection_gate_result": summary.get("selection_gate_result"),
@@ -1271,6 +1337,7 @@ def discover_kalshi_demo_ws_market(
     selected_at_utc: datetime,
     client: KalshiDemoMarketDataClient | None = None,
     max_pages: int = MAX_MARKET_DISCOVERY_PAGES,
+    selection_profile: SelectionProfile | str | None = None,
 ) -> dict[str, object]:
     """Find one lifecycle-eligible Demo market without hiding discovery failures."""
 
@@ -1282,7 +1349,12 @@ def discover_kalshi_demo_ws_market(
     rejection_counts: Counter[str] = Counter()
     orderbook_http_error = False
     orderbook_parse_error = False
-    long_horizon = duration_seconds >= LONG_HORIZON_MIN_SECONDS
+    profile = (
+        SelectionProfile(selection_profile)
+        if selection_profile is not None
+        else selection_profile_for_duration(duration_seconds)
+    )
+    require_event_metadata = profile is not SelectionProfile.SMOKE
     try:
         for _ in range(max_pages):
             try:
@@ -1331,18 +1403,23 @@ def discover_kalshi_demo_ws_market(
                     safety_buffer_seconds=safety_buffer_seconds,
                     selection_reason="kalshi_demo_paginated_market_discovery",
                     require_non_empty_orderbook=False,
+                    selection_profile=SelectionProfile.SMOKE,
                 )
                 rejection = selection.get("selection_gate_rejection_reason")
                 if rejection:
                     rejection_counts[str(rejection)] += 1
                     continue
-                if long_horizon:
+                if require_event_metadata:
                     try:
                         candidate_metadata = _with_event_metadata(
                             active_client, candidate_metadata
                         )
                     except (KalshiClientError, KalshiResponseError):
-                        rejection_counts["EVENT_METADATA_MISSING"] += 1
+                        rejection_counts[
+                            "EVENT_METADATA_FETCH_FAILED"
+                            if profile is SelectionProfile.CANARY
+                            else "EVENT_METADATA_MISSING"
+                        ] += 1
                         continue
                     selection = evaluate_market_selection(
                         candidate_metadata,
@@ -1352,6 +1429,7 @@ def discover_kalshi_demo_ws_market(
                         selection_reason="kalshi_demo_paginated_market_discovery",
                         require_non_empty_orderbook=False,
                         require_event_metadata=True,
+                        selection_profile=profile,
                     )
                     rejection = selection.get("selection_gate_rejection_reason")
                     if rejection:
@@ -1389,7 +1467,8 @@ def discover_kalshi_demo_ws_market(
                     duration_seconds=duration_seconds,
                     safety_buffer_seconds=safety_buffer_seconds,
                     selection_reason="kalshi_demo_paginated_market_discovery",
-                    require_event_metadata=long_horizon,
+                    require_event_metadata=require_event_metadata,
+                    selection_profile=profile,
                 )
                 return {
                     "market_metadata": selected_metadata,
@@ -1434,15 +1513,16 @@ def _with_event_metadata(
     if not isinstance(event_ticker, str) or not event_ticker:
         raise KalshiResponseError("selected market has no event_ticker")
     event = client.get_event(event_ticker)
-    if not event.get("category") or not event.get("title"):
-        raise KalshiResponseError("event metadata missing category or title")
+    event_type = event.get("event_type") or market_metadata.get("market_type")
+    if not event.get("category") or not event.get("title") or not event_type:
+        raise KalshiResponseError("event metadata missing category, title, or type")
     return {
         **market_metadata,
         "event_metadata_fetched": True,
         "event_category": event.get("category"),
         "event_title": event.get("title"),
         "event_subtitle": event.get("sub_title") or event.get("subtitle"),
-        "event_type": event.get("event_type"),
+        "event_type": event_type,
         "series_ticker": event.get("series_ticker"),
     }
 
@@ -1543,6 +1623,7 @@ def _default_lifecycle_record(
     selected_at_utc: datetime,
     duration_seconds: int,
 ) -> dict[str, object]:
+    profile = selection_profile_for_duration(duration_seconds)
     return {
         "market_ticker": market,
         "event_ticker": None,
@@ -1554,6 +1635,7 @@ def _default_lifecycle_record(
         "event_category": None,
         "event_title": None,
         "event_subtitle": None,
+        "event_type": None,
         "event_metadata_fetched": False,
         "category": None,
         "market_type": None,
@@ -1581,7 +1663,8 @@ def _default_lifecycle_record(
         "time_to_close_at_launch_seconds": None,
         "time_to_lifecycle_deadline_at_launch_seconds": None,
         "lifecycle_deadline": None,
-        "selection_safety_buffer_seconds": DEFAULT_SELECTION_SAFETY_BUFFER_SECONDS,
+        "selection_profile": profile.value,
+        "selection_safety_buffer_seconds": selection_safety_buffer_seconds(profile),
         "selection_reason": "bounded_smoke",
         "selection_gate_result": "not_required",
         "selection_gate_rejection_reason": None,
@@ -1598,6 +1681,7 @@ def _market_lifecycle_record(
     selection_reason: str,
     result: str,
     reason: str | None,
+    selection_profile: SelectionProfile,
 ) -> dict[str, object]:
     close_time = _parse_time(market_metadata.get("close_time"))
     lifecycle_deadline = _earliest_metadata_time(
@@ -1624,6 +1708,7 @@ def _market_lifecycle_record(
         "event_category": market_metadata.get("event_category"),
         "event_title": market_metadata.get("event_title"),
         "event_subtitle": market_metadata.get("event_subtitle"),
+        "event_type": market_metadata.get("event_type"),
         "event_metadata_fetched": _event_metadata_fetched(market_metadata),
         "category": market_metadata.get("category"),
         "market_type": market_metadata.get("market_type"),
@@ -1659,6 +1744,7 @@ def _market_lifecycle_record(
         ),
         "lifecycle_deadline": _time_text(lifecycle_deadline),
         "selection_reason": selection_reason,
+        "selection_profile": selection_profile.value,
         "selection_gate_result": result,
         "selection_gate_rejection_reason": reason,
         "selection_safety_buffer_seconds": safety_buffer_seconds,
@@ -1694,12 +1780,24 @@ def _first_metadata_value(market_metadata: Mapping[str, object], *keys: str) -> 
 
 
 def _event_metadata_fetched(market_metadata: Mapping[str, object]) -> bool:
-    if market_metadata.get("event_metadata_fetched") is True:
-        return True
-    return any(
-        market_metadata.get(key) not in (None, "")
-        for key in ("event_category", "event_title", "event_subtitle")
+    return (
+        market_metadata.get("event_metadata_fetched") is True
+        and bool(_event_category(market_metadata))
+        and bool(market_metadata.get("event_title"))
+        and bool(_event_type(market_metadata))
     )
+
+
+def _event_category(market_metadata: Mapping[str, object]) -> str:
+    return str(
+        market_metadata.get("event_category") or market_metadata.get("category") or ""
+    ).strip()
+
+
+def _event_type(market_metadata: Mapping[str, object]) -> str:
+    return str(
+        market_metadata.get("event_type") or market_metadata.get("market_type") or ""
+    ).strip()
 
 
 def _as_bool(value: object) -> bool:
@@ -1713,15 +1811,19 @@ def _is_sports_market(market_metadata: Mapping[str, object]) -> bool:
         market_metadata.get("event_category"),
         market_metadata.get("category"),
     )
-    if any("sport" in str(category).strip().lower() for category in categories if category):
-        return True
-    title = " ".join(
+    return any("sport" in str(category).strip().lower() for category in categories if category)
+
+
+def _is_match_event(market_metadata: Mapping[str, object]) -> bool:
+    text = " ".join(
         str(market_metadata.get(key) or "")
-        for key in ("title", "event_title", "name")
+        for key in ("title", "event_title", "event_subtitle", "event_type", "market_type")
     ).lower()
-    return any(word in title.split() for word in ("match", "game")) and bool(
-        market_metadata.get("event_category")
-    )
+    words = {
+        "".join(character for character in word if character.isalnum())
+        for word in text.split()
+    }
+    return bool(words & {"game", "match", "race", "bout", "set", "tournamentmatch"})
 
 
 def _parse_time(value: object) -> datetime | None:

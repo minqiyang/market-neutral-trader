@@ -15,8 +15,11 @@ from edmn_trader.adapters.kalshi import (
 )
 from edmn_trader.cli.monitor import build_monitor_snapshot, render_snapshot
 from edmn_trader.scripts.v2_readonly_campaign import (
+    CANARY_SECONDS,
+    CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
     SEVEN_DAY_SECONDS,
     SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
+    SelectionProfile,
     discover_kalshi_demo_ws_market,
     evaluate_market_selection,
     plan_campaign,
@@ -24,6 +27,7 @@ from edmn_trader.scripts.v2_readonly_campaign import (
     run_kalshi_rest_smoke,
     run_kalshi_ws_smoke,
     run_smoke,
+    selection_profile_for_duration,
     validate_campaign,
 )
 
@@ -40,6 +44,10 @@ def _market_metadata(**overrides: object) -> dict[str, object]:
         "open_time": "2026-07-01T00:00:00Z",
         "close_time": "2026-07-20T00:00:00Z",
         "orderbook_level_count": 2,
+        "event_category": "Finance",
+        "event_title": "Long-horizon finance event",
+        "event_metadata_fetched": True,
+        "market_type": "binary",
     }
     payload.update(overrides)
     return payload
@@ -175,12 +183,103 @@ def test_thirty_minute_canary_uses_its_own_duration_gate() -> None:
     canary = evaluate_market_selection(
         metadata,
         selected_at_utc=NOW,
-        duration_seconds=1_800,
-        safety_buffer_seconds=SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
+        duration_seconds=CANARY_SECONDS,
     )
 
     assert smoke["selection_gate_result"] == "pass"
-    assert canary["selection_gate_rejection_reason"] == "TIME_TO_CLOSE_TOO_SHORT"
+    assert canary["selection_profile"] == "canary"
+    assert canary["selection_safety_buffer_seconds"] == 3_600
+    assert canary["selection_gate_rejection_reason"] == "CANARY_LIFECYCLE_DEADLINE_TOO_SHORT"
+
+
+def test_selection_profiles_are_explicit_and_distinct() -> None:
+    assert selection_profile_for_duration(300) is SelectionProfile.SMOKE
+    assert selection_profile_for_duration(CANARY_SECONDS) is SelectionProfile.CANARY
+    assert selection_profile_for_duration(SEVEN_DAY_SECONDS) is SelectionProfile.SEVEN_DAY
+
+
+def test_canary_requires_complete_event_metadata() -> None:
+    incomplete = _market_metadata(event_metadata_fetched=True, event_title=None)
+    missing_category = _market_metadata(event_category=None, category=None)
+    missing_type = _market_metadata(event_type=None, market_type=None)
+
+    assert evaluate_market_selection(
+        incomplete, selected_at_utc=NOW, duration_seconds=CANARY_SECONDS
+    )["selection_gate_rejection_reason"] == "EVENT_METADATA_INCOMPLETE"
+    assert evaluate_market_selection(
+        missing_category, selected_at_utc=NOW, duration_seconds=CANARY_SECONDS
+    )["selection_gate_rejection_reason"] == "EVENT_CATEGORY_MISSING"
+    assert evaluate_market_selection(
+        missing_type, selected_at_utc=NOW, duration_seconds=CANARY_SECONDS
+    )["selection_gate_rejection_reason"] == "EVENT_METADATA_INCOMPLETE"
+
+
+@pytest.mark.parametrize(
+    ("overrides", "reason"),
+    [
+        ({"event_category": "Sports"}, "SPORTS_UNSUITABLE_FOR_CANARY"),
+        ({"event_title": "Championship match"}, "MATCH_EVENT_UNSUITABLE_FOR_CANARY"),
+        ({"event_title": "Horse race winner"}, "MATCH_EVENT_UNSUITABLE_FOR_CANARY"),
+        ({"event_title": "Boxing bout result"}, "MATCH_EVENT_UNSUITABLE_FOR_CANARY"),
+        ({"event_title": "Final tournament-match"}, "MATCH_EVENT_UNSUITABLE_FOR_CANARY"),
+    ],
+)
+def test_canary_rejects_sports_and_match_events(
+    overrides: dict[str, object], reason: str
+) -> None:
+    result = evaluate_market_selection(
+        _market_metadata(**overrides),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert result["selection_gate_rejection_reason"] == reason
+
+
+def test_canary_uses_earliest_deadline_and_rejects_unsafe_early_close() -> None:
+    early_expected = evaluate_market_selection(
+        _market_metadata(
+            close_time="2026-07-04T00:00:00Z",
+            expected_expiration_time="2026-07-03T19:00:00Z",
+            latest_expiration_time="2026-08-01T00:00:00Z",
+        ),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+    unsafe_early_close = evaluate_market_selection(
+        _market_metadata(can_close_early=True),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert early_expected["lifecycle_deadline"] == "2026-07-03T19:00:00+00:00"
+    assert early_expected["selection_gate_rejection_reason"] == "EXPECTED_EXPIRATION_TOO_SHORT"
+    assert (
+        unsafe_early_close["selection_gate_rejection_reason"]
+        == "CAN_CLOSE_EARLY_UNSAFE_FOR_CANARY"
+    )
+
+
+def test_valid_canary_records_profile_and_required_horizon(tmp_path: Path) -> None:
+    plan_kalshi_ws_campaign(
+        output_dir=tmp_path,
+        campaign_id="canary-profile",
+        duration_seconds=CANARY_SECONDS,
+        max_markets=1,
+        now=NOW,
+        market_metadata=_market_metadata(
+            close_time="2026-07-04T00:00:00Z",
+            expected_expiration_time="2026-07-04T00:00:00Z",
+        ),
+    )
+    manifest = json.loads((tmp_path / "campaign_manifest.json").read_text())
+
+    assert manifest["selection_profile"] == "canary"
+    assert manifest["selection_safety_buffer_seconds"] == CANARY_SELECTION_SAFETY_BUFFER_SECONDS
+    assert manifest["campaign_required_end_utc"] == "2026-07-03T19:30:00+00:00"
+    assert manifest["event_metadata_fetched"] is True
+    assert manifest["event_category"] == "Finance"
+    assert manifest["selection_gate_rejection_reason"] is None
 
 
 def test_market_selection_rejects_missing_close_time_and_empty_orderbook() -> None:
@@ -343,6 +442,60 @@ def test_market_discovery_fetches_event_metadata_for_seven_day_selection() -> No
     assert result["market_metadata"]["event_metadata_fetched"] is True
     assert result["market_metadata"]["event_category"] == "Finance"
     assert any(request.url.path.endswith("/events/DEMO-EVENT") for request in requests)
+
+
+def test_market_discovery_fetches_complete_event_metadata_for_canary() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(
+                200,
+                json={"markets": [_market_metadata()], "cursor": ""},
+            )
+        if request.url.path.endswith("/events/DEMO-EVENT"):
+            return httpx.Response(
+                200,
+                json={
+                    "event": {
+                        "event_ticker": "DEMO-EVENT",
+                        "category": "Finance",
+                        "title": "Long-horizon event",
+                    }
+                },
+            )
+        return httpx.Response(
+            200,
+            json={"orderbook_fp": {"yes_dollars": [["0.4000", "2.00"]], "no_dollars": []}},
+        )
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+    )
+
+    assert result["blocker_code"] is None
+    assert result["selection"]["selection_profile"] == "canary"
+    assert result["selection"]["event_metadata_fetched"] is True
+
+
+def test_canary_discovery_never_marks_incomplete_event_fetch_successful() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(200, json={"markets": [_market_metadata()], "cursor": ""})
+        if request.url.path.endswith("/events/DEMO-EVENT"):
+            return httpx.Response(200, json={"event": {"category": "Finance"}})
+        return httpx.Response(500)
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+    )
+
+    assert result["blocker_code"] == "DEMO_NO_ELIGIBLE_MARKET"
+    assert result["rejection_counts"] == {"EVENT_METADATA_FETCH_FAILED": 1}
 
 
 def test_market_discovery_rejects_incomplete_event_metadata() -> None:
