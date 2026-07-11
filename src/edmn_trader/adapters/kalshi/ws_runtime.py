@@ -1275,7 +1275,7 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
             if set(segment_summary) != expected_summary_fields:
                 failures.append(f"segment summary field set mismatch: {segment_id}")
             for field, value in segment_summary.items():
-                if segment.get(field) != value:
+                if field not in segment or segment[field] != value:
                     failures.append(
                         f"segment summary field contradicts manifest: {segment_id}: {field}"
                     )
@@ -1394,13 +1394,54 @@ def _validate_d2_preflight_block(
         failures.append("preflight blocker_code is required")
     if not isinstance(summary.get("selected_market_selection"), Mapping):
         failures.append("preflight selection provenance is required")
+    canonical_dimensions = _preflight_dimensions().to_record()
+    for field, expected in {
+        "raw_event_schema_version": KALSHI_WS_RAW_SCHEMA_VERSION,
+        "evidence_schema_version": EVIDENCE_CHAIN_SCHEMA_VERSION,
+        "threshold_policy_version": V2_THRESHOLD_POLICY.version,
+        "threshold_policy": V2_THRESHOLD_POLICY.to_record(),
+        "status": "d2_runtime_preflight_blocked",
+        "actual_elapsed_seconds": "0",
+        "connected_elapsed_seconds": "0",
+        "terminal_reason": f"preflight_blocked:{summary.get('blocker_code')}",
+        "stop_requested": False,
+        "connection_windows": [],
+        "disconnect_durations": [],
+        "sequence_summaries": [],
+        "rebuild_summaries": [],
+        "independent_evidence_classifications": canonical_dimensions,
+        "overall_evidence_classification": "FAIL",
+        "source_type": "WEBSOCKET_NO_ORDERBOOK",
+        "connection_established": False,
+        "subscription_acknowledged": False,
+        "validation_status": "blocked",
+        "evidence_classification": summary.get("blocker_code"),
+    }.items():
+        if summary.get(field) != expected:
+            failures.append(f"invalid canonical preflight field: {field}")
+    if summary.get("threshold_source_commit") != summary.get("public_code_commit"):
+        failures.append("preflight threshold provenance contradicts public code")
+    configured_duration = summary.get("configured_duration_seconds")
+    if not (
+        configured_duration == summary.get("duration_seconds")
+        and isinstance(configured_duration, int)
+        and configured_duration > 0
+    ):
+        failures.append("preflight configured duration is invalid")
+    if not (
+        summary.get("started_at")
+        == summary.get("started_at_utc")
+        == summary.get("ended_at")
+        == summary.get("ended_at_utc")
+    ):
+        failures.append("preflight timing boundaries contradict")
     expected_validation = {
         "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
         "schema_version": D2_RUNTIME_SCHEMA_VERSION,
         "status": "blocked",
         "campaign_id": summary.get("campaign_id"),
         "blocker_code": summary.get("blocker_code"),
-        **_preflight_dimensions().to_record(),
+        **canonical_dimensions,
         "overall_evidence_classification": "FAIL",
         "source_type": "WEBSOCKET_NO_ORDERBOOK",
         "event_count": 0,
@@ -1577,6 +1618,8 @@ def _derive_runtime_validation(
         if key.startswith(("native:", "admitted_selected:")):
             del counts[key]
 
+    if not durable_campaign_ids and allow_summary_terminal:
+        durable_campaign_ids.add(str(summary["campaign_id"]))
     if len(durable_campaign_ids) != 1:
         raise ValueError("durable runtime records require one campaign identity")
     durable_campaign_id = next(iter(durable_campaign_ids))

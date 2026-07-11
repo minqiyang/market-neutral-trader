@@ -1077,6 +1077,35 @@ def test_runtime_crash_recovery_removes_only_partial_tail_and_never_restarts(
     assert monitor["run_info"]["health"] == "BLOCKED"
 
 
+def test_runtime_recovers_immediate_zero_record_crash(tmp_path: Path) -> None:
+    session = RuntimeEvidenceSession(
+        output_dir=tmp_path,
+        campaign_id="d2e-zero-record-crash",
+        mode="read_only_websocket_smoke",
+        configured_duration_seconds=300,
+        selected_market_metadata={"ticker": MARKET, "status": "active"},
+        selected_market_selection={
+            "selection_profile": "smoke",
+            "selection_gate_result": "pass",
+        },
+        lifecycle_mode_and_source="selected_market_rest_fallback",
+        pricing_mode_and_source="subscription_metadata_or_explicit_venue_default",
+        provenance=RuntimeCodeProvenance(COMMIT, "main", "https://example.test/repo", False),
+        started_at_utc=START,
+    )
+    session._writer._handle.close()
+
+    recovery = recover_d2_runtime_artifacts(
+        tmp_path,
+        recovered_at_utc=START + timedelta(seconds=1),
+    )
+    summary = json.loads((tmp_path / "campaign_summary.json").read_text())
+
+    assert recovery["validation_status"] == "pass"
+    assert summary["campaign_id"] == "d2e-zero-record-crash"
+    assert summary["event_count"] == 0
+
+
 def test_runtime_crash_recovery_reconciles_complete_tail_record_counts(
     tmp_path: Path,
 ) -> None:
@@ -1357,6 +1386,13 @@ def test_validator_compares_every_persisted_segment_summary_field(tmp_path: Path
             segment_summary["terminal_reason"] = "tampered"
         segment_summary_path.write_text(json.dumps(segment_summary) + "\n")
         assert validate_d2_runtime_artifacts(tmp_path)["status"] == "fail"
+    segment_summary_path.write_text(json.dumps(baseline) + "\n")
+    for name in ("campaign_summary.json", "campaign_manifest.json", "run_metadata.json"):
+        path = tmp_path / name
+        payload = json.loads(path.read_text())
+        del payload["segment_summaries"][0]["rotation_reason"]
+        path.write_text(json.dumps(payload) + "\n")
+    assert validate_d2_runtime_artifacts(tmp_path)["status"] == "fail"
 
 
 def test_validator_semantically_reconstructs_all_d2c_evidence(tmp_path: Path) -> None:

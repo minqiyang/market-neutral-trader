@@ -950,6 +950,7 @@ def test_kalshi_ws_smoke_truthfully_blocks_without_credentials(
     assert snapshot["campaign"]["status"] == "WEBSOCKET_AUTH_BLOCKED"
     assert snapshot["campaign"]["source_type"] == "WEBSOCKET_NO_ORDERBOOK"
     assert "validation=blocked" in rendered
+    canonical_validation = dict(validation)
     validation.update(
         campaign_id="tampered",
         event_count=99,
@@ -959,6 +960,21 @@ def test_kalshi_ws_smoke_truthfully_blocks_without_credentials(
         json.dumps(validation) + "\n",
         encoding="utf-8",
     )
+    assert validate_campaign(input_dir=tmp_path)["status"] == "fail"
+    (tmp_path / "campaign_validation.json").write_text(
+        json.dumps(canonical_validation) + "\n",
+        encoding="utf-8",
+    )
+    for name in ("campaign_summary.json", "campaign_manifest.json", "run_metadata.json"):
+        path = tmp_path / name
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["actual_elapsed_seconds"] = "999"
+        payload["overall_evidence_classification"] = "PASS"
+        payload["independent_evidence_classifications"] = {
+            field: "PASS"
+            for field in payload["independent_evidence_classifications"]
+        }
+        path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
     assert validate_campaign(input_dir=tmp_path)["status"] == "fail"
 
 
