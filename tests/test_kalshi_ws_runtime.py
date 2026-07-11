@@ -1248,6 +1248,57 @@ def test_validator_rejects_tampered_top_level_freshness_timing(tmp_path: Path) -
     )
 
 
+def test_validator_binds_every_evidence_timing_field_to_terminal_chain(
+    tmp_path: Path,
+) -> None:
+    session = _session(tmp_path, configured_duration_seconds=1)
+    session.record_event(
+        _tracker().record(
+            {"type": "heartbeat", "sid": 41, "seq": 1},
+            local_row_index=1,
+            received_at_utc=START,
+            received_monotonic_ns=1,
+        )
+    )
+    session.close(
+        ended_at_utc=START + timedelta(seconds=1),
+        terminal_reason="bounded_duration_complete",
+        stop_requested=False,
+        connection_established=True,
+        subscription_acknowledged=True,
+        blocker_code=None,
+    )
+    names = ("campaign_summary.json", "campaign_manifest.json", "run_metadata.json")
+    baseline = json.loads((tmp_path / names[0]).read_text())
+    mutations = {
+        "configured_duration_seconds": 2,
+        "actual_elapsed_seconds": "2",
+        "connected_elapsed_seconds": "0",
+        "started_at_utc": (START - timedelta(seconds=1)).isoformat(),
+        "checkpoint_at_utc": START.isoformat(),
+        "first_snapshot_at": START.isoformat(),
+        "last_event_at": (START + timedelta(seconds=1)).isoformat(),
+        "ended_at": (START + timedelta(seconds=2)).isoformat(),
+        "terminal_reason": "tampered_terminal_reason",
+        "stop_requested": True,
+        "total_disconnect_seconds": "1",
+        "transport_keepalive_age_seconds": 999,
+        "lifecycle_observation_age_seconds": 999,
+        "orderbook_event_quiet_interval_seconds": 999,
+        "max_transport_keepalive_age_seconds": 999,
+        "max_lifecycle_observation_age_seconds": 999,
+        "max_orderbook_event_quiet_interval_seconds": 999,
+        "threshold_policy_version": "edmn.v2.thresholds.tampered",
+        "threshold_source_commit": "f" * 40,
+        "threshold_effective_utc": (START - timedelta(days=1)).isoformat(),
+    }
+    for field, value in mutations.items():
+        tampered = {**baseline, field: value}
+        for name in names:
+            (tmp_path / name).write_text(json.dumps(tampered) + "\n")
+        assert validate_d2_runtime_artifacts(tmp_path)["status"] == "fail", field
+
+
 def test_runtime_validator_rejects_tampered_durable_record(tmp_path: Path) -> None:
     session = _session(tmp_path, configured_duration_seconds=1)
     session.record_event(

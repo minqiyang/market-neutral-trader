@@ -100,6 +100,9 @@ replaying durable D2A envelopes through a fresh D2B instance and comparing the
 full persisted result and aggregate rebuild/sequence/freshness summaries, not
 from trusting stored frame validity or hashes. Recovery writes those same
 derived semantic summaries after reconciling complete tail rows.
+The full `EvidenceTiming` record and terminal disposition are written as a
+chained terminal record. Recovery closes a separate evidence-only terminal
+segment, without opening transport or inheriting book state.
 
 ## Safety
 

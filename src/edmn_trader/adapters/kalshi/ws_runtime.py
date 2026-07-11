@@ -561,13 +561,6 @@ class RuntimeEvidenceSession:
                 window["closed_at_utc"] = ended_at_utc.isoformat()
         self._sample_freshness(ended_at_utc)
         self._artifact_clock = max(self._artifact_clock, ended_at_utc)
-        self._closed_segment_summaries.append(
-            self._closed_segment_record(
-                self._writer,
-                self._writer.close(terminal_reason=terminal_reason),
-            )
-        )
-        artifact_integrity = self._verify_closed_segments()
         actual = _decimal_seconds(ended_at_utc - self.started_at_utc)
         connected = self._connected_seconds(ended_at_utc, connection_established)
         total_disconnect = max(Decimal("0"), actual - connected)
@@ -602,6 +595,26 @@ class RuntimeEvidenceSession:
             max_lifecycle_observation_age_seconds=self._max_lifecycle_age,
             max_orderbook_event_quiet_interval_seconds=self._max_orderbook_quiet,
         )
+        self._append(
+            "runtime_terminal",
+            {
+                "runtime_terminal": _runtime_terminal_payload(
+                    timing=timing,
+                    mode=self.mode,
+                    blocker_code=blocker_code,
+                    connection_established=connection_established,
+                    subscription_acknowledged=subscription_acknowledged,
+                )
+            },
+            observed_at_utc=ended_at_utc,
+        )
+        self._closed_segment_summaries.append(
+            self._closed_segment_record(
+                self._writer,
+                self._writer.close(terminal_reason=terminal_reason),
+            )
+        )
+        artifact_integrity = self._verify_closed_segments()
         dimensions = self._dimensions(
             timing=timing,
             artifact_integrity=artifact_integrity,
@@ -1245,7 +1258,7 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
         if summary.get(field) != expected:
             failures.append(f"unsafe runtime field: {field}")
     try:
-        dimensions, durable_counts, durable_fields = _derive_runtime_validation(
+        dimensions, durable_counts, durable_fields, _ = _derive_runtime_validation(
             summary,
             runtime_records,
         )
@@ -1324,12 +1337,20 @@ def _validate_runtime_records(
 def _derive_runtime_validation(
     summary: Mapping[str, object],
     records: list[dict[str, object]],
-) -> tuple[dict[str, EvidenceStatus], Counter[str], dict[str, object]]:
+    *,
+    allow_summary_terminal: bool = False,
+) -> tuple[
+    dict[str, EvidenceStatus],
+    Counter[str],
+    dict[str, object],
+    dict[str, object],
+]:
     raw_events: list[KalshiWsRawEvent] = []
     sequence: dict[tuple[str, str], dict[str, object]] = {}
     rebuild: dict[tuple[str, str, str], dict[str, object]] = {}
     connection_events: list[Mapping[str, object]] = []
     lifecycle_records: list[Mapping[str, object]] = []
+    terminal_records: list[Mapping[str, object]] = []
     counts: Counter[str] = Counter()
     selected_market = str(summary["market_ticker"])
     validation_rebuilder = KalshiWsBookRebuilder()
@@ -1340,6 +1361,9 @@ def _derive_runtime_validation(
             continue
         if record_type == "lifecycle_evidence":
             lifecycle_records.append(_required_mapping(record, "lifecycle_event"))
+            continue
+        if record_type == "runtime_terminal":
+            terminal_records.append(_required_mapping(record, "runtime_terminal"))
             continue
         if record_type != "raw_transport_event":
             continue
@@ -1388,8 +1412,26 @@ def _derive_runtime_validation(
         if key.startswith(("native:", "admitted_selected:")):
             del counts[key]
 
-    started = _parse_required_time(summary.get("started_at"), "started_at")
-    ended = _parse_required_time(summary.get("ended_at"), "ended_at")
+    if len(terminal_records) == 1:
+        terminal = terminal_records[0]
+        terminal_timing = _required_mapping(terminal, "timing")
+    elif allow_summary_terminal and not terminal_records:
+        terminal = {
+            "mode": summary["mode"],
+            "blocker_code": summary.get("blocker_code"),
+        }
+        terminal_timing = {
+            "configured_duration_seconds": summary["configured_duration_seconds"],
+            "started_at_utc": summary["started_at"],
+            "ended_at": summary["ended_at"],
+            "terminal_reason": summary["terminal_reason"],
+            "stop_requested": summary["stop_requested"],
+            "threshold_source_commit": summary["threshold_source_commit"],
+        }
+    else:
+        raise ValueError("exactly one durable runtime terminal record is required")
+    started = _parse_required_time(terminal_timing.get("started_at_utc"), "started_at_utc")
+    ended = _parse_required_time(terminal_timing.get("ended_at"), "ended_at")
     actual = _decimal_seconds(ended - started)
     windows = _validation_connection_windows(connection_events, ended)
     connected = sum(
@@ -1425,7 +1467,7 @@ def _derive_runtime_validation(
         ended,
     )
     timing = build_evidence_timing(
-        configured_duration_seconds=int(summary["configured_duration_seconds"]),
+        configured_duration_seconds=int(terminal_timing["configured_duration_seconds"]),
         started_at_utc=started,
         checkpoint_at_utc=None,
         ended_at_utc=ended,
@@ -1438,11 +1480,11 @@ def _derive_runtime_validation(
             None,
         ),
         last_event_at=raw_events[-1].received_at_utc if raw_events else None,
-        terminal_reason=str(summary["terminal_reason"]),
-        stop_requested=bool(summary["stop_requested"]),
+        terminal_reason=str(terminal_timing["terminal_reason"]),
+        stop_requested=bool(terminal_timing["stop_requested"]),
         total_disconnect_seconds=max(Decimal("0"), actual - connected),
         threshold_policy_version=V2_THRESHOLD_POLICY.version,
-        threshold_source_commit=str(summary["threshold_source_commit"]),
+        threshold_source_commit=str(terminal_timing["threshold_source_commit"]),
         threshold_effective_utc=V2_THRESHOLD_POLICY.effective_at_utc,
         transport_keepalive_age_seconds=(
             _age_seconds(ended, keepalives[-1]) if keepalives else None
@@ -1459,10 +1501,6 @@ def _derive_runtime_validation(
         max_lifecycle_observation_age_seconds=maximum_lifecycle_age,
         max_orderbook_event_quiet_interval_seconds=maximum_orderbook_quiet,
     )
-    if Decimal(str(summary["actual_elapsed_seconds"])) != timing.actual_elapsed_seconds:
-        raise ValueError("actual elapsed summary contradicts timestamps")
-    if Decimal(str(summary["connected_elapsed_seconds"])) != timing.connected_elapsed_seconds:
-        raise ValueError("connected elapsed summary contradicts connection evidence")
     opened_ids = {
         str(event["connection_id"])
         for event in connection_events
@@ -1480,6 +1518,23 @@ def _derive_runtime_validation(
         for event in connection_events
     )
     coverage = connected / actual if actual else Decimal("0")
+    derived_connection_established = bool(opened_ids)
+    derived_subscription_acknowledged = bool(
+        opened_ids and opened_ids <= acknowledged_ids and not rejected
+    )
+    canonical_terminal = _runtime_terminal_payload(
+        timing=timing,
+        mode=str(terminal["mode"]),
+        blocker_code=(
+            str(terminal["blocker_code"])
+            if terminal.get("blocker_code") is not None
+            else None
+        ),
+        connection_established=derived_connection_established,
+        subscription_acknowledged=derived_subscription_acknowledged,
+    )
+    if terminal_records and dict(terminal) != canonical_terminal:
+        raise ValueError("durable runtime terminal contradicts derived evidence")
     lifecycle = _loaded_lifecycle_status(
         lifecycle_records,
         maximum_lifecycle_age,
@@ -1512,8 +1567,7 @@ def _derive_runtime_validation(
         duration_evidence=classify_duration_evidence(timing),
         process_liveness=(
             EvidenceStatus.PASS
-            if summary.get("status") == "d2_runtime_complete"
-            and summary.get("blocker_code") is None
+            if canonical_terminal["status"] == "d2_runtime_complete"
             else EvidenceStatus.FAIL
         ),
         supervisor_liveness=EvidenceStatus.UNKNOWN,
@@ -1574,12 +1628,16 @@ def _derive_runtime_validation(
         ),
         "exchange_heartbeat_status": freshness.transport_keepalive_status,
         "connection_established": bool(opened_ids),
-        "subscription_acknowledged": bool(
-            opened_ids and opened_ids <= acknowledged_ids and not rejected
-        ),
+        "subscription_acknowledged": derived_subscription_acknowledged,
+        "mode": canonical_terminal["mode"],
+        "status": canonical_terminal["status"],
+        "blocker_code": canonical_terminal["blocker_code"],
+        "duration_seconds": timing.configured_duration_seconds,
+        "started_at": timing.started_at_utc.isoformat(),
+        "ended_at_utc": timing.ended_at.isoformat() if timing.ended_at else None,
         "source_type": _source_type(native_counts),
     }
-    return dimensions, counts, durable_fields
+    return dimensions, counts, durable_fields, canonical_terminal
 
 
 def _required_mapping(record: Mapping[str, object], field: str) -> Mapping[str, object]:
@@ -1587,6 +1645,31 @@ def _required_mapping(record: Mapping[str, object], field: str) -> Mapping[str, 
     if not isinstance(value, Mapping):
         raise ValueError(f"durable runtime record is missing {field}")
     return value
+
+
+def _runtime_terminal_payload(
+    *,
+    timing: Any,
+    mode: str,
+    blocker_code: str | None,
+    connection_established: bool,
+    subscription_acknowledged: bool,
+) -> dict[str, object]:
+    status = (
+        "d2_runtime_crash_recovered"
+        if timing.terminal_reason == "crash_recovered"
+        else "d2_runtime_complete"
+        if blocker_code is None
+        else "d2_runtime_blocked"
+    )
+    return {
+        "timing": timing.to_record(),
+        "mode": mode,
+        "status": status,
+        "blocker_code": blocker_code,
+        "connection_established": connection_established,
+        "subscription_acknowledged": subscription_acknowledged,
+    }
 
 
 def _accumulate_validation_sequence(
@@ -1920,7 +2003,49 @@ def recover_d2_runtime_artifacts(
             Counter(),
             recovered_records,
         )
-    _, durable_counts, durable_fields = _derive_runtime_validation(
+    _, _, _, recovery_terminal = _derive_runtime_validation(
+        summary,
+        recovered_records,
+        allow_summary_terminal=True,
+    )
+    terminal_writer = EvidenceSegmentWriter(
+        data_path.parent,
+        segment_id=f"{summary['campaign_id']}.recovery.terminal",
+        checkpoint_every_records=1,
+        now_utc=lambda: recovered_at_utc,
+    )
+    terminal_writer.append(
+        {
+            "schema_version": D2_RUNTIME_RECORD_SCHEMA_VERSION,
+            "record_type": "runtime_terminal",
+            "campaign_id": summary["campaign_id"],
+            "local_row_index": 1,
+            "observed_at_utc": recovered_at_utc.isoformat(),
+            "runtime_terminal": recovery_terminal,
+        }
+    )
+    terminal_summary = terminal_writer.close(terminal_reason="crash_recovery_terminal")
+    summary["segment_summaries"].append(
+        {
+            **terminal_summary,
+            "data_path": str(terminal_writer.data_path.relative_to(root)),
+            "checkpoint_path": str(terminal_writer.checkpoint_path.relative_to(root)),
+            "summary_path": str(terminal_writer.summary_path.relative_to(root)),
+            "append_chain_update_count": terminal_writer.append_chain_update_count,
+            "full_file_hash_count": terminal_writer.full_file_hash_count,
+            "recovery_status": "RECOVERY_TERMINAL_EVIDENCE",
+            "partial_tail_bytes_removed": 0,
+            "snapshot_required_after_recovery": True,
+        }
+    )
+    recovered_records = []
+    for closed_segment in summary["segment_summaries"]:
+        _validate_runtime_records(
+            root / str(closed_segment["data_path"]),
+            Counter(),
+            recovered_records,
+        )
+    _, durable_counts, durable_fields, _ = _derive_runtime_validation(
         summary,
         recovered_records,
     )

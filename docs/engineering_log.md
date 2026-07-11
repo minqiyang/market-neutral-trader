@@ -84,6 +84,9 @@ nested subscription errors emit typed rejection evidence.
 Validator and recovery now share the same durable derivation of aggregate
 sequence, rebuild-hash, freshness, connection, and lifecycle summaries, so
 counter reconciliation cannot leave semantic evidence stale.
+Requested/configured timing and terminal disposition are no longer summary
+inputs to validation: a chained terminal record binds the complete timing
+contract, and crash recovery writes an evidence-only terminal segment.
 
 ## D2D evidence classification, durability, and performance
 
