@@ -501,6 +501,8 @@ class RuntimeEvidenceSession:
         self._lifecycle_invalid_observed = False
         self._raw_counts: Counter[str] = Counter()
         self._durable_ack_channels: dict[str, set[str]] = {}
+        self._durable_ack_completed_at: dict[str, datetime] = {}
+        self._grounded_acknowledged_ids: set[str] = set()
         self._admitted_selected_orderbook_counts: Counter[str] = Counter()
         self._raw_event_count = 0
         self._public_trade_count = 0
@@ -537,6 +539,10 @@ class RuntimeEvidenceSession:
 
     def record_connection_event(self, event: ConnectionEvidenceEvent) -> None:
         record = event.to_record()
+        if event.event_type is ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED:
+            raw_ack_at = self._durable_ack_completed_at.get(event.connection_id)
+            if raw_ack_at is not None and raw_ack_at <= event.observed_at_utc:
+                self._grounded_acknowledged_ids.add(event.connection_id)
         self._connection_events.append(record)
         window = self._connection_windows.setdefault(
             event.connection_id,
@@ -621,12 +627,12 @@ class RuntimeEvidenceSession:
             or record.get("validity") != LifecycleValidity.VALID
         )
         self._last_lifecycle_at = observed_at_utc
+        self._sample_freshness(evaluated_at_utc)
         self._append(
             "lifecycle_evidence",
             {"lifecycle_event": record},
             observed_at_utc=evaluated_at_utc,
         )
-        self._sample_freshness(evaluated_at_utc)
 
     def record_event(self, event: KalshiWsRawEvent) -> None:
         if event.campaign_id != self.campaign_id:
@@ -641,12 +647,18 @@ class RuntimeEvidenceSession:
         self._raw_event_count += 1
         self._raw_counts[event.native_type or "unknown"] += 1
         if event.native_type in {"subscribed", "ack", "ok", "error", "rejected"}:
-            self._durable_ack_channels.setdefault(event.connection_id, set()).update(
+            channels = self._durable_ack_channels.setdefault(event.connection_id, set())
+            channels.update(
                 subscription_ack_channels(
                     event.original_payload,
                     event.native_type or "unknown",
                 )
             )
+            if (
+                REQUIRED_PUBLIC_CHANNELS <= channels
+                and event.connection_id not in self._durable_ack_completed_at
+            ):
+                self._durable_ack_completed_at[event.connection_id] = event.received_at_utc
         self._public_trade_count += len(trade_records)
         self._last_event_at = event.received_at_utc
         selected_orderbook_event = (
@@ -961,11 +973,7 @@ class RuntimeEvidenceSession:
             for event in self._connection_events
             if event.get("event_type") == ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED
         }
-        durable_acknowledged_ids = {
-            connection_id
-            for connection_id, channels in self._durable_ack_channels.items()
-            if REQUIRED_PUBLIC_CHANNELS <= channels
-        }
+        ungrounded_acknowledgments = acknowledged_ids - self._grounded_acknowledged_ids
         connection_established = bool(opened_ids)
         subscription_rejected = any(
             event.get("event_type") == ConnectionEvidenceType.SUBSCRIPTION_REJECTED
@@ -973,7 +981,7 @@ class RuntimeEvidenceSession:
         )
         subscription_acknowledged = bool(
             opened_ids
-            and opened_ids <= acknowledged_ids & durable_acknowledged_ids
+            and opened_ids <= self._grounded_acknowledged_ids
             and not subscription_rejected
         )
         connected = self._connected_seconds(observed_at_utc, connection_established)
@@ -1010,11 +1018,19 @@ class RuntimeEvidenceSession:
         if opened_ids:
             dimensions["subscription_status"] = (
                 EvidenceStatus.FAIL
-                if subscription_rejected
+                if subscription_rejected or ungrounded_acknowledgments
                 else EvidenceStatus.PASS
                 if subscription_acknowledged
                 else EvidenceStatus.UNKNOWN
             )
+        dimensions["sequence_integrity"] = _sequence_evidence_status(self._sequence)
+        dimensions["rebuild_integrity"] = _rebuild_evidence_status(self._rebuild)
+        dimensions["market_lifecycle_validity"] = _lifecycle_evidence_status(
+            self._lifecycle_observation_count,
+            self._lifecycle_invalid_observed,
+            self._max_lifecycle_age,
+            self.threshold_policy.maximum_lifecycle_age_seconds,
+        )
         if self._last_keepalive_at is not None:
             dimensions["transport_keepalive"] = (
                 EvidenceStatus.PASS
@@ -1093,6 +1109,11 @@ class RuntimeEvidenceSession:
                 for summary in self._sequence.values()
             ),
             "last_event_time": self._last_event_at.isoformat() if self._last_event_at else None,
+            "market_lifecycle_status": (
+                self._latest_lifecycle_record["lifecycle_status"]
+                if self._latest_lifecycle_record
+                else "UNKNOWN"
+            ),
             "websocket_message_freshness_status": _orderbook_freshness_status(
                 freshness.orderbook_event_quiet_interval_seconds
             ),
@@ -1532,7 +1553,8 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
         for pattern in ("*.events.jsonl", "*.checkpoint.json", "*.summary.json")
         for path in evidence_root.rglob(pattern)
     }
-    if actual_segment_paths != listed_segment_paths:
+    has_symlink = any(path.is_symlink() for path in evidence_root.rglob("*"))
+    if actual_segment_paths != listed_segment_paths or has_symlink:
         failures.append("segment artifact inventory contains missing or unlisted files")
     for sibling_name in ("campaign_manifest.json", "run_metadata.json"):
         try:

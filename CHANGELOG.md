@@ -43,7 +43,8 @@ numbers while the repository is still in early research scaffolding.
   100k memory gate, and missing orderbook freshness remains unknown. Typed-only
   acknowledgments fail, manifest paths are root-contained, segment artifacts
   are recursively inventoried by path, partial rotation successors fail closed,
-  and running monitor snapshots retain observed connection/freshness evidence.
+  and running monitor snapshots retain observed critical evidence without
+  allowing stale keepalive or late raw acknowledgment to pass.
   Legacy v1 artifacts remain readable but are not selected for new WebSocket
   runs. Tests are mocked and public live trading remains disabled.
 - Added D2D orthogonal evidence classification, timestamp-derived duration,

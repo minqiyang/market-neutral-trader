@@ -695,8 +695,6 @@ def _campaign_monitor_status(
                 in {"NO_WS_CREDENTIALS", "WS_CREDENTIAL_STORAGE_UNSAFE", "WS_AUTH_FAILED"}
                 else "D2_RUNTIME_BLOCKED"
             )
-        if campaign.get("status") == "d2_runtime_running":
-            return "D2_RUNTIME_RUNNING"
         dimensions = campaign.get("independent_evidence_classifications")
         if isinstance(dimensions, Mapping) and any(
             dimensions.get(field) == "FAIL"
@@ -711,6 +709,8 @@ def _campaign_monitor_status(
             )
         ):
             return "D2_RUNTIME_EVIDENCE_FAILED"
+        if campaign.get("status") == "d2_runtime_running":
+            return "D2_RUNTIME_RUNNING"
         return (
             "D2_RUNTIME_COMPLETE"
             if validation.get("status") == "pass"

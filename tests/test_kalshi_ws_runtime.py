@@ -1335,7 +1335,7 @@ def test_validator_rejects_data_connection_with_no_raw_ack_frame(tmp_path: Path)
 
 
 def test_validator_rejects_typed_ack_before_durable_raw_channels(tmp_path: Path) -> None:
-    session = _session_without_connection(tmp_path, configured_duration_seconds=1)
+    session = _session_without_connection(tmp_path, configured_duration_seconds=61)
     tracker = _tracker(offset=False)
     session.record_connection_event(
         ConnectionEvidenceEvent(
@@ -1363,12 +1363,17 @@ def test_validator_rejects_typed_ack_before_durable_raw_channels(tmp_path: Path)
                 "msg": {"channels": ["orderbook_delta", "trade"]},
             },
             local_row_index=1,
-            received_at_utc=START,
+            received_at_utc=START + timedelta(seconds=60),
             received_monotonic_ns=1,
         )
     )
+    running = json.loads((tmp_path / "campaign_summary.json").read_text())
+    assert running["subscription_acknowledged"] is False
+    assert running["independent_evidence_classifications"]["subscription_status"] == (
+        "FAIL"
+    )
     session.close(
-        ended_at_utc=START + timedelta(seconds=1),
+        ended_at_utc=START + timedelta(seconds=61),
         terminal_reason="bounded_duration_complete",
         stop_requested=False,
         connection_established=True,
@@ -1568,7 +1573,7 @@ def test_validator_rejects_unlisted_segment_artifact(tmp_path: Path) -> None:
     assert any("unlisted files" in item for item in validation["failures"])
 
 
-@pytest.mark.parametrize("alias_kind", ["nested", "symlink"])
+@pytest.mark.parametrize("alias_kind", ["nested", "symlink", "directory_symlink"])
 def test_validator_rejects_nested_or_alias_segment_artifact(
     tmp_path: Path,
     alias_kind: str,
@@ -1587,9 +1592,14 @@ def test_validator_rejects_nested_or_alias_segment_artifact(
         orphan = evidence_root / "nested" / "orphan.events.jsonl"
         orphan.parent.mkdir()
         orphan.write_text('{"unlisted":true}\n', encoding="utf-8")
-    else:
+    elif alias_kind == "symlink":
         target = tmp_path / summary["segment_summaries"][0]["data_path"]
         (evidence_root / "alias.events.jsonl").symlink_to(target)
+    else:
+        (evidence_root / "aliasdir").symlink_to(
+            evidence_root,
+            target_is_directory=True,
+        )
 
     validation = validate_d2_runtime_artifacts(tmp_path)
     assert validation["status"] == "fail"
@@ -2014,6 +2024,103 @@ def test_running_monitor_reports_observed_connection_and_freshness(tmp_path: Pat
     assert campaign["independent_evidence_classifications"]["transport_keepalive"] == (
         "PASS"
     )
+
+
+def test_running_monitor_blocks_observed_lifecycle_failure(tmp_path: Path) -> None:
+    session = _session(tmp_path, configured_duration_seconds=300)
+    session.record_lifecycle(
+        {"ticker": MARKET, "status": "finalized"},
+        observed_at_utc=START + timedelta(seconds=60),
+        evaluated_at_utc=START + timedelta(seconds=60),
+    )
+
+    monitor = build_monitor_snapshot(tmp_path, now=START + timedelta(seconds=60))
+
+    assert monitor["campaign"]["market_lifecycle_status"] == "SETTLED"
+    assert monitor["campaign"]["independent_evidence_classifications"][
+        "market_lifecycle_validity"
+    ] == "FAIL"
+    assert monitor["campaign"]["status"] == "D2_RUNTIME_EVIDENCE_FAILED"
+    assert monitor["run_info"]["health"] == "BLOCKED"
+
+
+def test_running_monitor_blocks_sequence_and_rebuild_failures(tmp_path: Path) -> None:
+    session = _session(tmp_path, configured_duration_seconds=300)
+    tracker = _tracker(
+        continuity_policy=SequenceContinuityPolicy.CONTIGUOUS_INCREMENT,
+    )
+    session.record_event(
+        tracker.record(
+            {
+                "type": "orderbook_snapshot",
+                "sid": 41,
+                "seq": 1,
+                "msg": {
+                    "market_ticker": MARKET,
+                    "yes_dollars_fp": [["0.42", "3"]],
+                    "no_dollars_fp": [],
+                },
+            },
+            local_row_index=1,
+            received_at_utc=START + timedelta(seconds=60),
+            received_monotonic_ns=1,
+        )
+    )
+    session.record_event(
+        tracker.record(
+            {
+                "type": "orderbook_delta",
+                "sid": 41,
+                "seq": 3,
+                "msg": {
+                    "market_ticker": MARKET,
+                    "side": "yes",
+                    "price_dollars": "0.42",
+                    "delta_fp": "1",
+                },
+            },
+            local_row_index=2,
+            received_at_utc=START + timedelta(seconds=120),
+            received_monotonic_ns=2,
+        )
+    )
+
+    monitor = build_monitor_snapshot(tmp_path, now=START + timedelta(seconds=120))
+    dimensions = monitor["campaign"]["independent_evidence_classifications"]
+
+    assert dimensions["sequence_integrity"] == "FAIL"
+    assert dimensions["rebuild_integrity"] == "FAIL"
+    assert monitor["campaign"]["status"] == "D2_RUNTIME_EVIDENCE_FAILED"
+    assert monitor["run_info"]["health"] == "BLOCKED"
+
+
+def test_running_monitor_does_not_pass_stale_keepalive_on_lifecycle_write(
+    tmp_path: Path,
+) -> None:
+    session = _session(tmp_path, configured_duration_seconds=300)
+    session.record_event(
+        _tracker().record(
+            {"type": "heartbeat", "sid": 41, "seq": 1},
+            local_row_index=1,
+            received_at_utc=START + timedelta(seconds=1),
+            received_monotonic_ns=1,
+        )
+    )
+    session.record_lifecycle(
+        {"ticker": MARKET, "status": "active"},
+        observed_at_utc=START + timedelta(seconds=300),
+        evaluated_at_utc=START + timedelta(seconds=300),
+    )
+
+    monitor = build_monitor_snapshot(tmp_path, now=START + timedelta(seconds=300))
+    campaign = monitor["campaign"]
+
+    assert campaign["freshness_dimensions"]["transport_keepalive_age_seconds"] == 299
+    assert campaign["independent_evidence_classifications"]["transport_keepalive"] == (
+        "FAIL"
+    )
+    assert monitor["campaign"]["status"] == "D2_RUNTIME_EVIDENCE_FAILED"
+    assert monitor["run_info"]["health"] == "BLOCKED"
 
 
 def test_runtime_recovery_rejects_path_escape_without_touching_target(tmp_path: Path) -> None:

@@ -150,8 +150,9 @@ Manifest paths must remain relative and resolve inside the run root. Validation
 recursively accounts for every distinct segment data/checkpoint/summary path,
 including aliases, and recovery rejects any partially created rotation successor
 before modifying artifacts. Running monitor snapshots preserve observed
-connection, subscription, and freshness dimensions instead of replacing them
-with unknown placeholders.
+connection, temporally grounded subscription, freshness, lifecycle, sequence,
+and rebuild dimensions instead of replacing them with unknown placeholders;
+observed critical failures block monitor health immediately.
 
 ## Safety
 

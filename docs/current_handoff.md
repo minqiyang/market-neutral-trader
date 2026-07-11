@@ -63,7 +63,8 @@ memory gate, and reports no-book freshness as unknown.
 Typed connection acknowledgment cannot substitute for durable raw channel
 frames or precede them. Segment paths are root-contained, every distinct nested
 segment artifact is inventoried, partial rotation successors block recovery
-before mutation, and running monitor snapshots expose observed transport state.
+before mutation, and running monitor snapshots expose and act on observed
+transport, lifecycle, sequence, and rebuild state.
 
 This checkpoint is software-only. Tests use mocked WebSocket and lifecycle
 transports. No VPS, credential, campaign, private raw data, production endpoint,

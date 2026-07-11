@@ -118,6 +118,8 @@ escapes and symlink escapes, validates a complete segment-file inventory, and
 fails closed on partially created rotation successors. The final review pass
 also binds acknowledgment chronology, recursive lexical artifact identity,
 symlink-root recovery, and observed running-monitor transport/freshness state.
+Running status now blocks observed lifecycle, sequence, rebuild, or stale
+keepalive failures and never retroactively grounds a typed acknowledgment.
 
 ## D2D evidence classification, durability, and performance
 
