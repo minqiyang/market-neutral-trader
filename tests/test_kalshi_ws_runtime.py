@@ -10,6 +10,11 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+from edmn_trader.adapters.kalshi import ws_recorder
+from edmn_trader.adapters.kalshi.public_evidence import (
+    ConnectionEvidenceEvent,
+    ConnectionEvidenceType,
+)
 from edmn_trader.adapters.kalshi.ws_auth import KalshiWsAuthConfig
 from edmn_trader.adapters.kalshi.ws_events import (
     KalshiWsIntegrityTracker,
@@ -73,9 +78,20 @@ def test_actual_runtime_assembly_uses_d2_writer_and_mocked_transports(
                 },
             },
             {
-                "type": "trade",
+                "type": "orderbook_delta",
                 "sid": 41,
                 "seq": 3,
+                "msg": {
+                    "market_ticker": MARKET,
+                    "side": "no",
+                    "price_dollars": "0.56",
+                    "delta_fp": "-1",
+                },
+            },
+            {
+                "type": "trade",
+                "sid": 41,
+                "seq": 4,
                 "msg": {"market_ticker": MARKET, "trade_id": "trade-1"},
             },
         ]
@@ -88,6 +104,7 @@ def test_actual_runtime_assembly_uses_d2_writer_and_mocked_transports(
         mode="read_only_websocket_smoke",
         duration_seconds=300,
         market_metadata={"ticker": MARKET, "status": "active"},
+        market_selection={"selection_profile": "smoke", "selection_gate_result": "pass"},
         auth=KalshiWsAuthConfig(api_key_id="fixture-id", private_key_path=key_path),
         provenance=RuntimeCodeProvenance(COMMIT, "main", "https://example.test/repo", False),
         websocket_factory=lambda *_args, **_kwargs: websocket,
@@ -99,9 +116,9 @@ def test_actual_runtime_assembly_uses_d2_writer_and_mocked_transports(
 
     assert summary["runtime_schema_version"] == D2_RUNTIME_SCHEMA_VERSION
     assert Decimal(summary["actual_elapsed_seconds"]) >= 300
-    assert summary["event_count"] == 4
+    assert summary["event_count"] == 5
     assert summary["snapshot_count"] == 1
-    assert summary["delta_count"] == 1
+    assert summary["delta_count"] == 2
     assert summary["public_trade_count"] == 1
     assert summary["connection_event_count"] >= 2
     assert summary["lifecycle_observation_count"] >= 3
@@ -118,9 +135,89 @@ def test_actual_runtime_assembly_uses_d2_writer_and_mocked_transports(
     assert monitor["run_info"]["health"] != "OK_PAPER"
 
 
-def test_public_smoke_entrypoint_cannot_select_legacy_writer(
+def test_actual_runtime_requires_acknowledgement_after_resubscription(
     tmp_path: Path,
     monkeypatch,
+) -> None:
+    fake_time = _FakeTime()
+    websockets = [
+        _FailingFakeWebSocket(
+            [
+                {"type": "subscribed", "id": 1, "sid": 41},
+                {
+                    "type": "orderbook_snapshot",
+                    "sid": 41,
+                    "seq": 1,
+                    "msg": {
+                        "market_ticker": MARKET,
+                        "yes_dollars_fp": [["0.42", "3"]],
+                        "no_dollars_fp": [],
+                    },
+                },
+            ]
+        ),
+        _FakeWebSocket(
+            [
+                {
+                    "type": "orderbook_delta",
+                    "sid": 42,
+                    "seq": 2,
+                    "msg": {
+                        "market_ticker": MARKET,
+                        "side": "yes",
+                        "price_dollars": "0.42",
+                        "delta_fp": "1",
+                    },
+                }
+            ]
+        ),
+    ]
+    monkeypatch.setattr(ws_recorder.time, "sleep", lambda _seconds: None)
+
+    summary = run_d2_kalshi_ws_runtime(
+        output_dir=tmp_path / "run",
+        campaign_id="d2e-runtime-reconnect",
+        mode="read_only_websocket_smoke",
+        duration_seconds=20,
+        market_metadata={"ticker": MARKET, "status": "active"},
+        market_selection={"selection_profile": "smoke", "selection_gate_result": "pass"},
+        auth=KalshiWsAuthConfig(
+            api_key_id="fixture-id",
+            private_key_path=_private_key(tmp_path),
+        ),
+        provenance=RuntimeCodeProvenance(COMMIT, "main", "https://example.test/repo", False),
+        websocket_factory=lambda *_args, **_kwargs: websockets.pop(0),
+        lifecycle_provider=lambda ticker: {"ticker": ticker, "status": "active"},
+        now=fake_time.now,
+        monotonic=fake_time.monotonic,
+        monotonic_ns=fake_time.monotonic_ns,
+        max_reconnects=1,
+    )
+
+    assert summary["reconnect_count"] == 1
+    assert len(summary["connection_windows"]) == 2
+    assert any(
+        "subscription_rebound_after_reconnect" in window["reasons"]
+        for window in summary["connection_windows"]
+    )
+    assert summary["subscription_acknowledged"] is False
+    assert summary["independent_evidence_classifications"]["subscription_status"] == "FAIL"
+    assert len(summary["sequence_summaries"]) == 2
+
+
+@pytest.mark.parametrize(
+    ("runner", "duration_seconds", "expected_profile"),
+    [
+        (v2_readonly_campaign.run_kalshi_ws_smoke, 300, "smoke"),
+        (v2_readonly_campaign.run_kalshi_ws_campaign, 1_800, "canary"),
+    ],
+)
+def test_public_ws_entrypoints_emit_d2_artifacts_with_selection_provenance(
+    tmp_path: Path,
+    monkeypatch,
+    runner,
+    duration_seconds: int,
+    expected_profile: str,
 ) -> None:
     fake_time = _FakeTime()
     websocket = _FakeWebSocket(
@@ -146,9 +243,13 @@ def test_public_smoke_entrypoint_cannot_select_legacy_writer(
     monkeypatch.setattr(
         v2_readonly_campaign,
         "discover_kalshi_demo_ws_market",
-        lambda **_kwargs: {
+        lambda **kwargs: {
             "market_metadata": {"ticker": MARKET, "status": "active"},
-            "selection": {"selection_gate_result": "pass"},
+            "selection": {
+                "selection_profile": kwargs["selection_profile"].value,
+                "selection_safety_buffer_seconds": kwargs["safety_buffer_seconds"],
+                "selection_gate_result": "pass",
+            },
             "blocker_code": None,
         },
     )
@@ -165,21 +266,16 @@ def test_public_smoke_entrypoint_cannot_select_legacy_writer(
         )
 
     monkeypatch.setattr(v2_readonly_campaign, "run_d2_kalshi_ws_runtime", mocked_runtime)
-    monkeypatch.setattr(
-        v2_readonly_campaign,
-        "_write_kalshi_ws_summary",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("legacy writer selected")),
-    )
-
-    summary = v2_readonly_campaign.run_kalshi_ws_smoke(
+    summary = runner(
         output_dir=tmp_path / "run",
         campaign_id="d2e-public-entrypoint",
-        duration_seconds=300,
+        duration_seconds=duration_seconds,
         max_markets=1,
     )
 
     assert summary["runtime_schema_version"] == D2_RUNTIME_SCHEMA_VERSION
     assert summary["schema_version"] != "v2.readonly_campaign.v1"
+    assert summary["selected_market_selection"]["selection_profile"] == expected_profile
 
 
 def test_runtime_session_wires_d2_pipeline_and_closes_verified_artifacts(
@@ -585,6 +681,43 @@ def test_runtime_keeps_two_markets_isolated_and_records_explicit_pricing_modes(
     assert len({item["terminal_state_hash"] for item in rebuilt}) == 2
 
 
+def test_wrong_market_snapshot_cannot_refresh_selected_market_evidence(
+    tmp_path: Path,
+) -> None:
+    session = _session(tmp_path, configured_duration_seconds=1)
+    event = _tracker().record(
+        {
+            "type": "orderbook_snapshot",
+            "sid": 41,
+            "seq": 1,
+            "msg": {
+                "market_ticker": "UNREQUESTED-MARKET",
+                "yes_dollars_fp": [["0.42", "3"]],
+                "no_dollars_fp": [],
+            },
+        },
+        local_row_index=1,
+        received_at_utc=START,
+        received_monotonic_ns=1,
+    )
+
+    session.record_event(event)
+    summary = session.close(
+        ended_at_utc=START + timedelta(seconds=1),
+        terminal_reason="bounded_duration_complete",
+        stop_requested=False,
+        connection_established=True,
+        subscription_acknowledged=True,
+        blocker_code=None,
+    )
+
+    assert summary["snapshot_count"] == 1
+    assert summary["admitted_selected_snapshot_count"] == 0
+    assert summary["first_snapshot_at"] is None
+    assert summary["freshness_dimensions"]["orderbook_event_quiet_interval_seconds"] is None
+    assert summary["independent_evidence_classifications"]["rebuild_integrity"] == "UNKNOWN"
+
+
 def test_runtime_pricing_mode_conflict_invalidates_rebuild_dimension(tmp_path: Path) -> None:
     session = _session(tmp_path, configured_duration_seconds=2)
     tracker = _tracker()
@@ -805,18 +938,103 @@ def test_runtime_validator_rejects_tampered_durable_record(tmp_path: Path) -> No
     assert any("segment verification failed" in failure for failure in validation["failures"])
 
 
+def test_validator_derives_dimensions_instead_of_trusting_mutable_summaries(
+    tmp_path: Path,
+) -> None:
+    session = _session(tmp_path, configured_duration_seconds=1)
+    tracker = _tracker(continuity_policy=SequenceContinuityPolicy.CONTIGUOUS_INCREMENT)
+    session.record_event(
+        tracker.record(
+            {
+                "type": "orderbook_snapshot",
+                "sid": 41,
+                "seq": 1,
+                "msg": {
+                    "market_ticker": MARKET,
+                    "yes_dollars_fp": [["0.42", "3"]],
+                    "no_dollars_fp": [],
+                },
+            },
+            local_row_index=1,
+            received_at_utc=START,
+            received_monotonic_ns=1,
+        )
+    )
+    session.close(
+        ended_at_utc=START + timedelta(seconds=1),
+        terminal_reason="bounded_duration_complete",
+        stop_requested=False,
+        connection_established=True,
+        subscription_acknowledged=True,
+        blocker_code=None,
+    )
+    for name in ("campaign_summary.json", "campaign_manifest.json", "run_metadata.json"):
+        path = tmp_path / name
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["independent_evidence_classifications"]["rebuild_integrity"] = "UNKNOWN"
+        path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+    validation = validate_d2_runtime_artifacts(tmp_path)
+    monitor = build_monitor_snapshot(tmp_path, now=START + timedelta(seconds=1))
+
+    assert validation["status"] == "fail"
+    assert validation["rebuild_integrity"] == "PASS"
+    assert any("rebuild_integrity" in failure for failure in validation["failures"])
+    assert monitor["run_info"]["health"] == "BLOCKED"
+
+
+def test_actual_runtime_rejects_nested_credentials_without_persisting_them(
+    tmp_path: Path,
+) -> None:
+    fake_time = _FakeTime()
+    secret_value = "fixture-secret-must-not-persist"
+    websocket = _FakeWebSocket(
+        [{"type": "subscribed", "msg": {"metadata": {"api_key": secret_value}}}]
+    )
+    summary = run_d2_kalshi_ws_runtime(
+        output_dir=tmp_path / "run",
+        campaign_id="d2e-secret-rejection",
+        mode="read_only_websocket_smoke",
+        duration_seconds=1,
+        market_metadata={"ticker": MARKET, "status": "active"},
+        market_selection={"selection_profile": "smoke", "selection_gate_result": "pass"},
+        auth=KalshiWsAuthConfig(
+            api_key_id="fixture-id",
+            private_key_path=_private_key(tmp_path),
+        ),
+        provenance=RuntimeCodeProvenance(COMMIT, "main", "https://example.test/repo", False),
+        websocket_factory=lambda *_args, **_kwargs: websocket,
+        lifecycle_provider=lambda ticker: {"ticker": ticker, "status": "active"},
+        now=fake_time.now,
+        monotonic=fake_time.monotonic,
+        monotonic_ns=fake_time.monotonic_ns,
+    )
+
+    assert summary["event_count"] == 0
+    assert summary["blocker_code"] is not None
+    assert secret_value not in "".join(
+        path.read_text(encoding="utf-8")
+        for path in (tmp_path / "run").rglob("*")
+        if path.is_file()
+    )
+
+
 def _session(
     root: Path,
     *,
     configured_duration_seconds: int,
     max_segment_bytes: int = 64 * 1024 * 1024,
 ) -> RuntimeEvidenceSession:
-    return RuntimeEvidenceSession(
+    session = RuntimeEvidenceSession(
         output_dir=root,
         campaign_id="d2e-runtime-test",
         mode="read_only_websocket_smoke",
         configured_duration_seconds=configured_duration_seconds,
         selected_market_metadata={"ticker": MARKET, "status": "active"},
+        selected_market_selection={
+            "selection_profile": "smoke",
+            "selection_gate_result": "pass",
+        },
         lifecycle_mode_and_source="selected_market_rest_fallback",
         pricing_mode_and_source="subscription_metadata_or_explicit_venue_default",
         provenance=RuntimeCodeProvenance(
@@ -830,6 +1048,23 @@ def _session(
         checkpoint_every_records=2,
         max_segment_bytes=max_segment_bytes,
     )
+    for event_type, reason in (
+        (ConnectionEvidenceType.CONNECTION_OPEN, "test_connection_open"),
+        (
+            ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED,
+            "test_subscription_acknowledged",
+        ),
+    ):
+        session.record_connection_event(
+            ConnectionEvidenceEvent(
+                event_type=event_type,
+                observed_at_utc=START,
+                connection_id="test-connection",
+                segment_id="test-segment",
+                reason=reason,
+            )
+        )
+    return session
 
 
 def _tracker(
@@ -879,6 +1114,13 @@ class _FakeWebSocket:
         if self.messages:
             return self.messages.pop(0)
         raise TimeoutError
+
+
+class _FailingFakeWebSocket(_FakeWebSocket):
+    def recv(self, *, timeout: float | None = None) -> str:
+        if self.messages:
+            return self.messages.pop(0)
+        raise RuntimeError("synthetic disconnect")
 
 
 def _private_key(root: Path) -> Path:

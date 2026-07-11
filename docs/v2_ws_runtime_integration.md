@@ -29,7 +29,8 @@ flowchart LR
 - campaign identity, mode, configured and actual duration, connected duration,
   connection windows, disconnect durations, and terminal reason;
 - `edmn.v2.thresholds.v1`, its effective time, and source commit;
-- selected-market metadata plus explicit lifecycle and pricing provenance;
+- selected-market metadata, the evaluated smoke/canary/seven-day selection
+  policy, and explicit lifecycle and pricing provenance;
 - D2A segment/sequence/admission summaries;
 - D2B frame hashes, terminal-state hashes, pricing modes, excluded rows, and
   invalidation reasons;
@@ -48,7 +49,11 @@ old file once; event callbacks never scan or hash the full file.
 ## Evidence Boundaries
 
 - D2A admission controls D2B mutation. Excluded rows remain durable evidence
-  but cannot change native book state.
+  but cannot change native book state or refresh selected-market snapshot and
+  orderbook-freshness evidence.
+- Every connection and resubscription must receive its own channel
+  acknowledgment; an acknowledgment from an earlier connection is never
+  carried forward.
 - Increasing sequence values under unknown semantics remain unknown; they do
   not establish continuity.
 - REST lifecycle fallback proves lifecycle only, never WebSocket transport.
@@ -69,8 +74,11 @@ complete rows after the checkpoint, removes only a partial final row, records
 automatically restarts a campaign.
 
 The validator dispatches by runtime schema. D2 artifacts receive full terminal
-chain/hash/safety verification; legacy v1 artifacts continue through the
-historical reader without being rewritten or promoted.
+chain/hash/safety verification, and critical counts and classifier dimensions
+are independently derived from durable runtime records rather than trusted
+from mutable summaries. The monitor blocks on validator failure. Legacy v1
+artifacts continue through the historical reader without being rewritten or
+promoted.
 
 ## Safety
 

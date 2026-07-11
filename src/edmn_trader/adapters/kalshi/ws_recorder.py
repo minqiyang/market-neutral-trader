@@ -112,7 +112,8 @@ def record_kalshi_demo_ws_orderbook(
     event_count = 0
     type_counts: Counter[str] = Counter()
     last_event_time: str | None = None
-    subscription_acknowledged = False
+    all_subscriptions_acknowledged = True
+    current_subscription_acknowledged = False
     reconnect_count = 0
     integrity_tracker = KalshiWsIntegrityTracker(
         campaign_id=config.campaign_id,
@@ -130,6 +131,7 @@ def record_kalshi_demo_ws_orderbook(
             with factory(config.url, additional_headers=headers, open_timeout=10) as websocket:
                 integrity_tracker.start_connection()
                 opened = True
+                current_subscription_acknowledged = False
                 _emit_connection(
                     connection_callback,
                     event_type=(
@@ -168,10 +170,29 @@ def record_kalshi_demo_ws_orderbook(
                     received_monotonic_ns = monotonic_ns_clock()
                     payload = _loads(raw)
                     message_type = _message_type(payload)
-                    subscription_acknowledged = subscription_acknowledged or _is_subscription_ack(
-                        payload,
-                        message_type,
-                    )
+                    acknowledged = _is_subscription_ack(payload, message_type)
+                    rejected = _is_subscription_rejection(payload, message_type)
+                    if acknowledged and not current_subscription_acknowledged:
+                        current_subscription_acknowledged = True
+                        _emit_connection(
+                            connection_callback,
+                            event_type=ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED,
+                            observed_at_utc=received_at,
+                            tracker=integrity_tracker,
+                            reason="selected_market_channels_acknowledged",
+                            previous_connection_id=previous_connection_id,
+                            previous_segment_id=previous_segment_id,
+                        )
+                    if rejected:
+                        _emit_connection(
+                            connection_callback,
+                            event_type=ConnectionEvidenceType.SUBSCRIPTION_REJECTED,
+                            observed_at_utc=received_at,
+                            tracker=integrity_tracker,
+                            reason="selected_market_channels_rejected",
+                            previous_connection_id=previous_connection_id,
+                            previous_segment_id=previous_segment_id,
+                        )
                     event = integrity_tracker.record(
                         payload,
                         local_row_index=event_count + 1,
@@ -192,7 +213,10 @@ def record_kalshi_demo_ws_orderbook(
                                 event_count=event_count,
                                 type_counts=type_counts,
                                 last_event_time=last_event_time,
-                                acknowledged=subscription_acknowledged,
+                                acknowledged=(
+                                    all_subscriptions_acknowledged
+                                    and current_subscription_acknowledged
+                                ),
                                 raw_events_path=config.raw_events_path,
                                 reconnect_count=reconnect_count,
                                 include_raw_hash=config.persist_legacy_raw_events,
@@ -226,7 +250,10 @@ def record_kalshi_demo_ws_orderbook(
                 type_counts=type_counts,
                 last_event_time=last_event_time,
                 blocker_code=code,
-                acknowledged=subscription_acknowledged,
+                acknowledged=(
+                    all_subscriptions_acknowledged
+                    and current_subscription_acknowledged
+                ),
                 reconnect_count=reconnect_count,
             )
         finally:
@@ -240,6 +267,7 @@ def record_kalshi_demo_ws_orderbook(
                     previous_connection_id=previous_connection_id,
                     previous_segment_id=previous_segment_id,
                 )
+                all_subscriptions_acknowledged &= current_subscription_acknowledged
 
     if not event_count:
         return _write_result(
@@ -256,7 +284,7 @@ def record_kalshi_demo_ws_orderbook(
         type_counts=type_counts,
         last_event_time=last_event_time,
         blocker_code=None,
-        acknowledged=subscription_acknowledged,
+        acknowledged=all_subscriptions_acknowledged,
         reconnect_count=reconnect_count,
     )
 
@@ -309,6 +337,15 @@ def _is_subscription_ack(payload: Mapping[str, object], message_type: str) -> bo
     if "subscribed" in lowered or lowered in {"ack", "ok"}:
         return True
     return str(payload.get("cmd") or "").lower() == "subscribe" and not payload.get("error")
+
+
+def _is_subscription_rejection(payload: Mapping[str, object], message_type: str) -> bool:
+    lowered = message_type.lower()
+    return (
+        "reject" in lowered
+        or lowered == "error" and bool(payload.get("error"))
+        or str(payload.get("cmd") or "").lower() == "subscribe" and bool(payload.get("error"))
+    )
 
 
 def _write_result(

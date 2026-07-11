@@ -127,6 +127,7 @@ def run_d2_kalshi_ws_runtime(
     mode: str,
     duration_seconds: int,
     market_metadata: Mapping[str, object],
+    market_selection: Mapping[str, object],
     auth: KalshiWsAuthConfig,
     provenance: RuntimeCodeProvenance,
     websocket_factory: WebSocketFactory | None = None,
@@ -147,6 +148,7 @@ def run_d2_kalshi_ws_runtime(
         mode=mode,
         configured_duration_seconds=duration_seconds,
         selected_market_metadata=market_metadata,
+        selected_market_selection=market_selection,
         lifecycle_mode_and_source="selected_market_rest_fallback",
         pricing_mode_and_source="subscription_metadata_or_explicit_venue_default",
         provenance=provenance,
@@ -364,6 +366,7 @@ class RuntimeEvidenceSession:
         mode: str,
         configured_duration_seconds: int,
         selected_market_metadata: Mapping[str, object],
+        selected_market_selection: Mapping[str, object],
         lifecycle_mode_and_source: str,
         pricing_mode_and_source: str,
         provenance: RuntimeCodeProvenance,
@@ -377,6 +380,7 @@ class RuntimeEvidenceSession:
             raise ValueError("runtime identity, mode, and duration are required")
         _require_aware(started_at_utc, "started_at_utc")
         validate_no_secret_payload(selected_market_metadata)
+        validate_no_secret_payload(selected_market_selection)
         ticker = selected_market_metadata.get("ticker") or selected_market_metadata.get(
             "market_ticker"
         )
@@ -393,6 +397,7 @@ class RuntimeEvidenceSession:
         self.mode = mode
         self.configured_duration_seconds = configured_duration_seconds
         self.selected_market_metadata = dict(selected_market_metadata)
+        self.selected_market_selection = dict(selected_market_selection)
         self.selected_market_ticker = ticker
         self.lifecycle_mode_and_source = lifecycle_mode_and_source
         self.pricing_mode_and_source = pricing_mode_and_source
@@ -414,6 +419,7 @@ class RuntimeEvidenceSession:
         self._connection_windows: dict[str, dict[str, object]] = {}
         self._lifecycle_records: list[dict[str, object]] = []
         self._raw_counts: Counter[str] = Counter()
+        self._admitted_selected_orderbook_counts: Counter[str] = Counter()
         self._raw_event_count = 0
         self._public_trade_count = 0
         self._rebuild_frame_count = 0
@@ -509,11 +515,21 @@ class RuntimeEvidenceSession:
         self._raw_counts[event.native_type or "unknown"] += 1
         self._public_trade_count += len(trade_records)
         self._last_event_at = event.received_at_utc
-        if event.native_type in {"orderbook_snapshot", "orderbook_delta"}:
+        selected_orderbook_event = (
+            event.admission_status is AdmissionStatus.ADMITTED
+            and event.native_market_ticker == self.selected_market_ticker
+            and event.native_type in {"orderbook_snapshot", "orderbook_delta"}
+        )
+        if selected_orderbook_event:
+            self._admitted_selected_orderbook_counts[event.native_type or "unknown"] += 1
             self._last_orderbook_event_at = event.received_at_utc
         if event.native_type in {"heartbeat", "pong"}:
             self._last_keepalive_at = event.received_at_utc
-        if event.native_type == "orderbook_snapshot" and self._first_snapshot_at is None:
+        if (
+            selected_orderbook_event
+            and event.native_type == "orderbook_snapshot"
+            and self._first_snapshot_at is None
+        ):
             self._first_snapshot_at = event.received_at_utc
         self._update_sequence_summary(event)
         rebuild_record = self._update_rebuild_summary(event, rebuild)
@@ -614,6 +630,7 @@ class RuntimeEvidenceSession:
             "started_at": self.started_at_utc.isoformat(),
             "ended_at_utc": ended_at_utc.isoformat(),
             "selected_market_metadata": self.selected_market_metadata,
+            "selected_market_selection": self.selected_market_selection,
             "market": self.selected_market_ticker,
             "market_ticker": self.selected_market_ticker,
             "market_tickers": [self.selected_market_ticker],
@@ -651,6 +668,12 @@ class RuntimeEvidenceSession:
             "event_count": self._raw_event_count,
             "snapshot_count": self._raw_counts["orderbook_snapshot"],
             "delta_count": self._raw_counts["orderbook_delta"],
+            "admitted_selected_snapshot_count": self._admitted_selected_orderbook_counts[
+                "orderbook_snapshot"
+            ],
+            "admitted_selected_delta_count": self._admitted_selected_orderbook_counts[
+                "orderbook_delta"
+            ],
             "public_trade_count": self._public_trade_count,
             "trade_count": self._public_trade_count,
             "lifecycle_observation_count": len(self._lifecycle_records),
@@ -776,6 +799,7 @@ class RuntimeEvidenceSession:
             "terminal_reason": None,
             "stop_requested": False,
             "selected_market_metadata": self.selected_market_metadata,
+            "selected_market_selection": self.selected_market_selection,
             "market": self.selected_market_ticker,
             "market_ticker": self.selected_market_ticker,
             "market_tickers": [self.selected_market_ticker],
@@ -820,6 +844,12 @@ class RuntimeEvidenceSession:
             "event_count": self._raw_event_count,
             "snapshot_count": self._raw_counts["orderbook_snapshot"],
             "delta_count": self._raw_counts["orderbook_delta"],
+            "admitted_selected_snapshot_count": self._admitted_selected_orderbook_counts[
+                "orderbook_snapshot"
+            ],
+            "admitted_selected_delta_count": self._admitted_selected_orderbook_counts[
+                "orderbook_delta"
+            ],
             "trade_count": self._public_trade_count,
             "rebuild_frame_count": self._rebuild_frame_count,
             "gap_count": sum(
@@ -1114,7 +1144,6 @@ class RuntimeEvidenceSession:
             transport_connectivity=(
                 EvidenceStatus.PASS
                 if connection_established
-                and self._raw_counts["orderbook_snapshot"] > 0
                 and coverage >= self.threshold_policy.minimum_connection_coverage
                 and maximum_disconnect
                 <= self.threshold_policy.maximum_disconnect_seconds
@@ -1159,6 +1188,7 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
         "rebuild_summaries",
         "freshness_dimensions",
         "independent_evidence_classifications",
+        "selected_market_selection",
     )
     failures.extend(f"missing required field: {name}" for name in required if name not in summary)
     try:
@@ -1170,6 +1200,7 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
         failures.append("at least one closed evidence segment is required")
         segments = []
     runtime_record_counts: Counter[str] = Counter()
+    runtime_records: list[dict[str, object]] = []
     for segment in segments:
         try:
             data_path = root / str(segment["data_path"])
@@ -1181,7 +1212,7 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
             segment_summary = json.loads(
                 segment_summary_path.read_text(encoding="utf-8")
             )
-            _validate_runtime_records(data_path, runtime_record_counts)
+            _validate_runtime_records(data_path, runtime_record_counts, runtime_records)
             with data_path.open("rb") as handle:
                 digest = hashlib.file_digest(handle, "sha256").hexdigest()
             if verified.terminal_chain_hash != segment["terminal_chain_hash"]:
@@ -1198,8 +1229,13 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
                 failures.append(f"segment summary artifact mismatch: {segment_id}")
         except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             failures.append(f"segment verification failed: {exc}")
-    if runtime_record_counts["raw_transport_event"] != summary.get("event_count"):
-        failures.append("raw transport count contradicts durable runtime records")
+    for sibling_name in ("campaign_manifest.json", "run_metadata.json"):
+        try:
+            sibling = json.loads((root / sibling_name).read_text(encoding="utf-8"))
+            if sibling != summary:
+                failures.append(f"{sibling_name} contradicts campaign_summary.json")
+        except (OSError, json.JSONDecodeError) as exc:
+            failures.append(f"{sibling_name} unavailable: {exc}")
     for field, expected in (
         ("live_gate_status", "disabled"),
         ("production_trading_enabled", False),
@@ -1209,16 +1245,32 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
     ):
         if summary.get(field) != expected:
             failures.append(f"unsafe runtime field: {field}")
-    recorded_dimensions = summary.get("independent_evidence_classifications", {})
-    dimensions = (
-        dict(recorded_dimensions) if isinstance(recorded_dimensions, Mapping) else {}
-    )
-    dimensions["artifact_integrity"] = "PASS" if not failures else "FAIL"
     try:
-        overall = classify_evidence(EvidenceDimensions(**dimensions)).overall_classification
-    except (TypeError, ValueError):
-        overall = "FAIL"
-        failures.append("independent evidence dimensions are missing or invalid")
+        dimensions, durable_counts = _derive_runtime_validation(summary, runtime_records)
+    except (KeyError, TypeError, ValueError) as exc:
+        failures.append(f"durable evidence classification failed: {exc}")
+        dimensions = {
+            field: EvidenceStatus.UNKNOWN
+            for field in EvidenceDimensions.__dataclass_fields__
+        }
+        durable_counts = Counter()
+    recorded_dimensions = summary.get("independent_evidence_classifications")
+    if not isinstance(recorded_dimensions, Mapping):
+        failures.append("recorded evidence dimensions are missing or invalid")
+        recorded_dimensions = {}
+    for field, derived in dimensions.items():
+        if field != "artifact_integrity" and recorded_dimensions.get(field) != derived:
+            failures.append(f"recorded evidence dimension contradicts durable records: {field}")
+    for field, expected in durable_counts.items():
+        if summary.get(field) != expected:
+            failures.append(f"summary count contradicts durable records: {field}")
+    dimensions["artifact_integrity"] = (
+        EvidenceStatus.PASS if not failures else EvidenceStatus.FAIL
+    )
+    if recorded_dimensions.get("artifact_integrity") != dimensions["artifact_integrity"]:
+        failures.append("recorded evidence dimension contradicts artifacts: artifact_integrity")
+        dimensions["artifact_integrity"] = EvidenceStatus.FAIL
+    overall = classify_evidence(EvidenceDimensions(**dimensions)).overall_classification
     result = {
         "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
         "schema_version": D2_RUNTIME_SCHEMA_VERSION,
@@ -1226,11 +1278,11 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
         "campaign_id": summary.get("campaign_id"),
         **dimensions,
         "overall_evidence_classification": overall,
-        "event_count": summary.get("event_count", 0),
-        "snapshot_count": summary.get("snapshot_count", 0),
-        "delta_count": summary.get("delta_count", 0),
-        "trade_count": summary.get("trade_count", 0),
-        "rebuild_frame_count": summary.get("rebuild_frame_count", 0),
+        "event_count": durable_counts["event_count"],
+        "snapshot_count": durable_counts["snapshot_count"],
+        "delta_count": durable_counts["delta_count"],
+        "trade_count": durable_counts["trade_count"],
+        "rebuild_frame_count": durable_counts["rebuild_frame_count"],
         "failures": failures,
         "live_gate_status": summary.get("live_gate_status"),
         "submit_attempts": summary.get("submit_attempts"),
@@ -1240,7 +1292,11 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
     return result
 
 
-def _validate_runtime_records(path: Path, counts: Counter[str]) -> None:
+def _validate_runtime_records(
+    path: Path,
+    counts: Counter[str],
+    records: list[dict[str, object]],
+) -> None:
     with path.open(encoding="utf-8") as handle:
         for line in handle:
             record = json.loads(line)
@@ -1251,11 +1307,336 @@ def _validate_runtime_records(path: Path, counts: Counter[str]) -> None:
             if not isinstance(record_type, str):
                 raise ValueError("runtime record type is required")
             counts[record_type] += 1
+            records.append(record)
             if record_type == "raw_transport_event":
                 d2a_event = record.get("d2a_event")
                 if not isinstance(d2a_event, Mapping):
                     raise ValueError("durable raw record is missing its D2A envelope")
                 KalshiWsRawEvent.from_record(d2a_event)
+
+
+def _derive_runtime_validation(
+    summary: Mapping[str, object],
+    records: list[dict[str, object]],
+) -> tuple[dict[str, EvidenceStatus], Counter[str]]:
+    raw_events: list[KalshiWsRawEvent] = []
+    sequence: dict[tuple[str, str], dict[str, object]] = {}
+    rebuild: dict[tuple[str, str, str], dict[str, object]] = {}
+    connection_events: list[Mapping[str, object]] = []
+    lifecycle_records: list[Mapping[str, object]] = []
+    counts: Counter[str] = Counter()
+    selected_market = str(summary["market_ticker"])
+    for record in records:
+        record_type = record["record_type"]
+        if record_type == "connection_evidence":
+            connection_events.append(_required_mapping(record, "connection_event"))
+            continue
+        if record_type == "lifecycle_evidence":
+            lifecycle_records.append(_required_mapping(record, "lifecycle_event"))
+            continue
+        if record_type != "raw_transport_event":
+            continue
+        event = KalshiWsRawEvent.from_record(_required_mapping(record, "d2a_event"))
+        raw_events.append(event)
+        counts["event_count"] += 1
+        counts[f"native:{event.native_type or 'unknown'}"] += 1
+        trades = record.get("d2c_public_trades")
+        if not isinstance(trades, list):
+            raise ValueError("durable public trade evidence must be a list")
+        counts["trade_count"] += len(trades)
+        _accumulate_validation_sequence(sequence, event)
+        _accumulate_validation_rebuild(
+            rebuild,
+            event,
+            _required_mapping(record, "d2b_rebuild"),
+            selected_market,
+            counts,
+        )
+    counts["snapshot_count"] = counts["native:orderbook_snapshot"]
+    counts["delta_count"] = counts["native:orderbook_delta"]
+    counts["admitted_selected_snapshot_count"] = counts[
+        "admitted_selected:orderbook_snapshot"
+    ]
+    counts["admitted_selected_delta_count"] = counts[
+        "admitted_selected:orderbook_delta"
+    ]
+    for field in ("event_count", "trade_count", "rebuild_frame_count"):
+        counts[field] = counts[field]
+    for key in tuple(counts):
+        if key.startswith(("native:", "admitted_selected:")):
+            del counts[key]
+
+    started = _parse_required_time(summary.get("started_at"), "started_at")
+    ended = _parse_required_time(summary.get("ended_at"), "ended_at")
+    actual = _decimal_seconds(ended - started)
+    windows = _validation_connection_windows(connection_events, ended)
+    connected = sum(
+        (Decimal(str(window["duration_seconds"])) for window in windows),
+        Decimal("0"),
+    )
+    connected = min(actual, connected)
+    disconnects = RuntimeEvidenceSession._disconnect_durations(windows)
+    maximum_disconnect = max(
+        (Decimal(value) for value in disconnects),
+        default=Decimal("0"),
+    )
+    keepalives = [
+        event.received_at_utc
+        for event in raw_events
+        if event.native_type in {"heartbeat", "pong"}
+    ]
+    selected_orderbook = [
+        event
+        for event in raw_events
+        if event.admission_status is AdmissionStatus.ADMITTED
+        and event.native_market_ticker == selected_market
+        and event.native_type in {"orderbook_snapshot", "orderbook_delta"}
+    ]
+    lifecycle_times = [
+        _parse_required_time(record.get("observed_at_utc"), "lifecycle observed_at_utc")
+        for record in lifecycle_records
+    ]
+    maximum_keepalive_age = _maximum_observation_gap(keepalives, ended)
+    maximum_lifecycle_age = _maximum_observation_gap(lifecycle_times, ended)
+    maximum_orderbook_quiet = _maximum_observation_gap(
+        [event.received_at_utc for event in selected_orderbook],
+        ended,
+    )
+    timing = build_evidence_timing(
+        configured_duration_seconds=int(summary["configured_duration_seconds"]),
+        started_at_utc=started,
+        checkpoint_at_utc=None,
+        ended_at_utc=ended,
+        first_snapshot_at=next(
+            (
+                event.received_at_utc
+                for event in selected_orderbook
+                if event.native_type == "orderbook_snapshot"
+            ),
+            None,
+        ),
+        last_event_at=raw_events[-1].received_at_utc if raw_events else None,
+        terminal_reason=str(summary["terminal_reason"]),
+        stop_requested=bool(summary["stop_requested"]),
+        total_disconnect_seconds=max(Decimal("0"), actual - connected),
+        threshold_policy_version=V2_THRESHOLD_POLICY.version,
+        threshold_source_commit=str(summary["threshold_source_commit"]),
+        threshold_effective_utc=V2_THRESHOLD_POLICY.effective_at_utc,
+        transport_keepalive_age_seconds=(
+            _age_seconds(ended, keepalives[-1]) if keepalives else None
+        ),
+        lifecycle_observation_age_seconds=(
+            _age_seconds(ended, lifecycle_times[-1]) if lifecycle_times else None
+        ),
+        orderbook_event_quiet_interval_seconds=(
+            _age_seconds(ended, selected_orderbook[-1].received_at_utc)
+            if selected_orderbook
+            else None
+        ),
+        max_transport_keepalive_age_seconds=maximum_keepalive_age,
+        max_lifecycle_observation_age_seconds=maximum_lifecycle_age,
+        max_orderbook_event_quiet_interval_seconds=maximum_orderbook_quiet,
+    )
+    if Decimal(str(summary["actual_elapsed_seconds"])) != timing.actual_elapsed_seconds:
+        raise ValueError("actual elapsed summary contradicts timestamps")
+    if Decimal(str(summary["connected_elapsed_seconds"])) != timing.connected_elapsed_seconds:
+        raise ValueError("connected elapsed summary contradicts connection evidence")
+    opened_ids = {
+        str(event["connection_id"])
+        for event in connection_events
+        if event.get("event_type")
+        in {ConnectionEvidenceType.CONNECTION_OPEN, ConnectionEvidenceType.RECONNECT}
+    }
+    acknowledged_ids = {
+        str(event["connection_id"])
+        for event in connection_events
+        if event.get("event_type") is ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED
+        or event.get("event_type") == ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED
+    }
+    rejected = any(
+        event.get("event_type") == ConnectionEvidenceType.SUBSCRIPTION_REJECTED
+        for event in connection_events
+    )
+    coverage = connected / actual if actual else Decimal("0")
+    lifecycle = _loaded_lifecycle_status(
+        lifecycle_records,
+        maximum_lifecycle_age,
+    )
+    dimensions = EvidenceDimensions(
+        artifact_integrity=EvidenceStatus.UNKNOWN,
+        transport_connectivity=(
+            EvidenceStatus.PASS
+            if opened_ids
+            and coverage >= V2_THRESHOLD_POLICY.minimum_connection_coverage
+            and maximum_disconnect <= V2_THRESHOLD_POLICY.maximum_disconnect_seconds
+            else EvidenceStatus.FAIL
+        ),
+        transport_keepalive=(
+            EvidenceStatus.UNKNOWN
+            if not keepalives
+            else EvidenceStatus.PASS
+            if (maximum_keepalive_age or 0)
+            <= V2_THRESHOLD_POLICY.maximum_transport_keepalive_age_seconds
+            else EvidenceStatus.FAIL
+        ),
+        subscription_status=(
+            EvidenceStatus.PASS
+            if opened_ids and opened_ids <= acknowledged_ids and not rejected
+            else EvidenceStatus.FAIL
+        ),
+        sequence_integrity=_sequence_evidence_status(sequence),
+        rebuild_integrity=_rebuild_evidence_status(rebuild),
+        market_lifecycle_validity=lifecycle,
+        duration_evidence=classify_duration_evidence(timing),
+        process_liveness=(
+            EvidenceStatus.PASS
+            if summary.get("status") == "d2_runtime_complete"
+            and summary.get("blocker_code") is None
+            else EvidenceStatus.FAIL
+        ),
+        supervisor_liveness=EvidenceStatus.UNKNOWN,
+        backup_integrity=EvidenceStatus.UNKNOWN,
+        replay_qualification=EvidenceStatus.UNKNOWN,
+    ).to_record()
+    return dimensions, counts
+
+
+def _required_mapping(record: Mapping[str, object], field: str) -> Mapping[str, object]:
+    value = record.get(field)
+    if not isinstance(value, Mapping):
+        raise ValueError(f"durable runtime record is missing {field}")
+    return value
+
+
+def _accumulate_validation_sequence(
+    summaries: dict[tuple[str, str], dict[str, object]],
+    event: KalshiWsRawEvent,
+) -> None:
+    summary = summaries.setdefault(
+        (event.connection_id, event.segment_id),
+        {"sequence_states": Counter()},
+    )
+    summary["sequence_states"][event.sequence_state] += 1
+
+
+def _accumulate_validation_rebuild(
+    summaries: dict[tuple[str, str, str], dict[str, object]],
+    event: KalshiWsRawEvent,
+    result: Mapping[str, object],
+    selected_market: str,
+    counts: Counter[str],
+) -> None:
+    key = (
+        event.native_market_ticker or selected_market,
+        event.connection_id,
+        event.segment_id,
+    )
+    summary = summaries.setdefault(
+        key,
+        {
+            "frame_count": 0,
+            "invalidation_reasons": Counter(),
+            "snapshot_first_admitted": False,
+            "native_state_valid": None,
+        },
+    )
+    selected_admitted = (
+        event.admission_status is AdmissionStatus.ADMITTED
+        and event.native_market_ticker == selected_market
+        and event.native_type in {"orderbook_snapshot", "orderbook_delta"}
+    )
+    if selected_admitted:
+        counts[f"admitted_selected:{event.native_type}"] += 1
+    frame = result.get("frame")
+    if isinstance(frame, Mapping):
+        summary["frame_count"] += 1
+        counts["rebuild_frame_count"] += 1
+        summary["native_state_valid"] = frame.get("segment_validity") == SegmentValidity.VALID
+        if event.native_type == "orderbook_snapshot":
+            summary["snapshot_first_admitted"] = True
+    elif event.native_type in {"orderbook_snapshot", "orderbook_delta"}:
+        reason = result.get("reason")
+        if reason is not None:
+            summary["invalidation_reasons"][str(reason)] += 1
+
+
+def _validation_connection_windows(
+    events: list[Mapping[str, object]],
+    ended_at_utc: datetime,
+) -> list[dict[str, object]]:
+    windows: dict[str, dict[str, object]] = {}
+    for event in events:
+        connection_id = str(event["connection_id"])
+        window = windows.setdefault(
+            connection_id,
+            {
+                "connection_id": connection_id,
+                "opened_at_utc": None,
+                "closed_at_utc": None,
+            },
+        )
+        event_type = str(event["event_type"])
+        observed = str(event["observed_at_utc"])
+        if event_type in {
+            ConnectionEvidenceType.CONNECTION_OPEN,
+            ConnectionEvidenceType.RECONNECT,
+        } and window["opened_at_utc"] is None:
+            window["opened_at_utc"] = observed
+        if event_type == ConnectionEvidenceType.CONNECTION_CLOSE:
+            window["closed_at_utc"] = observed
+    records = []
+    for window in windows.values():
+        opened = _parse_time(window["opened_at_utc"])
+        closed = _parse_time(window["closed_at_utc"]) or ended_at_utc
+        duration = (
+            _decimal_seconds(closed - opened)
+            if opened is not None and closed >= opened
+            else Decimal("0")
+        )
+        records.append({**window, "duration_seconds": _decimal_text(duration)})
+    return records
+
+
+def _loaded_lifecycle_status(
+    records: list[Mapping[str, object]],
+    maximum_age: int | None,
+) -> EvidenceStatus:
+    if not records:
+        return EvidenceStatus.UNKNOWN
+    if any(
+        record.get("lifecycle_status") != LifecycleStatus.OPEN
+        or record.get("validity") != LifecycleValidity.VALID
+        for record in records
+    ):
+        return EvidenceStatus.FAIL
+    return (
+        EvidenceStatus.PASS
+        if (maximum_age or 0) <= V2_THRESHOLD_POLICY.maximum_lifecycle_age_seconds
+        else EvidenceStatus.FAIL
+    )
+
+
+def _maximum_observation_gap(
+    observations: list[datetime],
+    ended_at_utc: datetime,
+) -> int | None:
+    if not observations:
+        return None
+    ordered = sorted(observations)
+    return max(
+        [
+            _age_seconds(current, previous)
+            for previous, current in zip(ordered, ordered[1:], strict=False)
+        ]
+        + [_age_seconds(ended_at_utc, ordered[-1])]
+    )
+
+
+def _parse_required_time(value: object, field: str) -> datetime:
+    parsed = _parse_time(value)
+    if parsed is None:
+        raise ValueError(f"{field} is missing or invalid")
+    return parsed
 
 
 def recover_d2_runtime_artifacts(

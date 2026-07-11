@@ -54,6 +54,15 @@ The legacy campaign reader remains for historical inspection. New WebSocket
 runs use the versioned D2 runtime writer, including preflight-blocked runs, so a
 future operator cannot silently fall back to `v2.readonly_campaign.v1`.
 
+The first independent adversarial review found three correctness issues and two
+coverage/provenance gaps. Correction round 1 made acknowledgments
+connection-local, prevented excluded markets from refreshing selected-market
+evidence, made the validator rederive critical counts and dimensions from the
+append chain, made monitor health honor validator failure, preserved the
+evaluated selection policy, and added mocked reconnect, canary, nested-secret,
+wrong-market, and summary-tamper regressions. The dead legacy WebSocket writer
+was removed; the historical reader remains.
+
 ## D2D evidence classification, durability, and performance
 
 D2D turns the D2A-D2C fixture contracts into an explicit software evidence

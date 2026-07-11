@@ -27,6 +27,12 @@ sequence, rebuild, lifecycle, durability, and safety dimensions to the
 validator and monitor. Legacy `v2.readonly_campaign.v1` remains readable but
 is not selected for new WebSocket runs.
 
+The D2 validator derives critical counts and dimensions from append-chained
+runtime records, the monitor blocks on validator failure, subscription
+acknowledgment is connection-local across reconnects, and excluded markets
+cannot refresh selected-market freshness. Runtime artifacts also preserve the
+evaluated smoke/canary/seven-day selection record.
+
 This checkpoint is software-only. Tests use mocked WebSocket and lifecycle
 transports. No VPS, credential, campaign, private raw data, production endpoint,
 order path, or real market network was used. Replay qualification remains

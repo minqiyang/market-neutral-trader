@@ -843,6 +843,9 @@ def _health(
         return "NO_DATA"
     campaign = summaries.get("campaign_summary.json", {})
     if campaign.get("runtime_schema_version") == "edmn.kalshi.ws.runtime.v2":
+        validation = summaries.get("campaign_validation.json", {})
+        if validation.get("status") in {"fail", "blocked"}:
+            return "BLOCKED"
         dimensions = campaign.get("independent_evidence_classifications")
         if isinstance(dimensions, Mapping):
             if any(value == "FAIL" for value in dimensions.values()):

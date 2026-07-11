@@ -113,7 +113,7 @@ def test_ws_recorder_reconnects_after_read_failure_with_existing_rows(
     )
 
     assert result.status == "ok"
-    assert result.subscription_acknowledged is True
+    assert result.subscription_acknowledged is False
     assert result.event_count == 2
     assert result.delta_count == 1
     assert result.reconnect_count == 1
@@ -128,13 +128,14 @@ def test_ws_recorder_reconnects_after_read_failure_with_existing_rows(
     assert records[1]["exclusion_reason"] == ExclusionReason.DELTA_BEFORE_SNAPSHOT
     assert [event.event_type for event in connection_events] == [
         ConnectionEvidenceType.CONNECTION_OPEN,
+        ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED,
         ConnectionEvidenceType.CONNECTION_ERROR,
         ConnectionEvidenceType.CONNECTION_CLOSE,
         ConnectionEvidenceType.RECONNECT,
         ConnectionEvidenceType.RESUBSCRIPTION,
         ConnectionEvidenceType.CONNECTION_CLOSE,
     ]
-    assert connection_events[3].previous_connection_id == connection_events[0].connection_id
+    assert connection_events[4].previous_connection_id == connection_events[0].connection_id
 
 
 @pytest.mark.parametrize("raw", ["[]", "null", "1"])
