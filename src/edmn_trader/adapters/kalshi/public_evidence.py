@@ -28,11 +28,6 @@ PUBLIC_TRADE_SCHEMA_VERSION = "edmn.kalshi.public_trade.v1"
 LIFECYCLE_SCHEMA_VERSION = "edmn.kalshi.rest_lifecycle.v1"
 CONNECTION_EVIDENCE_SCHEMA_VERSION = "edmn.kalshi.connection_evidence.v1"
 FRESHNESS_SCHEMA_VERSION = "edmn.kalshi.public_evidence_freshness.v1"
-_ACCOUNT_ONLY_FIELDS = frozenset(
-    {"account_id", "client_order_id", "fill_id", "order_id", "user_id"}
-)
-
-
 class PublicTradeStreamStatus(StrEnum):
     OBSERVED = "OBSERVED"
     QUIET_NO_PUBLIC_TRADES = "QUIET_NO_PUBLIC_TRADES"
@@ -111,8 +106,7 @@ class KalshiPublicTradeEvidence:
             raise ValueError("public trade identity fields are invalid")
         copied = deepcopy(dict(self.native_trade_payload))
         validate_no_secret_payload(copied)
-        if _ACCOUNT_ONLY_FIELDS.intersection(key.lower() for key in copied):
-            raise ValueError("public trade payload contains account-only fields")
+        validate_no_private_account_payload(copied)
         if (
             copied.get("trade_id") != self.native_trade_id
             or copied.get("market_ticker") != self.market_ticker
@@ -365,9 +359,6 @@ def build_public_trade_stream(
         try:
             validate_no_private_account_payload(payload)
         except ValueError:
-            quarantined += 1
-            continue
-        if _ACCOUNT_ONLY_FIELDS.intersection(key.lower() for key in payload):
             quarantined += 1
             continue
         trade_id = payload.get("trade_id")

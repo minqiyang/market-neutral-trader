@@ -367,7 +367,7 @@ def test_hard_evidence_flags_cannot_be_overridden() -> None:
         replace(trade, is_account_fill=True)
     with pytest.raises(ValueError, match="init=False"):
         replace(lifecycle, proves_websocket_transport=True)
-    with pytest.raises(ValueError, match="account-only"):
+    with pytest.raises(ValueError, match="private account/order data"):
         replace(
             trade,
             native_trade_payload={

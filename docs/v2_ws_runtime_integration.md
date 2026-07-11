@@ -97,7 +97,9 @@ persistence.
 Recovery derives runtime counts from the closed chain, including complete tail
 rows written after the last checkpoint. Validator rebuild integrity comes from
 replaying durable D2A envelopes through a fresh D2B instance and comparing the
-full persisted result, not from trusting stored frame validity or hashes.
+full persisted result and aggregate rebuild/sequence/freshness summaries, not
+from trusting stored frame validity or hashes. Recovery writes those same
+derived semantic summaries after reconciling complete tail rows.
 
 ## Safety
 

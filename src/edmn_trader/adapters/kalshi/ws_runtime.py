@@ -1008,37 +1008,10 @@ class RuntimeEvidenceSession:
         return record
 
     def _sequence_summary_records(self) -> list[dict[str, object]]:
-        records = []
-        for summary in self._sequence.values():
-            records.append(
-                {
-                    **summary,
-                    "segment_boundary_reasons": sorted(summary["segment_boundary_reasons"]),
-                    "native_sid_values": sorted(summary["native_sid_values"]),
-                    "sequence_states": dict(sorted(summary["sequence_states"].items())),
-                    "continuity_semantics_supported": (
-                        SequenceState.SEQUENCE_CONTIGUITY_VERIFIED
-                        in summary["sequence_states"]
-                    ),
-                    "aggregate_result": _sequence_result(summary["sequence_states"]),
-                }
-            )
-        return records
+        return _sequence_summary_records(self._sequence)
 
     def _rebuild_summary_records(self) -> list[dict[str, object]]:
-        records = []
-        for summary in self._rebuild.values():
-            records.append(
-                {
-                    **summary,
-                    "invalidation_reasons": dict(
-                        sorted(summary["invalidation_reasons"].items())
-                    ),
-                    "pricing_modes": sorted(summary["pricing_modes"]),
-                    "pricing_mode_sources": sorted(summary["pricing_mode_sources"]),
-                }
-            )
-        return records
+        return _rebuild_summary_records(self._rebuild)
 
     def _sample_freshness(self, observed_at_utc: datetime) -> None:
         if self._last_keepalive_at is not None:
@@ -1272,7 +1245,10 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
         if summary.get(field) != expected:
             failures.append(f"unsafe runtime field: {field}")
     try:
-        dimensions, durable_counts = _derive_runtime_validation(summary, runtime_records)
+        dimensions, durable_counts, durable_fields = _derive_runtime_validation(
+            summary,
+            runtime_records,
+        )
     except (KeyError, TypeError, ValueError) as exc:
         failures.append(f"durable evidence classification failed: {exc}")
         dimensions = {
@@ -1280,6 +1256,7 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
             for field in EvidenceDimensions.__dataclass_fields__
         }
         durable_counts = Counter()
+        durable_fields = {}
     recorded_dimensions = summary.get("independent_evidence_classifications")
     if not isinstance(recorded_dimensions, Mapping):
         failures.append("recorded evidence dimensions are missing or invalid")
@@ -1290,6 +1267,9 @@ def validate_d2_runtime_artifacts(input_dir: Path) -> dict[str, object]:
     for field, expected in durable_counts.items():
         if summary.get(field) != expected:
             failures.append(f"summary count contradicts durable records: {field}")
+    for field, expected in durable_fields.items():
+        if summary.get(field) != expected:
+            failures.append(f"summary evidence contradicts durable records: {field}")
     dimensions["artifact_integrity"] = (
         EvidenceStatus.PASS if not failures else EvidenceStatus.FAIL
     )
@@ -1344,7 +1324,7 @@ def _validate_runtime_records(
 def _derive_runtime_validation(
     summary: Mapping[str, object],
     records: list[dict[str, object]],
-) -> tuple[dict[str, EvidenceStatus], Counter[str]]:
+) -> tuple[dict[str, EvidenceStatus], Counter[str], dict[str, object]]:
     raw_events: list[KalshiWsRawEvent] = []
     sequence: dict[tuple[str, str], dict[str, object]] = {}
     rebuild: dict[tuple[str, str, str], dict[str, object]] = {}
@@ -1397,6 +1377,13 @@ def _derive_runtime_validation(
     ]
     for field in ("event_count", "trade_count", "rebuild_frame_count"):
         counts[field] = counts[field]
+    native_counts = Counter(
+        {
+            key.removeprefix("native:"): value
+            for key, value in counts.items()
+            if key.startswith("native:")
+        }
+    )
     for key in tuple(counts):
         if key.startswith(("native:", "admitted_selected:")):
             del counts[key]
@@ -1533,7 +1520,65 @@ def _derive_runtime_validation(
         backup_integrity=EvidenceStatus.UNKNOWN,
         replay_qualification=EvidenceStatus.UNKNOWN,
     ).to_record()
-    return dimensions, counts
+    freshness = evaluate_evidence_freshness(
+        evaluated_at_utc=ended,
+        transport_keepalive_observed_at_utc=keepalives[-1] if keepalives else None,
+        transport_keepalive_source=(
+            "RECORDED_WS_HEARTBEAT_OR_PONG" if keepalives else None
+        ),
+        lifecycle_observed_at_utc=lifecycle_times[-1] if lifecycle_times else None,
+        orderbook_event_at_utc=(
+            selected_orderbook[-1].received_at_utc if selected_orderbook else None
+        ),
+    )
+    durable_fields: dict[str, object] = {
+        "sequence_summaries": _sequence_summary_records(sequence),
+        "rebuild_summaries": _rebuild_summary_records(rebuild),
+        "connection_windows": windows,
+        "disconnect_durations": disconnects,
+        "disconnect_count": len(disconnects),
+        "reconnect_count": sum(
+            event.get("event_type") == ConnectionEvidenceType.RECONNECT
+            for event in connection_events
+        ),
+        "maximum_disconnect_seconds": _decimal_text(maximum_disconnect),
+        "connection_coverage": _decimal_text(coverage),
+        "lifecycle_observations": list(lifecycle_records),
+        "freshness_dimensions": freshness.to_record(),
+        "raw_event_count": counts["event_count"],
+        "public_trade_count": counts["trade_count"],
+        "lifecycle_observation_count": len(lifecycle_records),
+        "connection_event_count": len(connection_events),
+        "rebuild_excluded_count": sum(
+            int(item["excluded_row_count"]) for item in rebuild.values()
+        ),
+        "gap_count": sum(
+            item["sequence_states"].get(SequenceState.SEQUENCE_GAP_DETECTED, 0)
+            for item in sequence.values()
+        ),
+        "heartbeat_count": native_counts["heartbeat"],
+        "status_update_count": native_counts["market_status"],
+        "first_snapshot_at": (
+            timing.first_snapshot_at.isoformat() if timing.first_snapshot_at else None
+        ),
+        "last_event_time": timing.last_event_at.isoformat() if timing.last_event_at else None,
+        "market_lifecycle_status": (
+            lifecycle_records[-1]["lifecycle_status"] if lifecycle_records else "UNKNOWN"
+        ),
+        "websocket_message_freshness_status": (
+            "QUIET_WARNING"
+            if (freshness.orderbook_event_quiet_interval_seconds or 0)
+            > V2_THRESHOLD_POLICY.orderbook_quiet_warning_seconds
+            else "FRESH"
+        ),
+        "exchange_heartbeat_status": freshness.transport_keepalive_status,
+        "connection_established": bool(opened_ids),
+        "subscription_acknowledged": bool(
+            opened_ids and opened_ids <= acknowledged_ids and not rejected
+        ),
+        "source_type": _source_type(native_counts),
+    }
+    return dimensions, counts, durable_fields
 
 
 def _required_mapping(record: Mapping[str, object], field: str) -> Mapping[str, object]:
@@ -1549,9 +1594,33 @@ def _accumulate_validation_sequence(
 ) -> None:
     summary = summaries.setdefault(
         (event.connection_id, event.segment_id),
-        {"sequence_states": Counter()},
+        {
+            "connection_id": event.connection_id,
+            "segment_id": event.segment_id,
+            "segment_boundary_reasons": set(),
+            "native_sid_values": set(),
+            "native_seq_present_count": 0,
+            "sequence_states": Counter(),
+            "admitted_rows": 0,
+            "excluded_rows": 0,
+            "acknowledgement_count": 0,
+            "rejection_count": 0,
+        },
     )
+    summary["segment_boundary_reasons"].add(event.segment_boundary_reason)
+    if event.native_sid is not None:
+        summary["native_sid_values"].add(str(event.native_sid))
+    if event.native_seq is not None:
+        summary["native_seq_present_count"] += 1
     summary["sequence_states"][event.sequence_state] += 1
+    if event.admission_status is AdmissionStatus.ADMITTED:
+        summary["admitted_rows"] += 1
+    elif event.admission_status is AdmissionStatus.EXCLUDED:
+        summary["excluded_rows"] += 1
+    if event.native_type in {"subscribed", "ack", "ok"}:
+        summary["acknowledgement_count"] += 1
+    if event.native_type in {"error", "rejected"}:
+        summary["rejection_count"] += 1
 
 
 def _accumulate_validation_rebuild(
@@ -1569,9 +1638,17 @@ def _accumulate_validation_rebuild(
     summary = summaries.setdefault(
         key,
         {
+            "market_ticker": key[0],
+            "connection_id": key[1],
+            "segment_id": key[2],
             "frame_count": 0,
             "orderbook_row_count": 0,
+            "excluded_row_count": 0,
             "invalidation_reasons": Counter(),
+            "pricing_modes": set(),
+            "pricing_mode_sources": set(),
+            "frame_hashes": [],
+            "terminal_state_hash": None,
             "snapshot_first_admitted": False,
             "native_state_valid": None,
         },
@@ -1590,12 +1667,52 @@ def _accumulate_validation_rebuild(
         summary["frame_count"] += 1
         counts["rebuild_frame_count"] += 1
         summary["native_state_valid"] = frame.get("segment_validity") == SegmentValidity.VALID
+        summary["frame_hashes"].append(frame["frame_hash"])
+        summary["terminal_state_hash"] = frame["terminal_state_hash"]
+        summary["pricing_modes"].add(frame["pricing_mode"])
+        summary["pricing_mode_sources"].add(frame["pricing_mode_source"])
         if event.native_type == "orderbook_snapshot":
             summary["snapshot_first_admitted"] = True
     elif event.native_type in {"orderbook_snapshot", "orderbook_delta"}:
+        summary["excluded_row_count"] += 1
         reason = result.get("reason")
         if reason is not None:
             summary["invalidation_reasons"][str(reason)] += 1
+
+
+def _sequence_summary_records(
+    summaries: Mapping[tuple[str, str], Mapping[str, object]],
+) -> list[dict[str, object]]:
+    return [
+        {
+            **summary,
+            "segment_boundary_reasons": sorted(summary["segment_boundary_reasons"]),
+            "native_sid_values": sorted(summary["native_sid_values"]),
+            "sequence_states": dict(sorted(summary["sequence_states"].items())),
+            "continuity_semantics_supported": (
+                SequenceState.SEQUENCE_CONTIGUITY_VERIFIED
+                in summary["sequence_states"]
+            ),
+            "aggregate_result": _sequence_result(summary["sequence_states"]),
+        }
+        for summary in summaries.values()
+    ]
+
+
+def _rebuild_summary_records(
+    summaries: Mapping[tuple[str, str, str], Mapping[str, object]],
+) -> list[dict[str, object]]:
+    return [
+        {
+            **summary,
+            "invalidation_reasons": dict(
+                sorted(summary["invalidation_reasons"].items())
+            ),
+            "pricing_modes": sorted(summary["pricing_modes"]),
+            "pricing_mode_sources": sorted(summary["pricing_mode_sources"]),
+        }
+        for summary in summaries.values()
+    ]
 
 
 def _validation_connection_windows(
@@ -1609,10 +1726,17 @@ def _validation_connection_windows(
             connection_id,
             {
                 "connection_id": connection_id,
+                "segment_ids": [],
                 "opened_at_utc": None,
                 "closed_at_utc": None,
+                "error_count": 0,
+                "reasons": [],
             },
         )
+        segment_id = str(event["segment_id"])
+        if segment_id not in window["segment_ids"]:
+            window["segment_ids"].append(segment_id)
+        window["reasons"].append(str(event["reason"]))
         event_type = str(event["event_type"])
         observed = str(event["observed_at_utc"])
         if event_type in {
@@ -1622,6 +1746,8 @@ def _validation_connection_windows(
             window["opened_at_utc"] = observed
         if event_type == ConnectionEvidenceType.CONNECTION_CLOSE:
             window["closed_at_utc"] = observed
+        if event_type == ConnectionEvidenceType.CONNECTION_ERROR:
+            window["error_count"] += 1
     records = []
     for window in windows.values():
         opened = _parse_time(window["opened_at_utc"])
@@ -1631,7 +1757,13 @@ def _validation_connection_windows(
             if opened is not None and closed >= opened
             else Decimal("0")
         )
-        records.append({**window, "duration_seconds": _decimal_text(duration)})
+        records.append(
+            {
+                **window,
+                "closed_at_utc": closed.isoformat() if opened is not None else None,
+                "duration_seconds": _decimal_text(duration),
+            }
+        )
     return records
 
 
@@ -1787,10 +1919,12 @@ def recover_d2_runtime_artifacts(
             Counter(),
             recovered_records,
         )
-    _, durable_counts = _derive_runtime_validation(summary, recovered_records)
+    _, durable_counts, durable_fields = _derive_runtime_validation(
+        summary,
+        recovered_records,
+    )
     summary.update(durable_counts)
-    summary["raw_event_count"] = durable_counts["event_count"]
-    summary["public_trade_count"] = durable_counts["trade_count"]
+    summary.update(durable_fields)
     recovery = {
         "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
         "campaign_id": summary["campaign_id"],

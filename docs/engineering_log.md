@@ -81,6 +81,9 @@ reconciles complete post-checkpoint rows from durable records, validation
 replays D2A through a fresh D2B rebuilder, private-field matching covers common
 containers/prefixes, lifecycle shutdown respects the same retry interval, and
 nested subscription errors emit typed rejection evidence.
+Validator and recovery now share the same durable derivation of aggregate
+sequence, rebuild-hash, freshness, connection, and lifecycle summaries, so
+counter reconciliation cannot leave semantic evidence stale.
 
 ## D2D evidence classification, durability, and performance
 
