@@ -9,7 +9,7 @@ import re
 import subprocess
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from itertools import chain
@@ -37,11 +37,18 @@ from edmn_trader.adapters.kalshi.ws_book_rebuild import (
     SegmentValidity,
 )
 from edmn_trader.adapters.kalshi.ws_events import (
+    CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
     KALSHI_WS_RAW_SCHEMA_VERSION,
+    LEGACY_CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
     AdmissionStatus,
+    ExclusionReason,
     KalshiWsRawEvent,
     SegmentBoundaryReason,
     SequenceState,
+    SubscriptionBindingObservation,
+    SubscriptionBindingState,
+    SubscriptionRequestEvidence,
+    normalize_native_envelope,
 )
 from edmn_trader.adapters.kalshi.ws_recorder import (
     REQUIRED_PUBLIC_CHANNELS,
@@ -286,6 +293,7 @@ def run_d2_kalshi_ws_runtime(
         now=clock,
         event_callback=session.record_event,
         connection_callback=session.record_connection_event,
+        request_callback=session.record_subscription_request,
         tick_callback=poll_lifecycle,
         monotonic=monotonic,
         monotonic_ns=monotonic_ns,
@@ -360,6 +368,7 @@ def write_d2_runtime_preflight_block(
         "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
         "schema_version": D2_RUNTIME_SCHEMA_VERSION,
         "raw_event_schema_version": KALSHI_WS_RAW_SCHEMA_VERSION,
+        "subscription_identity_model": CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
         "evidence_schema_version": EVIDENCE_CHAIN_SCHEMA_VERSION,
         "threshold_policy_version": V2_THRESHOLD_POLICY.version,
         "threshold_source_commit": provenance.public_code_commit,
@@ -539,6 +548,9 @@ class RuntimeEvidenceSession:
         self._admitted_selected_orderbook_counts: Counter[str] = Counter()
         self._raw_event_count = 0
         self._public_trade_count = 0
+        self._binding_failure_observed = False
+        self._binding_failure_count = 0
+        self._subscription_request_count = 0
         self._rebuild_frame_count = 0
         self._rebuild_excluded_count = 0
         self._first_snapshot_at: datetime | None = None
@@ -609,10 +621,23 @@ class RuntimeEvidenceSession:
             observed_at_utc=event.observed_at_utc,
         )
 
+    def record_subscription_request(self, request: SubscriptionRequestEvidence) -> None:
+        if request.connection_id not in self._connection_windows:
+            raise ValueError("subscription request has no active connection evidence")
+        self._subscription_request_count += int(request.send_outcome == "PENDING_SEND")
+        self._append(
+            "subscription_request_evidence",
+            {"subscription_request": request.to_record()},
+            observed_at_utc=request.created_at_utc,
+        )
+
     def _runtime_launch_record(self) -> dict[str, object]:
         return {
             "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
             "raw_event_schema_version": KALSHI_WS_RAW_SCHEMA_VERSION,
+            "subscription_identity_model": (
+                CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION
+            ),
             "evidence_schema_version": EVIDENCE_CHAIN_SCHEMA_VERSION,
             "threshold_policy_version": self.threshold_policy.version,
             "threshold_source_commit": self.provenance.public_code_commit,
@@ -627,7 +652,7 @@ class RuntimeEvidenceSession:
             "lifecycle_mode_and_source": self.lifecycle_mode_and_source,
             "pricing_mode_and_source": self.pricing_mode_and_source,
             "use_yes_price": self.use_yes_price,
-            "subscription_command_id": 1,
+            "subscription_request_policy": "one_channel_per_command_run_unique_positive_id",
             "subscription_channels": sorted(REQUIRED_PUBLIC_CHANNELS),
         }
 
@@ -674,6 +699,23 @@ class RuntimeEvidenceSession:
             event.original_payload,
             path="d2a_event.original_payload",
         )
+        binding_failure = event.exclusion_reason in {
+            ExclusionReason.NATIVE_ENVELOPE_REJECTED,
+            ExclusionReason.PRE_ACKNOWLEDGMENT_DATA,
+            ExclusionReason.SUBSCRIPTION_BINDING_CONFLICTED,
+            ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH,
+            ExclusionReason.CHANNEL_TYPE_MISMATCH,
+        } or event.subscription_binding_observation is (
+            SubscriptionBindingObservation.CONFLICTING_ACK
+        ) or event.subscription_binding_observation is (
+            SubscriptionBindingObservation.CONFLICTING_REJECTION
+        ) or (
+            event.native_type in {"error", "rejected"}
+            and event.subscription_binding_state
+            in {SubscriptionBindingState.UNKNOWN, SubscriptionBindingState.REQUEST_MISMATCH}
+        )
+        self._binding_failure_observed |= binding_failure
+        self._binding_failure_count += int(binding_failure)
         self._sample_freshness(event.received_at_utc)
         rebuild = self._rebuilder.apply(event)
         trade_stream = build_public_trade_stream(
@@ -685,12 +727,21 @@ class RuntimeEvidenceSession:
         self._raw_counts[event.native_type or "unknown"] += 1
         if event.native_type in {"subscribed", "ack", "ok", "error", "rejected"}:
             channels = self._durable_ack_channels.setdefault(event.connection_id, set())
-            channels.update(
-                subscription_ack_channels(
-                    event.original_payload,
-                    event.native_type or "unknown",
+            if (
+                event.subscription_binding_state
+                is SubscriptionBindingState.ACKNOWLEDGED
+                and event.subscription_binding_observation
+                in {
+                    SubscriptionBindingObservation.ACKNOWLEDGED,
+                    SubscriptionBindingObservation.DUPLICATE_ACK,
+                }
+            ):
+                channels.update(
+                    subscription_ack_channels(
+                        event.original_payload,
+                        event.native_type or "unknown",
+                    )
                 )
-            )
             if (
                 REQUIRED_PUBLIC_CHANNELS <= channels
                 and event.connection_id not in self._durable_ack_completed_at
@@ -735,6 +786,8 @@ class RuntimeEvidenceSession:
             },
             observed_at_utc=event.received_at_utc,
         )
+        if binding_failure:
+            self._write_open_status(event.received_at_utc)
 
     def close(
         self,
@@ -825,6 +878,9 @@ class RuntimeEvidenceSession:
             "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
             "schema_version": D2_RUNTIME_SCHEMA_VERSION,
             "raw_event_schema_version": KALSHI_WS_RAW_SCHEMA_VERSION,
+            "subscription_identity_model": (
+                CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION
+            ),
             "evidence_schema_version": EVIDENCE_CHAIN_SCHEMA_VERSION,
             "threshold_policy_version": self.threshold_policy.version,
             "threshold_source_commit": self.provenance.public_code_commit,
@@ -912,6 +968,9 @@ class RuntimeEvidenceSession:
             "campaign_process_liveness_status": "EXITED",
             "connection_established": connection_established,
             "subscription_acknowledged": subscription_acknowledged,
+            "binding_failure_observed": self._binding_failure_observed,
+            "binding_failure_count": self._binding_failure_count,
+            "subscription_request_count": self._subscription_request_count,
             "blocker_code": blocker_code,
             "status": "d2_runtime_complete" if blocker_code is None else "d2_runtime_blocked",
             "source_type": _source_type(self._raw_counts),
@@ -1051,7 +1110,11 @@ class RuntimeEvidenceSession:
         if opened_ids:
             dimensions["subscription_status"] = (
                 EvidenceStatus.FAIL
-                if subscription_rejected or ungrounded_acknowledgments
+                if (
+                    subscription_rejected
+                    or ungrounded_acknowledgments
+                    or self._binding_failure_observed
+                )
                 else EvidenceStatus.PASS
                 if subscription_acknowledged
                 else EvidenceStatus.UNKNOWN
@@ -1075,6 +1138,9 @@ class RuntimeEvidenceSession:
             "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
             "schema_version": D2_RUNTIME_SCHEMA_VERSION,
             "raw_event_schema_version": KALSHI_WS_RAW_SCHEMA_VERSION,
+            "subscription_identity_model": (
+                CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION
+            ),
             "evidence_schema_version": EVIDENCE_CHAIN_SCHEMA_VERSION,
             "threshold_policy_version": self.threshold_policy.version,
             "threshold_source_commit": self.provenance.public_code_commit,
@@ -1153,6 +1219,9 @@ class RuntimeEvidenceSession:
             "exchange_heartbeat_status": freshness.transport_keepalive_status,
             "connection_established": connection_established,
             "subscription_acknowledged": subscription_acknowledged,
+            "binding_failure_observed": self._binding_failure_observed,
+            "binding_failure_count": self._binding_failure_count,
+            "subscription_request_count": self._subscription_request_count,
             "status": "d2_runtime_running",
             "source_type": _source_type(self._raw_counts),
             "live_gate_status": "disabled",
@@ -1244,6 +1313,7 @@ class RuntimeEvidenceSession:
                 "excluded_rows": 0,
                 "acknowledgement_count": 0,
                 "rejection_count": 0,
+                "channel_bindings": {},
             },
         )
         summary["segment_boundary_reasons"].add(event.segment_boundary_reason)
@@ -1260,6 +1330,7 @@ class RuntimeEvidenceSession:
             summary["acknowledgement_count"] += 1
         if event.native_type in {"error", "rejected"}:
             summary["rejection_count"] += 1
+        _observe_channel_binding(summary, event)
 
     def _update_rebuild_summary(self, event: KalshiWsRawEvent, result: Any) -> dict[str, object]:
         key = (
@@ -1460,7 +1531,9 @@ class RuntimeEvidenceSession:
             ),
             transport_keepalive=keepalive,
             subscription_status=(
-                EvidenceStatus.PASS if subscription_acknowledged else EvidenceStatus.FAIL
+                EvidenceStatus.PASS
+                if subscription_acknowledged and not self._binding_failure_observed
+                else EvidenceStatus.FAIL
             ),
             sequence_integrity=_sequence_evidence_status(self._sequence),
             rebuild_integrity=_rebuild_evidence_status(self._rebuild),
@@ -1963,6 +2036,7 @@ def _validate_d2_preflight_block(
     canonical_dimensions = _preflight_dimensions().to_record()
     for field, expected in {
         "raw_event_schema_version": KALSHI_WS_RAW_SCHEMA_VERSION,
+        "subscription_identity_model": CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
         "evidence_schema_version": EVIDENCE_CHAIN_SCHEMA_VERSION,
         "threshold_policy_version": V2_THRESHOLD_POLICY.version,
         "threshold_policy": V2_THRESHOLD_POLICY.to_record(),
@@ -2122,6 +2196,8 @@ def _update_validation_connection_state(
 def _validate_event_subscription_state(
     event: KalshiWsRawEvent,
     states: dict[str, dict[str, object]],
+    *,
+    require_channel_binding: bool,
 ) -> None:
     state = states.get(event.connection_id)
     if state is None:
@@ -2153,7 +2229,317 @@ def _validate_event_subscription_state(
         SegmentBoundaryReason.RESUBSCRIPTION,
     } and event.segment_id != state.get("acknowledged_segment_id"):
         raise ValueError("D2A subscription segment contradicts acknowledgment evidence")
+    if require_channel_binding:
+        _validate_channel_binding(event)
     state["last_event_at"] = event.received_at_utc
+
+
+def _validate_channel_binding(event: KalshiWsRawEvent) -> None:
+    if event.subscription_identity_model not in {
+        CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
+        LEGACY_CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
+    }:
+        raise ValueError("D2A event lacks channel-scoped subscription identity")
+    if event.subscription_binding_state is SubscriptionBindingState.REQUEST_MISMATCH:
+        raise ValueError("D2A subscription acknowledgment request ID mismatch")
+    expected_channel = (
+        "orderbook_delta"
+        if event.native_type in {"orderbook_snapshot", "orderbook_delta"}
+        else "trade"
+        if event.native_type == "trade"
+        else None
+    )
+    if expected_channel is not None and event.channel != expected_channel:
+        raise ValueError("D2A native type contradicts its channel binding")
+    if event.native_type in {"subscribed", "ack", "ok", "error", "rejected"}:
+        if event.channel in REQUIRED_PUBLIC_CHANNELS and (
+            event.subscription_generation is None
+            or event.subscription_binding_id is None
+            or isinstance(event.subscription_command_id, bool)
+            or not isinstance(event.subscription_command_id, int)
+            or event.subscription_command_id < 1
+            or (
+                event.subscription_identity_model
+                == CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION
+                and (event.connection_epoch is None or event.run_request_index is None)
+            )
+        ):
+            raise ValueError("D2A subscription control lacks a channel binding")
+        return
+    binding_required = (
+        event.native_type in {"orderbook_snapshot", "orderbook_delta", "trade"}
+        or event.channel in REQUIRED_PUBLIC_CHANNELS
+    )
+    if not binding_required:
+        return
+    if (
+        event.subscription_generation is None
+        or event.subscription_binding_id is None
+        or isinstance(event.subscription_command_id, bool)
+        or not isinstance(event.subscription_command_id, int)
+        or event.subscription_command_id < 1
+        or (
+            event.subscription_identity_model
+            == CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION
+            and (event.connection_epoch is None or event.run_request_index is None)
+        )
+        or event.subscription_binding_state
+        is not SubscriptionBindingState.ACKNOWLEDGED
+    ):
+        raise ValueError("D2A public channel row lacks a valid channel binding")
+    expected_suffix = (
+        f":subscription:{event.channel}:{event.subscription_generation:04d}"
+    )
+    if not event.subscription_binding_id.startswith(f"{event.connection_id}:") or not (
+        event.subscription_binding_id.endswith(expected_suffix)
+    ):
+        raise ValueError("D2A channel binding identity is inconsistent")
+
+
+def _replay_channel_binding(
+    event: KalshiWsRawEvent,
+    bindings: dict[object, dict[str, object]],
+    requests: Mapping[tuple[str, str], SubscriptionRequestEvidence],
+) -> None:
+    if (
+        event.subscription_identity_model
+        == LEGACY_CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION
+    ):
+        _replay_legacy_channel_binding(event, bindings)
+        return
+    envelope = normalize_native_envelope(event.original_payload)
+    if envelope.rejection != event.native_envelope_rejection:
+        raise ValueError("D2A native envelope rejection was not independently reproduced")
+    request = requests.get((event.connection_id, envelope.channel))
+    if request is None and envelope.native_type in {"error", "rejected"}:
+        matches = tuple(
+            candidate
+            for (connection_id, _channel), candidate in requests.items()
+            if connection_id == event.connection_id
+            and candidate.native_command_id == envelope.request_id
+        )
+        request = matches[0] if len(matches) == 1 else None
+    binding_channel = request.channel if request is not None else envelope.channel
+    binding = bindings.get(binding_channel)
+    if envelope.native_type in {"subscribed", "ack", "ok"}:
+        if envelope.rejection is not None:
+            return
+        request_matches = (
+            request is not None
+            and request.send_outcome == "SENT"
+            and envelope.request_id == request.native_command_id
+            and event.subscription_command_id == request.native_command_id
+            and event.subscription_generation == request.subscription_generation
+            and event.connection_epoch == request.connection_epoch
+            and event.run_request_index == request.run_request_index
+        )
+        if not request_matches:
+            if event.subscription_binding_state is not SubscriptionBindingState.REQUEST_MISMATCH:
+                raise ValueError("D2A unknown or stale acknowledgment state was not reproduced")
+            if (
+                event.subscription_binding_observation
+                is not SubscriptionBindingObservation.STALE_ACK
+            ):
+                raise ValueError("D2A stale acknowledgment evidence was not reproduced")
+            return
+        exact_duplicate = (
+            binding is not None
+            and binding["connection_id"] == event.connection_id
+            and binding["sid"] == envelope.sid
+            and binding["generation"] == request.subscription_generation
+            and binding["request_id"] == request.native_command_id
+            and binding["state"] is SubscriptionBindingState.ACKNOWLEDGED
+        )
+        if exact_duplicate:
+            expected = SubscriptionBindingState.ACKNOWLEDGED
+            expected_observation = SubscriptionBindingObservation.DUPLICATE_ACK
+        elif binding is None or (
+            binding["connection_id"] != event.connection_id
+            and request.subscription_generation == binding["generation"] + 1
+            and request.native_command_id != binding["request_id"]
+        ):
+            bindings[envelope.channel] = {
+                "sid": envelope.sid,
+                "state": SubscriptionBindingState.ACKNOWLEDGED,
+                "generation": request.subscription_generation,
+                "request_id": request.native_command_id,
+                "connection_id": event.connection_id,
+                "connection_epoch": request.connection_epoch,
+                "run_request_index": request.run_request_index,
+            }
+            expected = SubscriptionBindingState.ACKNOWLEDGED
+            expected_observation = SubscriptionBindingObservation.ACKNOWLEDGED
+        elif (
+            binding["connection_id"] == event.connection_id
+            and request.subscription_generation == binding["generation"] + 1
+            and request.native_command_id != binding["request_id"]
+        ):
+            binding.update(
+                sid=envelope.sid,
+                state=SubscriptionBindingState.ACKNOWLEDGED,
+                generation=request.subscription_generation,
+                request_id=request.native_command_id,
+                connection_id=event.connection_id,
+                connection_epoch=request.connection_epoch,
+                run_request_index=request.run_request_index,
+            )
+            expected = SubscriptionBindingState.ACKNOWLEDGED
+            expected_observation = SubscriptionBindingObservation.ACKNOWLEDGED
+        else:
+            binding["state"] = SubscriptionBindingState.CONFLICTED
+            expected = SubscriptionBindingState.CONFLICTED
+            expected_observation = SubscriptionBindingObservation.CONFLICTING_ACK
+        if event.subscription_binding_state is not expected:
+            raise ValueError("D2A acknowledgment state contradicts independent replay")
+        if event.subscription_binding_observation is not expected_observation:
+            raise ValueError("D2A acknowledgment observation contradicts replay")
+        return
+    if envelope.native_type in {"error", "rejected"}:
+        request_matches = (
+            envelope.rejection is None
+            and request is not None
+            and request.send_outcome == "SENT"
+            and envelope.request_id == request.native_command_id
+            and event.subscription_command_id == request.native_command_id
+            and event.subscription_generation == request.subscription_generation
+            and event.connection_epoch == request.connection_epoch
+            and event.run_request_index == request.run_request_index
+        )
+        if request_matches:
+            if binding is None:
+                bindings[binding_channel] = {
+                    "sid": None,
+                    "state": SubscriptionBindingState.REJECTED,
+                    "generation": request.subscription_generation,
+                    "request_id": request.native_command_id,
+                    "connection_id": event.connection_id,
+                    "connection_epoch": request.connection_epoch,
+                    "run_request_index": request.run_request_index,
+                }
+                expected = SubscriptionBindingState.REJECTED
+                expected_observation = SubscriptionBindingObservation.REJECTED
+            elif (
+                binding["connection_id"] == event.connection_id
+                and binding["generation"] == request.subscription_generation
+                and binding["request_id"] == request.native_command_id
+            ):
+                if binding["state"] is SubscriptionBindingState.REJECTED:
+                    expected = SubscriptionBindingState.REJECTED
+                    expected_observation = (
+                        SubscriptionBindingObservation.DUPLICATE_REJECTION
+                    )
+                else:
+                    binding["state"] = SubscriptionBindingState.CONFLICTED
+                    expected = SubscriptionBindingState.CONFLICTED
+                    expected_observation = (
+                        SubscriptionBindingObservation.CONFLICTING_REJECTION
+                    )
+            elif (
+                request.subscription_generation == binding["generation"] + 1
+                and request.native_command_id != binding["request_id"]
+            ):
+                bindings[binding_channel] = {
+                    "sid": None,
+                    "state": SubscriptionBindingState.REJECTED,
+                    "generation": request.subscription_generation,
+                    "request_id": request.native_command_id,
+                    "connection_id": event.connection_id,
+                    "connection_epoch": request.connection_epoch,
+                    "run_request_index": request.run_request_index,
+                }
+                expected = SubscriptionBindingState.REJECTED
+                expected_observation = SubscriptionBindingObservation.REJECTED
+            else:
+                raise ValueError("D2A rejection contradicts active binding identity")
+        else:
+            if request is None and binding is None:
+                expected = SubscriptionBindingState.UNKNOWN
+                expected_observation = None
+            else:
+                expected = SubscriptionBindingState.REQUEST_MISMATCH
+                expected_observation = SubscriptionBindingObservation.REJECTED
+        if event.subscription_binding_state is not expected:
+            raise ValueError("D2A rejection state contradicts independent replay")
+        if event.subscription_binding_observation is not expected_observation:
+            raise ValueError("D2A rejection observation contradicts replay")
+        return
+    if envelope.native_type not in {"orderbook_snapshot", "orderbook_delta", "trade"}:
+        return
+    trusted = (
+        envelope.rejection is None
+        and binding is not None
+        and binding["connection_id"] == event.connection_id
+        and binding["state"] is SubscriptionBindingState.ACKNOWLEDGED
+        and binding["sid"] == envelope.sid
+        and binding["generation"] == event.subscription_generation
+        and request is not None
+        and request.send_outcome == "SENT"
+        and event.subscription_command_id == request.native_command_id
+        and event.connection_epoch == request.connection_epoch
+        and event.run_request_index == request.run_request_index
+        and binding["connection_epoch"] == request.connection_epoch
+        and binding["run_request_index"] == request.run_request_index
+    )
+    if trusted:
+        if event.subscription_binding_state is not SubscriptionBindingState.ACKNOWLEDGED:
+            raise ValueError("trusted D2A data binding state contradicts replay")
+    elif event.admission_status is not AdmissionStatus.EXCLUDED:
+        raise ValueError("untrusted D2A data was admitted before binding confirmation")
+
+
+def _replay_legacy_channel_binding(
+    event: KalshiWsRawEvent,
+    bindings: dict[object, dict[str, object]],
+) -> None:
+    envelope = normalize_native_envelope(event.original_payload)
+    key = (event.connection_id, envelope.channel)
+    binding = bindings.get(key)
+    if envelope.native_type in {"subscribed", "ack", "ok"}:
+        if envelope.rejection is not None:
+            return
+        if envelope.request_id != event.subscription_command_id:
+            if event.subscription_binding_state is not SubscriptionBindingState.REQUEST_MISMATCH:
+                raise ValueError("legacy D2A stale acknowledgment state was not reproduced")
+            return
+        if binding is None:
+            bindings[key] = {
+                "sid": envelope.sid,
+                "state": SubscriptionBindingState.ACKNOWLEDGED,
+                "generation": event.subscription_generation,
+                "request_id": envelope.request_id,
+            }
+            expected = SubscriptionBindingState.ACKNOWLEDGED
+            observation = SubscriptionBindingObservation.ACKNOWLEDGED
+        elif binding["state"] is SubscriptionBindingState.ACKNOWLEDGED:
+            if binding["sid"] == envelope.sid:
+                expected = SubscriptionBindingState.ACKNOWLEDGED
+                observation = SubscriptionBindingObservation.DUPLICATE_ACK
+            else:
+                binding["state"] = SubscriptionBindingState.CONFLICTED
+                expected = SubscriptionBindingState.CONFLICTED
+                observation = SubscriptionBindingObservation.CONFLICTING_ACK
+        else:
+            expected = binding["state"]
+            observation = SubscriptionBindingObservation.CONFLICTING_ACK
+        if event.subscription_binding_state is not expected:
+            raise ValueError("legacy D2A acknowledgment state contradicts replay")
+        if event.subscription_binding_observation is not observation:
+            raise ValueError("legacy D2A acknowledgment observation contradicts replay")
+        return
+    if envelope.native_type not in {"orderbook_snapshot", "orderbook_delta", "trade"}:
+        return
+    trusted = (
+        envelope.rejection is None
+        and binding is not None
+        and binding["state"] is SubscriptionBindingState.ACKNOWLEDGED
+        and binding["sid"] == envelope.sid
+        and binding["generation"] == event.subscription_generation
+    )
+    if trusted:
+        if event.subscription_binding_state is not SubscriptionBindingState.ACKNOWLEDGED:
+            raise ValueError("legacy trusted D2A binding state contradicts replay")
+    elif event.admission_status is not AdmissionStatus.EXCLUDED:
+        raise ValueError("legacy untrusted D2A data was admitted")
 
 
 def _validate_runtime_launch_record(
@@ -2167,11 +2553,23 @@ def _validate_runtime_launch_record(
         ("threshold_policy_version", V2_THRESHOLD_POLICY.version),
         ("threshold_policy", V2_THRESHOLD_POLICY.to_record()),
         ("campaign_id", campaign_id),
-        ("subscription_command_id", 1),
         ("subscription_channels", sorted(REQUIRED_PUBLIC_CHANNELS)),
     ):
         if launch.get(field) != expected:
             raise ValueError(f"durable runtime launch contradicts {field}")
+    identity_model = launch.get("subscription_identity_model")
+    if identity_model == CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION:
+        if launch.get("subscription_request_policy") != (
+            "one_channel_per_command_run_unique_positive_id"
+        ):
+            raise ValueError(
+                "durable runtime launch contradicts subscription_request_policy"
+            )
+    elif identity_model == LEGACY_CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION:
+        if launch.get("subscription_command_id") != 1:
+            raise ValueError("legacy durable runtime launch contradicts command ID")
+    elif identity_model is not None:
+        raise ValueError("durable runtime launch identity model is unsupported")
     if launch.get("threshold_source_commit") != launch.get("public_code_commit"):
         raise ValueError("durable runtime launch threshold provenance contradicts code")
     if not isinstance(launch.get("use_yes_price"), bool):
@@ -2237,6 +2635,7 @@ def _derive_runtime_validation(
     terminal_record: Mapping[str, object] | None = None
     durable_campaign_ids: set[str] = set()
     connection_states: dict[str, dict[str, object]] = {}
+    connection_epochs: dict[str, int] = {}
     last_connection_observed_at: datetime | None = None
     last_event_at: datetime | None = None
     first_snapshot_at: datetime | None = None
@@ -2247,6 +2646,12 @@ def _derive_runtime_validation(
     raw_observed_min: datetime | None = None
     raw_observed_max: datetime | None = None
     durable_ack_channels: dict[str, set[str]] = {}
+    validation_bindings: dict[str, dict[str, object]] = {}
+    validation_requests: dict[tuple[str, str], SubscriptionRequestEvidence] = {}
+    requests_with_inbound_evidence: set[tuple[str, str]] = set()
+    used_command_ids: set[int] = set()
+    last_generation_by_channel: dict[str, int] = {}
+    last_run_request_index = 0
     counts: Counter[str] = Counter()
     selected_market: str | None = None
     launch_started_at: datetime | None = None
@@ -2320,6 +2725,13 @@ def _derive_runtime_validation(
                 )
             last_connection_observed_at = observed_at
             _update_validation_connection_state(connection_states, connection)
+            if connection.event_type in {
+                ConnectionEvidenceType.CONNECTION_OPEN,
+                ConnectionEvidenceType.RECONNECT,
+            }:
+                if connection.connection_id in connection_epochs:
+                    raise ValueError("connection identity was reused")
+                connection_epochs[connection.connection_id] = len(connection_epochs) + 1
             connection_events.append(connection_record)
             continue
         if record_type == "lifecycle_evidence":
@@ -2367,6 +2779,41 @@ def _derive_runtime_validation(
                 lifecycle.observed_at_utc,
             )
             continue
+        if record_type == "subscription_request_evidence":
+            request = SubscriptionRequestEvidence.from_record(
+                _required_mapping(record, "subscription_request")
+            )
+            key = (request.connection_id, request.channel)
+            prior = validation_requests.get(key)
+            if request.send_outcome == "PENDING_SEND":
+                if prior is not None:
+                    raise ValueError("duplicate pending subscription request")
+                if request.run_request_index != last_run_request_index + 1:
+                    raise ValueError("subscription run request index is not contiguous")
+                if request.native_command_id in used_command_ids:
+                    raise ValueError("native subscription command ID was reused")
+                if request.subscription_generation != (
+                    last_generation_by_channel.get(request.channel, 0) + 1
+                ):
+                    raise ValueError("subscription generation is not contiguous")
+                if request.connection_id not in connection_states:
+                    raise ValueError("subscription request lacks connection-open evidence")
+                if connection_epochs.get(request.connection_id) != request.connection_epoch:
+                    raise ValueError("subscription request connection epoch is invalid")
+                validation_requests[key] = request
+                used_command_ids.add(request.native_command_id)
+                last_generation_by_channel[request.channel] = request.subscription_generation
+                last_run_request_index = request.run_request_index
+            else:
+                if (
+                    prior is None
+                    or prior.send_outcome != "PENDING_SEND"
+                    or key in requests_with_inbound_evidence
+                    or replace(prior, send_outcome=request.send_outcome) != request
+                ):
+                    raise ValueError("subscription send outcome lacks matching pending request")
+                validation_requests[key] = request
+            continue
         if record_type == "runtime_terminal":
             if terminal_record is not None:
                 raise ValueError("exactly one durable runtime terminal record is required")
@@ -2379,9 +2826,48 @@ def _derive_runtime_validation(
             raise ValueError("D2A campaign identity contradicts durable runtime record")
         if event.local_row_index != counts["event_count"] + 1:
             raise ValueError("D2A local row indices must be contiguous across the runtime")
-        _validate_event_subscription_state(event, connection_states)
+        _replay_channel_binding(event, validation_bindings, validation_requests)
+        request_key = (event.connection_id, event.channel)
+        if (
+            request_key not in validation_requests
+            and event.native_type in {"error", "rejected"}
+        ):
+            matching_keys = tuple(
+                key
+                for key, candidate in validation_requests.items()
+                if key[0] == event.connection_id
+                and candidate.native_command_id == event.subscription_id
+            )
+            if len(matching_keys) == 1:
+                request_key = matching_keys[0]
+        if request_key in validation_requests:
+            requests_with_inbound_evidence.add(request_key)
+        _validate_event_subscription_state(
+            event,
+            connection_states,
+            require_channel_binding=(
+                launch_record.get("subscription_identity_model")
+                == CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION
+            ),
+        )
         counts["event_count"] += 1
         counts[f"native:{event.native_type or 'unknown'}"] += 1
+        if event.exclusion_reason in {
+            ExclusionReason.NATIVE_ENVELOPE_REJECTED,
+            ExclusionReason.PRE_ACKNOWLEDGMENT_DATA,
+            ExclusionReason.SUBSCRIPTION_BINDING_CONFLICTED,
+            ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH,
+            ExclusionReason.CHANNEL_TYPE_MISMATCH,
+        } or event.subscription_binding_observation is (
+            SubscriptionBindingObservation.CONFLICTING_ACK
+        ) or event.subscription_binding_observation is (
+            SubscriptionBindingObservation.CONFLICTING_REJECTION
+        ) or (
+            event.native_type in {"error", "rejected"}
+            and event.subscription_binding_state
+            in {SubscriptionBindingState.UNKNOWN, SubscriptionBindingState.REQUEST_MISMATCH}
+        ):
+            counts["binding_failure_count"] += 1
         last_event_at = event.received_at_utc
         raw_observed_min = min(raw_observed_min or event.received_at_utc, event.received_at_utc)
         raw_observed_max = max(raw_observed_max or event.received_at_utc, event.received_at_utc)
@@ -2390,9 +2876,18 @@ def _derive_runtime_validation(
             event.native_type or "unknown",
         )
         if event.native_type in {"subscribed", "ack", "ok", "error", "rejected"}:
-            durable_ack_channels.setdefault(event.connection_id, set()).update(
-                control_channels
-            )
+            if (
+                event.subscription_binding_state
+                is SubscriptionBindingState.ACKNOWLEDGED
+                and event.subscription_binding_observation
+                in {
+                    SubscriptionBindingObservation.ACKNOWLEDGED,
+                    SubscriptionBindingObservation.DUPLICATE_ACK,
+                }
+            ):
+                durable_ack_channels.setdefault(event.connection_id, set()).update(
+                    control_channels
+                )
         if event.native_type in {"heartbeat", "pong"}:
             last_keepalive_at, maximum_keepalive_age = _observe_runtime_gap(
                 previous=last_keepalive_at,
@@ -2637,7 +3132,10 @@ def _derive_runtime_validation(
         ),
         subscription_status=(
             EvidenceStatus.PASS
-            if opened_ids and opened_ids <= grounded_acknowledged_ids and not rejected
+            if opened_ids
+            and opened_ids <= grounded_acknowledged_ids
+            and not rejected
+            and counts["binding_failure_count"] == 0
             else EvidenceStatus.FAIL
         ),
         sequence_integrity=_sequence_evidence_status(sequence),
@@ -2685,6 +3183,9 @@ def _derive_runtime_validation(
                 "use_yes_price",
             )
         },
+        "subscription_identity_model": launch_record.get(
+            "subscription_identity_model"
+        ),
         "campaign_id": durable_campaign_id,
         "market": selected_market,
         "market_ticker": selected_market,
@@ -2739,6 +3240,7 @@ def _derive_runtime_validation(
         "exchange_heartbeat_status": freshness.transport_keepalive_status,
         "connection_established": bool(opened_ids),
         "subscription_acknowledged": derived_subscription_acknowledged,
+        "binding_failure_observed": counts["binding_failure_count"] > 0,
         "mode": canonical_terminal["mode"],
         "status": canonical_terminal["status"],
         "blocker_code": canonical_terminal["blocker_code"],
@@ -2799,6 +3301,7 @@ def _accumulate_validation_sequence(
             "excluded_rows": 0,
             "acknowledgement_count": 0,
             "rejection_count": 0,
+            "channel_bindings": {},
         },
     )
     summary["segment_boundary_reasons"].add(event.segment_boundary_reason)
@@ -2815,6 +3318,7 @@ def _accumulate_validation_sequence(
         summary["acknowledgement_count"] += 1
     if event.native_type in {"error", "rejected"}:
         summary["rejection_count"] += 1
+    _observe_channel_binding(summary, event)
 
 
 def _accumulate_validation_rebuild(
@@ -2887,6 +3391,13 @@ def _sequence_summary_records(
             **summary,
             "segment_boundary_reasons": sorted(summary["segment_boundary_reasons"]),
             "native_sid_values": sorted(summary["native_sid_values"]),
+            "channel_bindings": {
+                channel: {
+                    field_name: sorted(values)
+                    for field_name, values in sorted(binding.items())
+                }
+                for channel, binding in sorted(summary["channel_bindings"].items())
+            },
             "sequence_states": dict(sorted(summary["sequence_states"].items())),
             "continuity_semantics_supported": (
                 SequenceState.SEQUENCE_CONTIGUITY_VERIFIED
@@ -2896,6 +3407,38 @@ def _sequence_summary_records(
         }
         for summary in summaries.values()
     ]
+
+
+def _observe_channel_binding(
+    summary: dict[str, object],
+    event: KalshiWsRawEvent,
+) -> None:
+    if (
+        event.subscription_binding_id is None
+        and event.subscription_generation is None
+        and event.subscription_command_id is None
+    ):
+        return
+    bindings = summary["channel_bindings"]
+    binding = bindings.setdefault(
+        event.channel,
+        {
+            "command_ids": set(),
+            "generations": set(),
+            "binding_ids": set(),
+            "native_sids": set(),
+            "states": set(),
+        },
+    )
+    if event.subscription_command_id is not None:
+        binding["command_ids"].add(str(event.subscription_command_id))
+    if event.subscription_generation is not None:
+        binding["generations"].add(str(event.subscription_generation))
+    if event.subscription_binding_id is not None:
+        binding["binding_ids"].add(event.subscription_binding_id)
+    if event.native_sid is not None:
+        binding["native_sids"].add(str(event.native_sid))
+    binding["states"].add(str(event.subscription_binding_state))
 
 
 def _rebuild_summary_records(

@@ -1,5 +1,45 @@
 # Current Handoff
 
+## D2E-F3 request and generation integrity
+
+D2E-F3 replaces connection-local command ID reuse with a run-level monotonic
+allocator. The recorder sends one reviewed public channel per subscribe command,
+persists immutable request identity and pending/send outcome evidence before an
+ACK can be trusted, and never resets command IDs on reconnect. Channel generation
+continues across connection epochs while server SIDs remain connection- and
+channel-scoped.
+
+The independent validator now replays outbound request evidence before inbound
+ACK/data evidence, rejects command reuse and generation jumps, and requires an
+exact connection/channel/generation/request/SID match. The tracker rejects
+Boolean, nonpositive, oversized, noninteger IDs and unknown channels without
+state mutation. Legacy v1 evidence remains readable; new runtime evidence uses
+subscription identity v2. Live trading remains disabled.
+
+The final reconnect correction treats a valid request in the next connection
+epoch and channel generation as a new current identity even when it is rejected.
+The prior acknowledged request stays historical; the new binding is untrusted
+and recovery requires another request/generation. Contradictory ACK and rejection
+frames for the same complete request identity instead conflict fail-closed.
+
+## D2E-F2 native-envelope and binding coherence
+
+D2E-F2 closes the three findings that blocked PR #129. One pure native-envelope
+normalizer now rejects conflicting top-level/`msg` copies of `type`, `channel`,
+`id`, and `sid` before binding or trusted evidence mutation, with typed rejection
+and field-provenance evidence. Boolean identifiers fail closed.
+
+Channel bindings now distinguish first ACK, exact duplicate ACK, conflicting
+duplicate ACK, stale ACK, and rejection. A conflicting ACK leaves that channel
+`CONFLICTED` until an explicit new generation; trade conflicts remain isolated
+from D2B, while orderbook recovery requires resubscription and a fresh snapshot.
+Data before ACK is preserved raw but excluded from D2B/D2C. Runtime open status,
+monitor, terminal summary, and independent validator replay all report the
+binding failure immediately and consistently.
+
+All F2 work remains mocked/synthetic until review, merge, Phase 0B, and the
+separately gated single owner-authorized Real5M stage. Live trading is disabled.
+
 ## Round 8J5 dual-interpretation occurrence policy
 
 Selection profile v4 replaces the Round 8J4 global occurrence hard stop with a
@@ -77,22 +117,35 @@ The independent validator repeats parsing from durable D2A evidence and compares
 the resulting frame and terminal hashes. This remains software-only until a new
 bounded Demo regression is completed; live trading stays disabled.
 
-## D2B channel-scoped subscription identity correction
+## D2E-F1 channel-scoped subscription identity
 
-The failed Real5M D2E regression exposed a mismatch between the documented
-contract and the D2B implementation: Kalshi returned SID `1` for
-`orderbook_delta` and SID `2` for `trade`, while segment metadata compared both
-as one global SID. D2B now maintains subscription identity per channel within
-the existing connection/segment generation. Native book state binds only the
-`orderbook_delta` request ID and SID; trade identity remains available to D2C
-and cannot invalidate or rebind the book.
+The first owner-controlled post-D2E Real5M stopped fail-closed after separate
+public-channel acknowledgments used orderbook SID `1` and trade SID `2`. The
+D2B rebuilder had treated both control frames as one segment-wide identity, so
+the trade acknowledgment invalidated the later valid orderbook snapshot.
 
-Synthetic tests cover split channel acknowledgments, trade messages before and
-after the first snapshot, equal sequence numbers across channels, equal numeric
-SIDs across channels, true same-channel SID mismatch quarantine, deterministic
-frame/state hashes, and independent validator replay. This checkpoint is a
-software correction only until a fresh bounded Demo regression completes. The
-live gate remains disabled and no production or order-write path was added.
+D2E-F1 keeps subscription generation, binding ID, acknowledgment state, and
+native SID scoped by channel. Only the `orderbook_delta` binding can establish
+D2B identity; trade control/data rows remain durable D2C evidence without
+mutating orderbook state. An unexpected orderbook SID is excluded and cannot
+silently create a new segment; only explicit orderbook resubscription does so.
+Raw v2 rows written before these optional provenance fields remain readable.
+Runtime and validator summaries independently expose the channel bindings.
+The post-review correction adds an explicit identity-model marker, validates
+coherent binding IDs/generations for new runtime rows, matches acknowledgments
+to their native request ID, and rejects a plural-channel acknowledgment that
+ambiguously carries one SID. Historical unmarked rows remain compatibility
+evidence only.
+The clean PR-head review additionally closes nested-SID ambiguity and requires
+new public data rows to carry acknowledged bindings. A trade row with a stale
+or foreign trade SID is quarantined from D2C and still cannot affect D2B.
+Native orderbook/trade message types must also match their corresponding
+channel. A plural no-SID ACK binds each channel's first observed SID and rejects
+later changes.
+
+This fix is fixture-only until a separately authorized post-fix Real5M. It does
+not weaken thresholds, use credentials or market network, or add any order
+path. Public live trading remains disabled.
 
 ## Round 8J-B discovery reliability
 
@@ -1681,21 +1734,20 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended action
 
-Independent adversarial review of the focused D2E PR, followed by correction,
-100k benchmark verification, merge, and merged-main verification. Then stop at
-the external owner gates; do not deploy or run a market campaign.
+Complete D2E-F3 review, merge, merged-main verification, and the Phase 0B
+software-only VPS refresh before any network run. The active autonomous audit
+authorization then permits one bounded post-fix Real5M with no automatic retry;
+a second run is conditional on a repaired and re-reviewed deterministic defect.
 
 ## Exact next prompt suggestion
 
-Review the D2E runtime assembly, D2D classifier, timing, append-chain,
-checkpoint, rotation, recovery, and benchmark contracts against synthetic
-fixtures only. After merged-main
-verification, stop before deployment, market network, campaign, credentials,
-retention deletion, or any order path.
+Continue the autonomous audit controller only after confirming the reviewed
+D2E-F3 public commit and Phase 0B software-only VPS acceptance evidence. Keep
+Demo, read-only, raw-private, disabled-live-gate, and zero-submit boundaries.
 
 ## Last updated timestamp
 
-2026-07-10 12:26:38 -07:00
+2026-07-12 13:45:00 -07:00
 
 ## Round 8G lifecycle gate v2 checkpoint
 

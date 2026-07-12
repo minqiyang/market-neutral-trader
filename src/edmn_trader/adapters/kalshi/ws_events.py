@@ -18,6 +18,14 @@ from edmn_trader.data.payload_safety import (
 
 KALSHI_WS_RAW_SCHEMA_VERSION = "edmn.kalshi.ws.raw.v2"
 KALSHI_WS_RECORD_TYPE = "kalshi_demo_ws_message"
+CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION = (
+    "edmn.kalshi.ws.subscription_identity.v2"
+)
+LEGACY_CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION = (
+    "edmn.kalshi.ws.subscription_identity.v1"
+)
+REVIEWED_PUBLIC_CHANNELS = frozenset({"orderbook_delta", "trade"})
+MAX_NATIVE_COMMAND_ID = 2_147_483_647
 
 
 class SequenceState(StrEnum):
@@ -44,6 +52,131 @@ class AdmissionStatus(StrEnum):
     NOT_APPLICABLE = "NOT_APPLICABLE"
 
 
+class SubscriptionBindingState(StrEnum):
+    UNKNOWN = "UNKNOWN"
+    REQUESTED = "REQUESTED"
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    REJECTED = "REJECTED"
+    REQUEST_MISMATCH = "REQUEST_MISMATCH"
+    CONFLICTED = "CONFLICTED"
+    RESUBSCRIBE_REQUIRED = "RESUBSCRIBE_REQUIRED"
+
+
+class NativeEnvelopeRejection(StrEnum):
+    CONFLICTING_NATIVE_TYPE = "CONFLICTING_NATIVE_TYPE"
+    CONFLICTING_NATIVE_CHANNEL = "CONFLICTING_NATIVE_CHANNEL"
+    CONFLICTING_NATIVE_ID = "CONFLICTING_NATIVE_ID"
+    CONFLICTING_NATIVE_SID = "CONFLICTING_NATIVE_SID"
+    INVALID_NATIVE_TYPE = "INVALID_NATIVE_TYPE"
+    INVALID_NATIVE_CHANNEL = "INVALID_NATIVE_CHANNEL"
+    INVALID_NATIVE_ID = "INVALID_NATIVE_ID"
+    INVALID_NATIVE_SID = "INVALID_NATIVE_SID"
+    MISSING_NATIVE_TYPE = "MISSING_NATIVE_TYPE"
+    MISSING_ACK_CHANNEL = "MISSING_ACK_CHANNEL"
+    MISSING_ACK_ID = "MISSING_ACK_ID"
+    MISSING_ACK_SID = "MISSING_ACK_SID"
+    MISSING_DATA_SID = "MISSING_DATA_SID"
+
+
+class SubscriptionRequestRejection(StrEnum):
+    INVALID_COMMAND_ID = "INVALID_COMMAND_ID"
+    INVALID_CHANNEL = "INVALID_CHANNEL"
+    MISSING_CONNECTION = "MISSING_CONNECTION"
+    INVALID_GENERATION = "INVALID_GENERATION"
+    COMMAND_ID_REUSED = "COMMAND_ID_REUSED"
+    REQUEST_NOT_PENDING = "REQUEST_NOT_PENDING"
+    REQUEST_IDENTITY_MISMATCH = "REQUEST_IDENTITY_MISMATCH"
+
+
+@dataclass(frozen=True, slots=True)
+class SubscriptionRequestEvidence:
+    run_request_index: int
+    native_command_id: int
+    connection_id: str
+    connection_epoch: int
+    channel: str
+    subscription_generation: int
+    command_type: str
+    created_at_utc: datetime
+    created_at_monotonic_ns: int
+    request_payload_hash: str
+    market_tickers: tuple[str, ...]
+    send_outcome: str = "PENDING_SEND"
+
+    def __post_init__(self) -> None:
+        if isinstance(self.run_request_index, bool) or self.run_request_index < 1:
+            raise ValueError("run_request_index must be a positive integer")
+        if (
+            isinstance(self.native_command_id, bool)
+            or self.native_command_id < 1
+            or self.native_command_id > MAX_NATIVE_COMMAND_ID
+        ):
+            raise ValueError("native_command_id must be a positive integer")
+        if not self.connection_id or self.connection_epoch < 1:
+            raise ValueError("complete connection identity is required")
+        if self.channel not in REVIEWED_PUBLIC_CHANNELS:
+            raise ValueError("unsupported subscription channel")
+        if isinstance(self.subscription_generation, bool) or self.subscription_generation < 1:
+            raise ValueError("subscription_generation must be a positive integer")
+        if self.command_type != "subscribe":
+            raise ValueError("only reviewed subscribe commands are supported")
+        if self.created_at_utc.tzinfo is None or self.created_at_utc.utcoffset() is None:
+            raise ValueError("created_at_utc must be timezone-aware")
+        if self.created_at_monotonic_ns < 0:
+            raise ValueError("created_at_monotonic_ns must be non-negative")
+        if len(self.request_payload_hash) != 64:
+            raise ValueError("request_payload_hash must be SHA-256")
+        if not self.market_tickers:
+            raise ValueError("market_tickers must not be empty")
+        if self.send_outcome not in {"PENDING_SEND", "SENT", "SEND_FAILED"}:
+            raise ValueError("unsupported send outcome")
+
+    def to_record(self) -> dict[str, object]:
+        return {
+            "run_request_index": self.run_request_index,
+            "native_command_id": self.native_command_id,
+            "connection_id": self.connection_id,
+            "connection_epoch": self.connection_epoch,
+            "channel": self.channel,
+            "subscription_generation": self.subscription_generation,
+            "command_type": self.command_type,
+            "created_at_utc": self.created_at_utc.isoformat(),
+            "created_at_monotonic_ns": self.created_at_monotonic_ns,
+            "request_payload_hash": self.request_payload_hash,
+            "market_tickers": list(self.market_tickers),
+            "send_outcome": self.send_outcome,
+        }
+
+    @classmethod
+    def from_record(cls, record: Mapping[str, Any]) -> SubscriptionRequestEvidence:
+        return cls(
+            run_request_index=_expect_int(record, "run_request_index"),
+            native_command_id=_expect_int(record, "native_command_id"),
+            connection_id=_expect_str(record, "connection_id"),
+            connection_epoch=_expect_int(record, "connection_epoch"),
+            channel=_expect_str(record, "channel"),
+            subscription_generation=_expect_int(record, "subscription_generation"),
+            command_type=_expect_str(record, "command_type"),
+            created_at_utc=_parse_datetime(
+                _expect_str(record, "created_at_utc"), "created_at_utc"
+            ),
+            created_at_monotonic_ns=_expect_int(record, "created_at_monotonic_ns"),
+            request_payload_hash=_expect_str(record, "request_payload_hash"),
+            market_tickers=tuple(_expect_str_list(record, "market_tickers")),
+            send_outcome=_expect_str(record, "send_outcome"),
+        )
+
+
+class SubscriptionBindingObservation(StrEnum):
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    DUPLICATE_ACK = "DUPLICATE_ACK"
+    CONFLICTING_ACK = "CONFLICTING_ACK"
+    STALE_ACK = "STALE_ACK"
+    REJECTED = "REJECTED"
+    DUPLICATE_REJECTION = "DUPLICATE_REJECTION"
+    CONFLICTING_REJECTION = "CONFLICTING_REJECTION"
+
+
 class ExclusionReason(StrEnum):
     DELTA_BEFORE_SNAPSHOT = "DELTA_BEFORE_SNAPSHOT"
     MISSING_MARKET_TICKER = "MISSING_MARKET_TICKER"
@@ -51,6 +184,11 @@ class ExclusionReason(StrEnum):
     SEQUENCE_DUPLICATE = "SEQUENCE_DUPLICATE"
     SEQUENCE_OUT_OF_ORDER = "SEQUENCE_OUT_OF_ORDER"
     SEQUENCE_GAP = "SEQUENCE_GAP"
+    SUBSCRIPTION_IDENTITY_MISMATCH = "SUBSCRIPTION_IDENTITY_MISMATCH"
+    CHANNEL_TYPE_MISMATCH = "CHANNEL_TYPE_MISMATCH"
+    NATIVE_ENVELOPE_REJECTED = "NATIVE_ENVELOPE_REJECTED"
+    PRE_ACKNOWLEDGMENT_DATA = "PRE_ACKNOWLEDGMENT_DATA"
+    SUBSCRIPTION_BINDING_CONFLICTED = "SUBSCRIPTION_BINDING_CONFLICTED"
 
 
 class ResyncState(StrEnum):
@@ -103,6 +241,15 @@ class KalshiWsRawEvent:
     native_exchange_ts: str | int | float | None
     native_exchange_ts_ms: int | None
     original_payload: Mapping[str, Any]
+    subscription_generation: int | None = None
+    subscription_binding_id: str | None = None
+    subscription_binding_state: SubscriptionBindingState = SubscriptionBindingState.UNKNOWN
+    subscription_identity_model: str | None = None
+    native_envelope_rejection: NativeEnvelopeRejection | None = None
+    native_field_provenance: Mapping[str, str] | None = None
+    subscription_binding_observation: SubscriptionBindingObservation | None = None
+    connection_epoch: int | None = None
+    run_request_index: int | None = None
     schema_version: str = KALSHI_WS_RAW_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
@@ -123,10 +270,11 @@ class KalshiWsRawEvent:
         validate_no_private_account_payload(copied_payload, path="original_payload")
         if self.payload_sha256 != payload_sha256(copied_payload):
             raise ValueError("payload_sha256 does not match original_payload")
-        native_type = _native_str(copied_payload, "type")
+        envelope = normalize_native_envelope(copied_payload)
+        native_type = envelope.native_type
         expected_native_fields = {
             "native_type": native_type,
-            "native_sid": _native_identifier(copied_payload, "sid"),
+            "native_sid": envelope.sid,
             "native_seq": _native_identifier(copied_payload, "seq"),
             "native_market_ticker": _native_str(copied_payload, "market_ticker"),
             "native_market_id": _native_str(copied_payload, "market_id"),
@@ -138,14 +286,37 @@ class KalshiWsRawEvent:
                 copied_payload,
                 ("exchange_ts_ms", "timestamp_ms", "ts_ms"),
             ),
-            "subscription_id": _native_identifier(copied_payload, "id"),
-            "channel": _native_channel(copied_payload, native_type),
+            "subscription_id": envelope.request_id,
+            "channel": envelope.channel,
         }
         for field_name, expected in expected_native_fields.items():
             if getattr(self, field_name) != expected:
                 raise ValueError(f"{field_name} does not match original_payload")
+        if self.native_envelope_rejection != envelope.rejection:
+            raise ValueError("native_envelope_rejection does not match original_payload")
+        if dict(self.native_field_provenance or {}) != dict(envelope.provenance):
+            raise ValueError("native_field_provenance does not match original_payload")
         if self.native_sid is not None and self.subscription_sid != self.native_sid:
             raise ValueError("subscription_sid does not match native_sid")
+        if self.subscription_identity_model not in {
+            None,
+            CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
+            LEGACY_CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
+        }:
+            raise ValueError("unsupported subscription identity model")
+        if (self.subscription_generation is None) != (
+            self.subscription_binding_id is None
+        ):
+            raise ValueError("subscription generation and binding ID must appear together")
+        if self.subscription_generation is not None and self.subscription_generation < 1:
+            raise ValueError("subscription_generation must be positive")
+        if self.subscription_identity_model == CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION:
+            if self.connection_epoch is None or self.connection_epoch < 1:
+                raise ValueError("F3 subscription identity requires connection_epoch")
+            if self.subscription_binding_id is not None and (
+                self.run_request_index is None or self.run_request_index < 1
+            ):
+                raise ValueError("F3 binding requires run_request_index")
         if self.sequence_state in {
             SequenceState.SEQUENCE_CONTIGUITY_VERIFIED,
             SequenceState.SEQUENCE_GAP_DETECTED,
@@ -212,6 +383,42 @@ class KalshiWsRawEvent:
             native_exchange_ts=_optional_scalar(record, "native_exchange_ts"),
             native_exchange_ts_ms=_optional_int(record, "native_exchange_ts_ms"),
             original_payload=original_payload,
+            subscription_generation=_optional_int(record, "subscription_generation"),
+            subscription_binding_id=_optional_str(record, "subscription_binding_id"),
+            subscription_binding_state=(
+                _expect_enum(
+                    record,
+                    "subscription_binding_state",
+                    SubscriptionBindingState,
+                )
+                if "subscription_binding_state" in record
+                else SubscriptionBindingState.UNKNOWN
+            ),
+            subscription_identity_model=_optional_str(
+                record,
+                "subscription_identity_model",
+            ),
+            native_envelope_rejection=(
+                _optional_enum(
+                    record,
+                    "native_envelope_rejection",
+                    NativeEnvelopeRejection,
+                )
+                if "native_envelope_rejection" in record
+                else normalize_native_envelope(original_payload).rejection
+            ),
+            native_field_provenance=(
+                _expect_mapping(record, "native_field_provenance")
+                if "native_field_provenance" in record
+                else normalize_native_envelope(original_payload).provenance
+            ),
+            subscription_binding_observation=_optional_enum(
+                record,
+                "subscription_binding_observation",
+                SubscriptionBindingObservation,
+            ),
+            connection_epoch=_optional_int(record, "connection_epoch"),
+            run_request_index=_optional_int(record, "run_request_index"),
         )
 
     def to_record(self) -> dict[str, object]:
@@ -232,6 +439,15 @@ class KalshiWsRawEvent:
             "subscription_id": self.subscription_id,
             "subscription_sid": self.subscription_sid,
             "subscription_command_id": self.subscription_command_id,
+            "subscription_generation": self.subscription_generation,
+            "subscription_binding_id": self.subscription_binding_id,
+            "subscription_binding_state": self.subscription_binding_state,
+            "subscription_identity_model": self.subscription_identity_model,
+            "native_envelope_rejection": self.native_envelope_rejection,
+            "native_field_provenance": dict(self.native_field_provenance or {}),
+            "subscription_binding_observation": self.subscription_binding_observation,
+            "connection_epoch": self.connection_epoch,
+            "run_request_index": self.run_request_index,
             "admission_status": self.admission_status,
             "exclusion_reason": self.exclusion_reason,
             "sequence_continuity_policy": self.sequence_continuity_policy,
@@ -323,6 +539,111 @@ def parse_kalshi_ws_raw_record(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class NormalizedNativeEnvelope:
+    native_type: str | None
+    channel: str
+    request_id: str | int | None
+    sid: str | int | None
+    rejection: NativeEnvelopeRejection | None
+    provenance: Mapping[str, str]
+
+
+def normalize_native_envelope(payload: Mapping[str, Any]) -> NormalizedNativeEnvelope:
+    """Resolve duplicated routing fields without silent precedence."""
+
+    native_type, type_source, rejection = _coherent_field(payload, "type", str)
+    channel, channel_source, channel_rejection = _coherent_field(
+        payload, "channel", str
+    )
+    request_id, id_source, id_rejection = _coherent_field(
+        payload, "id", (str, int)
+    )
+    sid, sid_source, sid_rejection = _coherent_field(payload, "sid", (str, int))
+    rejection = rejection or channel_rejection or id_rejection or sid_rejection
+    if native_type is None and rejection is None:
+        rejection = NativeEnvelopeRejection.MISSING_NATIVE_TYPE
+    if channel is None:
+        if native_type in {"orderbook_snapshot", "orderbook_delta"}:
+            channel, channel_source = "orderbook_delta", "derived_from_type"
+        elif native_type == "trade":
+            channel, channel_source = "trade", "derived_from_type"
+        else:
+            channel = native_type or "unknown"
+            channel_source = "derived_from_type" if native_type else "missing"
+    if native_type in {"subscribed", "ack", "ok"} and rejection is None:
+        if channel in {native_type, "unknown"}:
+            rejection = NativeEnvelopeRejection.MISSING_ACK_CHANNEL
+        elif request_id is None:
+            rejection = NativeEnvelopeRejection.MISSING_ACK_ID
+        elif sid is None:
+            rejection = NativeEnvelopeRejection.MISSING_ACK_SID
+    if (
+        native_type in {"orderbook_snapshot", "orderbook_delta", "trade"}
+        and sid is None
+        and rejection is None
+    ):
+        rejection = NativeEnvelopeRejection.MISSING_DATA_SID
+    return NormalizedNativeEnvelope(
+        native_type=native_type if isinstance(native_type, str) else None,
+        channel=channel if isinstance(channel, str) else "unknown",
+        request_id=request_id if isinstance(request_id, str | int) else None,
+        sid=sid if isinstance(sid, str | int) else None,
+        rejection=rejection,
+        provenance={
+            "type": type_source,
+            "channel": channel_source,
+            "id": id_source,
+            "sid": sid_source,
+        },
+    )
+
+
+def _coherent_field(
+    payload: Mapping[str, Any],
+    key: str,
+    expected_type: type | tuple[type, ...],
+) -> tuple[object | None, str, NativeEnvelopeRejection | None]:
+    nested = _native_object(payload)
+    top_present = key in payload
+    nested_present = key in nested
+    top = payload.get(key)
+    inner = nested.get(key)
+    conflict = NativeEnvelopeRejection[f"CONFLICTING_NATIVE_{key.upper()}"]
+    invalid = NativeEnvelopeRejection[f"INVALID_NATIVE_{key.upper()}"]
+    if top_present and nested_present and (
+        type(top) is not type(inner) or top != inner
+    ):
+        return None, "conflicting", conflict
+    value = top if top_present else inner if nested_present else None
+    source = (
+        "duplicate_equal"
+        if top_present and nested_present
+        else "top_level"
+        if top_present
+        else "nested_msg"
+        if nested_present
+        else "missing"
+    )
+    if value is None:
+        return None, source, None
+    if isinstance(value, bool) or not isinstance(value, expected_type):
+        return None, source, invalid
+    return value, source, None
+
+
+@dataclass(slots=True)
+class _SubscriptionBinding:
+    channel: str
+    command_id: int
+    generation: int
+    binding_id: str
+    run_request_index: int
+    sid: str | int | None = None
+    state: SubscriptionBindingState = SubscriptionBindingState.REQUESTED
+    duplicate_ack_count: int = 0
+
+
 class KalshiWsIntegrityTracker:
     """Assign local transport context without asserting native continuity."""
 
@@ -345,9 +666,10 @@ class KalshiWsIntegrityTracker:
         self._connection_id: str | None = None
         self._segment_id: str | None = None
         self._segment_boundary_reason = SegmentBoundaryReason.INITIAL_CONNECTION
-        self._has_bound_subscription = False
-        self._subscription_command_id: str | int | None = None
-        self._subscription_sid: str | int | None = None
+        self._binding_generations: dict[str, int] = {}
+        self._bindings: dict[str, _SubscriptionBinding] = {}
+        self._used_command_ids: set[int] = set()
+        self._run_request_index = 0
         self._snapshot_market_tickers: set[str] = set()
         self._last_native_seq: int | None = None
 
@@ -372,20 +694,82 @@ class KalshiWsIntegrityTracker:
         )
         self._connection_id = f"{self.campaign_id}:connection:{self._connection_number:04d}"
         self._start_segment(reason)
-        self._subscription_command_id = None
-        self._subscription_sid = None
+        self._bindings.clear()
 
-    def bind_subscription(self, *, command_id: str | int) -> None:
+    @property
+    def connection_epoch(self) -> int:
+        if self._connection_id is None:
+            raise RuntimeError("no active connection")
+        return self._connection_number
+
+    def bind_subscription(
+        self,
+        *,
+        command_id: int,
+        channels: tuple[str, ...] = ("orderbook_delta",),
+        created_at_utc: datetime | None = None,
+        created_at_monotonic_ns: int = 0,
+        request_payload_hash: str = "0" * 64,
+    ) -> tuple[SubscriptionRequestEvidence, ...]:
         if self._connection_id is None:
             raise RuntimeError("start_connection must be called before bind_subscription")
-        reason = (
-            SegmentBoundaryReason.RESUBSCRIPTION
-            if self._has_bound_subscription
-            else SegmentBoundaryReason.NEW_SUBSCRIPTION
+        if (
+            isinstance(command_id, bool)
+            or not isinstance(command_id, int)
+            or command_id < 1
+            or command_id > MAX_NATIVE_COMMAND_ID
+        ):
+            raise ValueError(SubscriptionRequestRejection.INVALID_COMMAND_ID)
+        if not channels:
+            raise ValueError("channels must not be empty")
+        if len(set(channels)) != len(channels) or any(
+            not isinstance(channel, str) or channel not in REVIEWED_PUBLIC_CHANNELS
+            for channel in channels
+        ):
+            raise ValueError(SubscriptionRequestRejection.INVALID_CHANNEL)
+        command_ids = tuple(command_id + offset for offset in range(len(channels)))
+        if command_ids[-1] > MAX_NATIVE_COMMAND_ID:
+            raise ValueError(SubscriptionRequestRejection.INVALID_COMMAND_ID)
+        if any(value in self._used_command_ids for value in command_ids):
+            raise ValueError(SubscriptionRequestRejection.COMMAND_ID_REUSED)
+        created = created_at_utc or datetime.now().astimezone()
+        if "orderbook_delta" in channels:
+            reason = (
+                SegmentBoundaryReason.RESUBSCRIPTION
+                if self._binding_generations.get("orderbook_delta", 0) > 0
+                else SegmentBoundaryReason.NEW_SUBSCRIPTION
+            )
+            self._start_segment(reason)
+        for channel, channel_command_id in zip(channels, command_ids, strict=True):
+            generation = self._binding_generations.get(channel, 0) + 1
+            self._binding_generations[channel] = generation
+            self._run_request_index += 1
+            self._bindings[channel] = _SubscriptionBinding(
+                channel=channel,
+                command_id=channel_command_id,
+                generation=generation,
+                run_request_index=self._run_request_index,
+                binding_id=(
+                    f"{self.connection_id}:subscription:{channel}:{generation:04d}"
+                ),
+            )
+        self._used_command_ids.update(command_ids)
+        return tuple(
+            SubscriptionRequestEvidence(
+                run_request_index=self._bindings[channel].run_request_index,
+                native_command_id=self._bindings[channel].command_id,
+                connection_id=self.connection_id,
+                connection_epoch=self.connection_epoch,
+                channel=channel,
+                subscription_generation=self._bindings[channel].generation,
+                command_type="subscribe",
+                created_at_utc=created,
+                created_at_monotonic_ns=created_at_monotonic_ns,
+                request_payload_hash=request_payload_hash,
+                market_tickers=self.requested_market_tickers,
+            )
+            for channel in channels
         )
-        self._start_segment(reason)
-        self._subscription_command_id = command_id
-        self._has_bound_subscription = True
 
     def record(
         self,
@@ -406,15 +790,73 @@ class KalshiWsIntegrityTracker:
         validate_no_secret_payload(payload)
         validate_no_private_account_payload(payload)
 
-        native_type = _native_str(payload, "type")
+        envelope = normalize_native_envelope(payload)
+        native_type = envelope.native_type
+        channel = envelope.channel
+        binding = self._bindings.get(channel)
         native_market_ticker = _native_str(payload, "market_ticker")
         is_orderbook = native_type in {"orderbook_snapshot", "orderbook_delta"}
         has_requested_market = native_market_ticker in self.requested_market_tickers
-        native_sid = _native_identifier(payload, "sid")
-        if is_orderbook and native_sid is not None:
-            if self._subscription_sid is not None and native_sid != self._subscription_sid:
-                self._start_segment(SegmentBoundaryReason.SID_CHANGE)
-            self._subscription_sid = native_sid
+        native_sid = envelope.sid
+        native_command_id = envelope.request_id
+        if (
+            binding is None
+            and native_type in {"error", "rejected"}
+            and native_command_id is not None
+        ):
+            matches = tuple(
+                candidate
+                for candidate in self._bindings.values()
+                if candidate.command_id == native_command_id
+            )
+            binding = matches[0] if len(matches) == 1 else None
+        binding_observation: SubscriptionBindingObservation | None = None
+        event_binding_state: SubscriptionBindingState | None = None
+        if (
+            envelope.rejection is None
+            and binding is not None
+            and native_type in {"subscribed", "ack", "ok"}
+        ):
+            if native_command_id != binding.command_id:
+                binding_observation = SubscriptionBindingObservation.STALE_ACK
+                event_binding_state = SubscriptionBindingState.REQUEST_MISMATCH
+            elif binding.state is SubscriptionBindingState.CONFLICTED:
+                binding_observation = SubscriptionBindingObservation.CONFLICTING_ACK
+            elif binding.state is SubscriptionBindingState.ACKNOWLEDGED:
+                if native_sid == binding.sid:
+                    binding.duplicate_ack_count += 1
+                    binding_observation = SubscriptionBindingObservation.DUPLICATE_ACK
+                else:
+                    binding.state = SubscriptionBindingState.CONFLICTED
+                    binding_observation = SubscriptionBindingObservation.CONFLICTING_ACK
+            elif binding.state is SubscriptionBindingState.REQUESTED:
+                binding.state = SubscriptionBindingState.ACKNOWLEDGED
+                binding.sid = native_sid
+                binding_observation = SubscriptionBindingObservation.ACKNOWLEDGED
+            else:
+                binding.state = SubscriptionBindingState.CONFLICTED
+                binding_observation = SubscriptionBindingObservation.CONFLICTING_ACK
+        elif (
+            envelope.rejection is None
+            and binding is not None
+            and native_type in {"error", "rejected"}
+        ):
+            if native_command_id == binding.command_id:
+                if binding.state is SubscriptionBindingState.REQUESTED:
+                    binding.state = SubscriptionBindingState.REJECTED
+                    binding_observation = SubscriptionBindingObservation.REJECTED
+                elif binding.state is SubscriptionBindingState.REJECTED:
+                    binding_observation = (
+                        SubscriptionBindingObservation.DUPLICATE_REJECTION
+                    )
+                else:
+                    binding.state = SubscriptionBindingState.CONFLICTED
+                    binding_observation = (
+                        SubscriptionBindingObservation.CONFLICTING_REJECTION
+                    )
+            else:
+                event_binding_state = SubscriptionBindingState.REQUEST_MISMATCH
+                binding_observation = SubscriptionBindingObservation.REJECTED
         native_seq = _native_identifier(payload, "seq")
         if (
             native_type == "orderbook_snapshot"
@@ -424,11 +866,59 @@ class KalshiWsIntegrityTracker:
             self._last_native_seq = None
         sequence_state = self._sequence_state(
             native_seq,
-            continuity_eligible=is_orderbook and has_requested_market,
+            continuity_eligible=(
+                is_orderbook
+                and has_requested_market
+                and envelope.rejection is None
+                and binding is not None
+                and binding.state is SubscriptionBindingState.ACKNOWLEDGED
+            ),
         )
         admission_status = AdmissionStatus.NOT_APPLICABLE
         exclusion_reason = _sequence_exclusion_reason(sequence_state)
         integrity_failure = exclusion_reason is not None
+        if envelope.rejection is not None:
+            exclusion_reason = ExclusionReason.NATIVE_ENVELOPE_REJECTED
+            integrity_failure = True
+        expected_channel = (
+            "orderbook_delta"
+            if is_orderbook
+            else "trade"
+            if native_type == "trade"
+            else None
+        )
+        if expected_channel is not None and channel != expected_channel:
+            exclusion_reason = ExclusionReason.CHANNEL_TYPE_MISMATCH
+            integrity_failure = True
+        if (
+            native_type in {"orderbook_snapshot", "orderbook_delta", "trade"}
+            and exclusion_reason
+            not in {
+                ExclusionReason.NATIVE_ENVELOPE_REJECTED,
+                ExclusionReason.CHANNEL_TYPE_MISMATCH,
+            }
+            and (
+                binding is None
+                or binding.state is not SubscriptionBindingState.ACKNOWLEDGED
+            )
+        ):
+            exclusion_reason = (
+                ExclusionReason.SUBSCRIPTION_BINDING_CONFLICTED
+                if binding is not None
+                and binding.state is SubscriptionBindingState.CONFLICTED
+                else ExclusionReason.PRE_ACKNOWLEDGMENT_DATA
+            )
+            integrity_failure = True
+        if (
+            native_type in {"orderbook_snapshot", "orderbook_delta", "trade"}
+            and binding is not None
+            and binding.state is SubscriptionBindingState.ACKNOWLEDGED
+            and binding.sid is not None
+            and native_sid is not None
+            and native_sid != binding.sid
+        ):
+            exclusion_reason = ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH
+            integrity_failure = True
         resync_state = ResyncState.RESYNC_REQUIRED
         if integrity_failure:
             admission_status = AdmissionStatus.EXCLUDED
@@ -462,10 +952,10 @@ class KalshiWsIntegrityTracker:
             received_at_utc=received_at_utc,
             received_monotonic_ns=received_monotonic_ns,
             payload_sha256=payload_sha256(original_payload),
-            channel=_native_channel(payload, native_type),
-            subscription_id=_native_identifier(payload, "id"),
-            subscription_sid=(self._subscription_sid if is_orderbook else native_sid),
-            subscription_command_id=self._subscription_command_id,
+            channel=channel,
+            subscription_id=native_command_id,
+            subscription_sid=native_sid,
+            subscription_command_id=(binding.command_id if binding is not None else None),
             admission_status=admission_status,
             exclusion_reason=exclusion_reason,
             sequence_continuity_policy=self.continuity_policy,
@@ -482,8 +972,31 @@ class KalshiWsIntegrityTracker:
                 ("exchange_ts_ms", "timestamp_ms", "ts_ms"),
             ),
             original_payload=original_payload,
+            subscription_generation=(binding.generation if binding is not None else None),
+            subscription_binding_id=(binding.binding_id if binding is not None else None),
+            subscription_binding_state=(
+                event_binding_state
+                or (binding.state if binding is not None else SubscriptionBindingState.UNKNOWN)
+            ),
+            subscription_identity_model=CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
+            native_envelope_rejection=envelope.rejection,
+            native_field_provenance=envelope.provenance,
+            subscription_binding_observation=binding_observation,
+            connection_epoch=self.connection_epoch,
+            run_request_index=(binding.run_request_index if binding is not None else None),
         )
-        if integrity_failure:
+        if (
+            integrity_failure
+            and exclusion_reason
+            not in {
+                ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH,
+                ExclusionReason.CHANNEL_TYPE_MISMATCH,
+                ExclusionReason.NATIVE_ENVELOPE_REJECTED,
+                ExclusionReason.PRE_ACKNOWLEDGMENT_DATA,
+                ExclusionReason.SUBSCRIPTION_BINDING_CONFLICTED,
+            }
+            and is_orderbook
+        ):
             self._start_segment(SegmentBoundaryReason.INTEGRITY_FAILURE)
         return event
 
@@ -491,7 +1004,6 @@ class KalshiWsIntegrityTracker:
         self._segment_number += 1
         self._segment_id = f"{self.campaign_id}:segment:{self._segment_number:04d}"
         self._segment_boundary_reason = reason
-        self._subscription_sid = None
         self._snapshot_market_tickers.clear()
         self._last_native_seq = None
 
@@ -584,6 +1096,14 @@ def _native_channel(payload: Mapping[str, Any], native_type: str | None) -> str:
     if native_type in {"orderbook_snapshot", "orderbook_delta"}:
         return "orderbook_delta"
     return native_type or "unknown"
+
+
+def _native_channels(payload: Mapping[str, Any]) -> tuple[str, ...]:
+    nested = _native_object(payload)
+    values = nested.get("channels", payload.get("channels"))
+    if not isinstance(values, list):
+        return ()
+    return tuple(value for value in values if isinstance(value, str))
 
 
 def _expect_mapping(record: Mapping[str, Any], field_name: str) -> Mapping[str, Any]:

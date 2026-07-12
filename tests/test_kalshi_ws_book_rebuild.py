@@ -162,6 +162,86 @@ def test_subscription_params_bind_explicit_future_pricing_mode() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    ("channel", "message_type"),
+    [("trade", "trade")],
+)
+def test_non_orderbook_binding_and_messages_never_mutate_d2b(
+    channel: str,
+    message_type: str,
+) -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    tracker.bind_subscription(command_id=3, channels=(channel,))
+    control = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 3,
+            "sid": 99,
+            "msg": {"channel": channel},
+        },
+        local_row_index=1,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1001,
+    )
+    before_snapshot = tracker.record(
+        {
+            "type": message_type,
+            "sid": 99,
+            "seq": 1,
+            "msg": {"channel": channel, "market_ticker": MARKET},
+        },
+        local_row_index=2,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1002,
+    )
+    snapshot = _snapshot(
+        tracker,
+        yes=[["0.42", "3"]],
+        no=[],
+        local_row_index=3,
+        seq=1,
+    )
+    after_snapshot = tracker.record(
+        {
+            "type": message_type,
+            "sid": 99,
+            "seq": 2,
+            "msg": {"channel": channel, "market_ticker": MARKET},
+        },
+        local_row_index=4,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1004,
+    )
+    delta = _delta(
+        tracker,
+        side="yes",
+        price="0.42",
+        delta="1",
+        local_row_index=5,
+        seq=2,
+        sid=41,
+    )
+
+    assert rebuilder.apply(control).disposition is RebuildDisposition.IGNORED_NON_ORDERBOOK
+    assert (
+        rebuilder.apply(before_snapshot).disposition
+        is RebuildDisposition.IGNORED_NON_ORDERBOOK
+    )
+    snapshot_result = rebuilder.apply(snapshot)
+    assert snapshot_result.frame is not None
+    before_hash = snapshot_result.frame.terminal_state_hash
+    assert (
+        rebuilder.apply(after_snapshot).disposition
+        is RebuildDisposition.IGNORED_NON_ORDERBOOK
+    )
+    delta_result = rebuilder.apply(delta)
+
+    assert delta_result.frame is not None
+    assert delta_result.frame.terminal_state_hash != before_hash
+    assert delta.segment_id == snapshot.segment_id
+
+
 @pytest.mark.parametrize("value", ["true", 1, None])
 def test_unknown_pricing_mode_metadata_is_quarantined(value: object) -> None:
     tracker = _tracker()
@@ -905,6 +985,17 @@ def test_same_market_has_independent_state_per_segment() -> None:
     first = _snapshot(tracker, yes=[["0.42", "3"]], no=[])
     rebuilder.apply(first)
     tracker.bind_subscription(command_id=2)
+    tracker.record(
+        {
+            "type": "subscribed",
+            "id": 2,
+            "sid": 41,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=2,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=2,
+    )
     second = _snapshot(
         tracker,
         yes=[["0.35", "9"]],
@@ -933,6 +1024,17 @@ def test_same_market_has_independent_state_per_connection() -> None:
     rebuilder.apply(first)
     tracker.start_connection()
     tracker.bind_subscription(command_id=2)
+    tracker.record(
+        {
+            "type": "subscribed",
+            "id": 2,
+            "sid": 41,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=2,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=2,
+    )
     second = _snapshot(
         tracker,
         yes=[["0.35", "9"]],
@@ -972,10 +1074,12 @@ def test_sid_change_cannot_mutate_the_prior_segment() -> None:
     )
     result = rebuilder.apply(delta)
 
-    assert delta.segment_id != snapshot.segment_id
-    assert delta.exclusion_reason is ExclusionReason.DELTA_BEFORE_SNAPSHOT
-    assert result.disposition is RebuildDisposition.EXCLUDED
-    assert rebuilder.state_for(MARKET, delta.connection_id, delta.segment_id) is None
+    assert delta.segment_id == snapshot.segment_id
+    assert (
+        delta.exclusion_reason is ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH
+    )
+    assert result.disposition is RebuildDisposition.QUARANTINED
+    assert result.reason is RebuildReason.IDENTITY_MISMATCH
     assert (
         rebuilder.terminal_state_hash(
             MARKET,
@@ -984,6 +1088,58 @@ def test_sid_change_cannot_mutate_the_prior_segment() -> None:
         )
         == before
     )
+
+
+def test_conflicting_orderbook_ack_requires_new_generation_and_snapshot() -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    snapshot = _snapshot(tracker, yes=[["0.42", "3"]], no=[])
+    assert rebuilder.apply(snapshot).frame is not None
+    conflict = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 1,
+            "sid": 99,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=2,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=2,
+    )
+    conflict_result = rebuilder.apply(conflict)
+    disputed = _snapshot(
+        tracker,
+        yes=[["0.40", "4"]],
+        no=[],
+        local_row_index=3,
+        seq=2,
+    )
+    disputed_result = rebuilder.apply(disputed)
+    tracker.bind_subscription(command_id=2)
+    tracker.record(
+        {
+            "type": "subscribed",
+            "id": 2,
+            "sid": 44,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=4,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=4,
+    )
+    recovered = _snapshot(
+        tracker,
+        yes=[["0.39", "5"]],
+        no=[],
+        local_row_index=5,
+        seq=1,
+        sid=44,
+    )
+
+    assert conflict_result.reason is RebuildReason.IDENTITY_MISMATCH
+    assert disputed_result.frame is None
+    assert disputed.exclusion_reason is ExclusionReason.SUBSCRIPTION_BINDING_CONFLICTED
+    assert rebuilder.apply(recovered).frame is not None
 
 
 def test_cross_market_delta_is_excluded_without_mutating_existing_market() -> None:
@@ -1414,6 +1570,17 @@ def _tracker(
     )
     tracker.start_connection()
     tracker.bind_subscription(command_id=1)
+    tracker.record(
+        {
+            "type": "subscribed",
+            "id": 1,
+            "sid": 41,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=1,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1,
+    )
     return tracker
 
 

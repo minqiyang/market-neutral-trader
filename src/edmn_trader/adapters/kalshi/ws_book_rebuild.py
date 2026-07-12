@@ -11,6 +11,7 @@ from typing import Any
 
 from edmn_trader.adapters.kalshi.ws_events import (
     AdmissionStatus,
+    ExclusionReason,
     KalshiWsRawEvent,
     KalshiWsSchemaCompatibilityError,
     LegacyKalshiWsRawEvent,
@@ -199,6 +200,7 @@ class _ChannelSubscriptionIdentity:
     request_id: str | int | None = None
     command_id: str | int | None = None
     sid: str | int | None = None
+    binding_id: str | None = None
     market_tickers: set[str] = field(default_factory=set)
 
 
@@ -212,6 +214,7 @@ class _ChannelSubscriptionRegistry:
             ("request_id", event.subscription_id),
             ("command_id", event.subscription_command_id),
             ("sid", event.subscription_sid),
+            ("binding_id", event.subscription_binding_id),
         ):
             current = getattr(identity, field_name)
             if current is not None and observed is not None and current != observed:
@@ -271,22 +274,43 @@ class KalshiWsBookRebuilder:
         event = parsed
         is_orderbook = event.native_type in {"orderbook_snapshot", "orderbook_delta"}
         key = _event_key(event) if is_orderbook else None
-        if is_orderbook and (
-            event.admission_status is not AdmissionStatus.ADMITTED
-            or event.exclusion_reason is not None
-        ):
-            return RebuildResult(
-                disposition=RebuildDisposition.EXCLUDED,
-                reason=RebuildReason.D2A_ROW_EXCLUDED,
-                key=key,
-            )
-        if not is_orderbook and event.native_type not in {
+        is_control = event.native_type in {
             "subscribed",
             "ack",
             "ok",
             "error",
             "rejected",
-        }:
+        }
+        is_unscoped_control = is_control and event.channel == event.native_type
+        if (
+            not is_orderbook
+            and event.channel != "orderbook_delta"
+            and not is_unscoped_control
+        ):
+            return RebuildResult(
+                disposition=RebuildDisposition.IGNORED_NON_ORDERBOOK,
+                reason=None,
+            )
+        if is_orderbook and (
+            event.admission_status is not AdmissionStatus.ADMITTED
+            or event.exclusion_reason is not None
+        ):
+            if (
+                event.exclusion_reason
+                is ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH
+            ):
+                return RebuildResult(
+                    disposition=RebuildDisposition.QUARANTINED,
+                    reason=RebuildReason.IDENTITY_MISMATCH,
+                    key=key,
+                    quarantined_record=event.to_record(),
+                )
+            return RebuildResult(
+                disposition=RebuildDisposition.EXCLUDED,
+                reason=RebuildReason.D2A_ROW_EXCLUDED,
+                key=key,
+            )
+        if not is_orderbook and not is_control:
             return RebuildResult(
                 disposition=RebuildDisposition.IGNORED_NON_ORDERBOOK,
                 reason=None,

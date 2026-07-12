@@ -22,7 +22,10 @@ from edmn_trader.adapters.kalshi.public_evidence import (
     record_rest_lifecycle,
     write_public_trade_evidence,
 )
-from edmn_trader.adapters.kalshi.ws_events import KalshiWsIntegrityTracker
+from edmn_trader.adapters.kalshi.ws_events import (
+    ExclusionReason,
+    KalshiWsIntegrityTracker,
+)
 from edmn_trader.adapters.kalshi.ws_recorder import _source_type, _subscription_payload
 
 NOW = datetime(2026, 7, 10, 12, 0, tzinfo=UTC)
@@ -147,6 +150,96 @@ def test_trade_missing_market_identity_is_quarantined() -> None:
     assert stream.status is PublicTradeStreamStatus.QUARANTINED_INPUT
 
 
+def test_trade_with_wrong_channel_sid_is_quarantined() -> None:
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="campaign-1",
+        requested_market_tickers=(MARKET,),
+    )
+    tracker.start_connection()
+    tracker.bind_subscription(command_id=1, channels=("orderbook_delta", "trade"))
+    tracker.record(
+        {
+            "type": "subscribed",
+            "id": 2,
+            "sid": 7,
+            "msg": {"channel": "trade"},
+        },
+        local_row_index=1,
+        received_at_utc=NOW,
+        received_monotonic_ns=1,
+    )
+    event = tracker.record(
+        {
+            "type": "trade",
+            "sid": 8,
+            "seq": 1,
+            "msg": {"trade_id": "wrong-sid", "market_ticker": MARKET},
+        },
+        local_row_index=2,
+        received_at_utc=NOW,
+        received_monotonic_ns=2,
+    )
+
+    stream = build_public_trade_stream([event], selected_market_tickers=(MARKET,))
+
+    assert event.exclusion_reason is ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH
+    assert stream.trade_count == 0
+    assert stream.quarantined_count == 1
+    assert stream.status is PublicTradeStreamStatus.QUARANTINED_INPUT
+
+
+def test_trade_before_ack_is_excluded_and_only_later_trade_is_trusted() -> None:
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="campaign-1",
+        requested_market_tickers=(MARKET,),
+    )
+    tracker.start_connection()
+    tracker.bind_subscription(command_id=1, channels=("orderbook_delta", "trade"))
+    first = tracker.record(
+        {
+            "type": "trade",
+            "sid": 22,
+            "seq": 1,
+            "msg": {"trade_id": "first", "market_ticker": MARKET},
+        },
+        local_row_index=2,
+        received_at_utc=NOW,
+        received_monotonic_ns=2,
+    )
+    tracker.record(
+        {
+            "type": "subscribed",
+            "id": 2,
+            "sid": 22,
+            "msg": {"channel": "trade"},
+        },
+        local_row_index=3,
+        received_at_utc=NOW,
+        received_monotonic_ns=3,
+    )
+    changed = tracker.record(
+        {
+            "type": "trade",
+            "sid": 22,
+            "seq": 2,
+            "msg": {"trade_id": "changed", "market_ticker": MARKET},
+        },
+        local_row_index=4,
+        received_at_utc=NOW,
+        received_monotonic_ns=4,
+    )
+
+    stream = build_public_trade_stream(
+        [first, changed],
+        selected_market_tickers=(MARKET,),
+    )
+
+    assert first.exclusion_reason is ExclusionReason.PRE_ACKNOWLEDGMENT_DATA
+    assert changed.exclusion_reason is None
+    assert stream.trade_count == 1
+    assert stream.quarantined_count == 1
+
+
 def test_accepted_trade_does_not_hide_quarantined_input() -> None:
     malformed = _event(
         _tracker(),
@@ -198,11 +291,13 @@ def test_zero_trade_fixture_is_valid_quiet_market_evidence() -> None:
 
 
 def test_fixture_subscription_includes_orderbook_and_public_trade_channels() -> None:
-    assert json.loads(_subscription_payload((MARKET,))) == {
-        "id": 1,
+    assert json.loads(
+        _subscription_payload((MARKET,), channel="trade", command_id=2)
+    ) == {
+        "id": 2,
         "cmd": "subscribe",
         "params": {
-            "channels": ["orderbook_delta", "trade"],
+            "channels": ["trade"],
             "market_tickers": [MARKET],
             "use_yes_price": False,
         },
@@ -469,7 +564,25 @@ def _tracker(
         requested_market_tickers=markets,
     )
     tracker.start_connection()
-    tracker.bind_subscription(command_id=1)
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
+    )
+    for index, (channel, sid, command_id) in enumerate(
+        (("orderbook_delta", 41, 1), ("trade", 7, 2)),
+        start=1,
+    ):
+        tracker.record(
+            {
+                "type": "subscribed",
+                "id": command_id,
+                "sid": sid,
+                "msg": {"channel": channel},
+            },
+            local_row_index=index,
+            received_at_utc=NOW,
+            received_monotonic_ns=index,
+        )
     return tracker
 
 

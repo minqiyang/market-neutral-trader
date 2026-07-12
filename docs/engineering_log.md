@@ -1,5 +1,25 @@
 # Engineering Log
 
+## D2E-F2 coherence and pre-ACK parity
+
+The F2 correction moves duplicated routing-field resolution into one pure gate.
+It requires type-safe equality between top-level and nested `type`, `channel`,
+`id`, and `sid`, records where each accepted field came from, and preserves
+conflicting frames as typed exclusions without mutating subscription state.
+
+The channel registry now treats an exact duplicate ACK as idempotent and a
+different-SID duplicate as a permanent conflict for that generation. Unknown
+request ACKs are evidence-only and do not alter the pending binding. Data under
+pending, rejected, conflicted, wrong-SID, or wrong-channel bindings is excluded
+before D2B/D2C. The validator reconstructs the same state machine from immutable
+D2A rows rather than trusting persisted states. Binding failures force an open
+status refresh, block monitor health, and remain failed in terminal evidence.
+
+The regression matrix includes all four duplicate-field conflicts, Boolean
+identifiers, ACK idempotency/conflict, pre-ACK snapshot/trade exclusion,
+post-ACK fresh-snapshot recovery, channel isolation, reconnect/generation
+boundaries, exact split-SID reproduction, D2B hashes, and monitor parity.
+
 ## Why this project exists
 
 This project exists to demonstrate professional trading-system engineering in a
@@ -29,6 +49,52 @@ incomplete coverage. Auxiliary image metadata remains outside lifecycle
 completeness.
 
 ## D2E runtime integration
+
+### D2E-F1 channel-scoped identity correction
+
+The first post-D2E Real5M supplied two valid acknowledgments for one subscribe
+command: orderbook SID `1` and trade SID `2`. D2A preserved both correctly, but
+D2B's segment metadata was channel-blind and interpreted the trade SID as an
+orderbook identity contradiction. It quarantined the subsequent orderbook
+snapshot and the run failed closed.
+
+The correction reuses the D2A integrity tracker as the subscription registry.
+Each requested channel receives a connection-local generation and deterministic
+binding ID, and acknowledgment state/SID stay with that channel. D2B ignores
+trade control frames as well as trade data, while D2C still persists them.
+Orderbook SID mismatch is excluded without inventing a new segment; an explicit
+orderbook resubscription is required to create a fresh generation and segment.
+The raw v2 parser tolerates historical rows without the new optional binding
+provenance, and runtime validation independently reconstructs channel-binding
+summaries from durable D2A rows.
+
+The exact split-ack fixture now proves that orderbook SID `11`, trade SID `22`,
+and a later orderbook snapshot/delta on SID `11` produce a valid two-frame
+native rebuild and validator pass. No threshold, network, credential, market
+selection, production, or order behavior changed.
+
+Independent review then found that optional fields alone did not distinguish
+new formal rows from historical compatibility rows, plural-channel ACKs with
+one SID were ambiguous, and late ACKs were not matched to the active command.
+The correction records `edmn.kalshi.ws.subscription_identity.v1` in launch,
+summary, and new D2A rows; validator replay requires coherent connection,
+channel, generation, binding ID, and command provenance under that marker.
+No-SID plural acknowledgments may acknowledge the request, but a plural ACK
+carrying one SID cannot bind multiple channels. Late or unknown command IDs are
+typed `REQUEST_MISMATCH` and cannot rebind the active generation.
+
+The clean PR-head review found two more containment gaps. A SID nested inside a
+plural-channel ACK now receives the same ambiguous treatment as a top-level
+SID, and post-fix validation requires public data rows to carry an acknowledged
+binding rather than a merely requested one. Trade data is also checked against
+the trade binding SID; stale/foreign trade rows are D2A-excluded and quarantined
+from D2C without touching D2B.
+
+The final correction round rejects native type/channel contradictions before
+downstream mutation: orderbook data must resolve to `orderbook_delta`, and
+public trades must resolve to `trade`. For supported plural no-SID ACKs, the
+first post-ACK data SID now binds that channel; later SID changes are excluded,
+so the compatibility path cannot admit multiple trade identities.
 
 D2A-D2D originally merged as independently verified software contracts, while
 the operational `kalshi-ws-smoke` entrypoint still wrote the historical
@@ -1564,6 +1630,23 @@ terminal state hash but retain different raw payload hashes. Runtime and the
 independent validator use the same parser through separate rebuild instances;
 durable validation still compares every generated frame and terminal hash.
 No production, account, order-write, or live-gate behavior changed.
+
+## D2E-F3 request and generation integrity
+
+The F2 review found that validator binding history reset at reconnect and the
+real recorder reused native command ID `1`. F3 records each outbound subscribe
+as immutable run-scoped evidence with a contiguous request index, unique positive
+native command ID, connection epoch, channel generation, semantic payload hash,
+and send outcome. The recorder uses one channel per command and persists the
+pending record before send. Validation reconstructs the full run history rather
+than trusting inbound event annotations or runtime summaries. Synthetic tests
+cover invalid allocator input, reconnect progression, split channel commands,
+ACK conflicts, D2B/D2C isolation, recovery, and 100k streaming validation.
+
+The post-review correction aligns rejection transitions with the same full-run
+identity model. A new connection and generation can reject cleanly; duplicate
+rejections are idempotent; ACK then rejection or rejection then ACK for one
+request conflicts. Stale rejection evidence cannot mutate the active binding.
 
 ## Round 8J4 candidate-discovery integrity audit
 

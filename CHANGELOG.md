@@ -6,6 +6,41 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added D2E-F3 run-scoped WebSocket request evidence and strict subscription
+  identity. New runtime writes allocate unique positive command IDs per channel
+  across reconnects, advance channel generations across connection epochs,
+  persist pending/send outcomes before trusting ACKs, and independently replay
+  request/ACK/SID bindings. Invalid IDs and channels fail before mutation;
+  legacy v1 binding evidence remains readable. No production or order path was
+  added.
+- Corrected rejection replay across reconnects. A valid next-generation request
+  may terminate rejected without conflicting with the prior connection, while
+  ACK/rejection contradictions within one complete request identity conflict and
+  duplicate rejections remain idempotent.
+- Correlated documented channel-less WebSocket error responses through the
+  run-unique native command ID. Unknown or old-connection errors remain raw,
+  fail monitor trust, and cannot mutate a current binding.
+- Added D2E-F2 native-envelope coherence and binding-state fail-close behavior.
+  Conflicting top-level/nested `type`, `channel`, `id`, or `sid` values and
+  Boolean identifiers are typed exclusions; exact duplicate ACKs are
+  idempotent, contradictory ACKs conflict only their channel, and pre-ACK data
+  remains raw but cannot enter D2B/D2C. Runtime, monitor, terminal summary, and
+  independent validator replay now agree on binding failures. No network,
+  credential, production, or order-write behavior was added.
+- Corrected D2E subscription identity to be channel-scoped. Split public
+  acknowledgments may now bind distinct orderbook and trade SIDs under one
+  command without trade evidence invalidating D2B. D2A records optional
+  generation/binding/state provenance, runtime and validator expose the same
+  per-channel summary, and unexpected orderbook SIDs remain fail-closed until
+  explicit resubscription. An identity-model marker distinguishes new formal
+  rows from readable historical rows; native command IDs are matched to the
+  active generation, and ambiguous plural-channel ACKs with one SID do not
+  satisfy acknowledgment, including nested SIDs. New public data rows require
+  acknowledged bindings, and wrong-SID trades are quarantined from D2C without
+  affecting D2B. Native type/channel contradictions are excluded, and the first
+  SID after a supported no-SID ACK binds that channel. This is a fixture-only
+  correction with no threshold, credential, network, production, or
+  order-write change.
 - Replaced the Round 8J4 global `occurrence_datetime` hard stop with selection
   profile v4's dual-interpretation policy. Canary and seven-day candidates now
   require independently safe close and expected-expiration deadlines;

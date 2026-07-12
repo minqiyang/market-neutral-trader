@@ -7,7 +7,7 @@ import json
 import time
 from collections import Counter
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -22,7 +22,12 @@ from edmn_trader.adapters.kalshi.ws_auth import (
     KalshiWsAuthConfig,
     build_kalshi_ws_headers,
 )
-from edmn_trader.adapters.kalshi.ws_events import KalshiWsIntegrityTracker, KalshiWsRawEvent
+from edmn_trader.adapters.kalshi.ws_events import (
+    KalshiWsIntegrityTracker,
+    KalshiWsRawEvent,
+    SubscriptionRequestEvidence,
+    normalize_native_envelope,
+)
 from edmn_trader.data.jsonl import append_jsonl_record, write_jsonl_records
 
 WebSocketFactory = Callable[..., Any]
@@ -30,6 +35,7 @@ ProgressCallback = Callable[[dict[str, object]], None]
 EventCallback = Callable[[KalshiWsRawEvent], None]
 ConnectionCallback = Callable[[ConnectionEvidenceEvent], None]
 TickCallback = Callable[[datetime], None]
+RequestCallback = Callable[[SubscriptionRequestEvidence], None]
 REQUIRED_PUBLIC_CHANNELS = frozenset({"orderbook_delta", "trade"})
 
 
@@ -101,6 +107,7 @@ def record_kalshi_demo_ws_orderbook(
     progress_callback: ProgressCallback | None = None,
     event_callback: EventCallback | None = None,
     connection_callback: ConnectionCallback | None = None,
+    request_callback: RequestCallback | None = None,
     tick_callback: TickCallback | None = None,
     monotonic: Callable[[], float] | None = None,
     monotonic_ns: Callable[[], int] | None = None,
@@ -133,6 +140,7 @@ def record_kalshi_demo_ws_orderbook(
         write_jsonl_records(config.raw_events_path, [])
     previous_connection_id: str | None = None
     previous_segment_id: str | None = None
+    next_command_id = 1
     while event_count < config.max_events and monotonic_clock() < deadline:
         opened = False
         try:
@@ -155,13 +163,38 @@ def record_kalshi_demo_ws_orderbook(
                     previous_connection_id=previous_connection_id,
                     previous_segment_id=previous_segment_id,
                 )
-                websocket.send(
-                    _subscription_payload(
+                for channel in sorted(REQUIRED_PUBLIC_CHANNELS):
+                    command_id = next_command_id
+                    next_command_id += 1
+                    payload = _subscription_payload(
                         config.market_tickers,
+                        channel=channel,
+                        command_id=command_id,
                         use_yes_price=config.use_yes_price,
                     )
-                )
-                integrity_tracker.bind_subscription(command_id=1)
+                    request = integrity_tracker.bind_subscription(
+                        command_id=command_id,
+                        channels=(channel,),
+                        created_at_utc=clock(),
+                        created_at_monotonic_ns=monotonic_ns_clock(),
+                        request_payload_hash=hashlib.sha256(payload.encode()).hexdigest(),
+                    )[0]
+                    if request_callback is not None:
+                        _invoke_evidence_callback(request_callback, request)
+                    try:
+                        websocket.send(payload)
+                    except Exception:
+                        if request_callback is not None:
+                            _invoke_evidence_callback(
+                                request_callback,
+                                replace(request, send_outcome="SEND_FAILED"),
+                            )
+                        raise
+                    if request_callback is not None:
+                        _invoke_evidence_callback(
+                            request_callback,
+                            replace(request, send_outcome="SENT"),
+                        )
                 if reconnect_count:
                     _emit_connection(
                         connection_callback,
@@ -185,16 +218,23 @@ def record_kalshi_demo_ws_orderbook(
                     received_monotonic_ns = monotonic_ns_clock()
                     payload = _loads(raw)
                     message_type = _message_type(payload)
-                    acknowledged_channels.update(
-                        subscription_ack_channels(payload, message_type)
-                    )
-                    acknowledged = REQUIRED_PUBLIC_CHANNELS <= acknowledged_channels
-                    rejected = _is_subscription_rejection(payload, message_type)
                     event = integrity_tracker.record(
                         payload,
                         local_row_index=event_count + 1,
                         received_at_utc=received_at,
                         received_monotonic_ns=received_monotonic_ns,
+                    )
+                    if event.subscription_binding_state.value == "ACKNOWLEDGED":
+                        acknowledged_channels.update(
+                            subscription_ack_channels(payload, message_type)
+                        )
+                    acknowledged = REQUIRED_PUBLIC_CHANNELS <= acknowledged_channels
+                    rejected = (
+                        event.native_type in {"error", "rejected"}
+                        and event.subscription_binding_state.value == "REJECTED"
+                        and event.subscription_binding_observation is not None
+                        and event.subscription_binding_observation.value == "REJECTED"
+                        and event.subscription_id == event.subscription_command_id
                     )
                     row = event.to_record()
                     if config.persist_legacy_raw_events:
@@ -320,14 +360,16 @@ def _websockets_connect(*args: object, **kwargs: object) -> object:
 def _subscription_payload(
     market_tickers: tuple[str, ...],
     *,
+    channel: str,
+    command_id: int,
     use_yes_price: bool = False,
 ) -> str:
     return json.dumps(
         {
-            "id": 1,
+            "id": command_id,
             "cmd": "subscribe",
             "params": {
-                "channels": ["orderbook_delta", "trade"],
+                "channels": [channel],
                 "market_tickers": list(market_tickers),
                 "use_yes_price": use_yes_price,
             },
@@ -359,40 +401,23 @@ def _message_type(payload: Mapping[str, object]) -> str:
 
 def subscription_ack_channels(
     payload: Mapping[str, object],
-    message_type: str,
+    _message_type: str,
+    expected_request_ids: Mapping[str, int] | None = None,
 ) -> set[str]:
-    lowered = message_type.lower()
-    if payload.get("id") != 1 or not (
-        "subscribed" in lowered or lowered == "ack"
+    envelope = normalize_native_envelope(payload)
+    if (
+        envelope.rejection is not None
+        or not isinstance(envelope.request_id, int)
+        or envelope.native_type not in {"subscribed", "ack", "ok"}
+        or envelope.channel not in REQUIRED_PUBLIC_CHANNELS
     ):
         return set()
-    nested = payload.get("msg")
-    source = nested if isinstance(nested, Mapping) else payload
-    channels: set[str] = set()
-    channel = source.get("channel")
-    if isinstance(channel, str):
-        channels.add(channel)
-    channel_list = source.get("channels")
-    if isinstance(channel_list, list):
-        channels.update(str(item) for item in channel_list if isinstance(item, str))
-    return channels & REQUIRED_PUBLIC_CHANNELS
-
-
-def _is_subscription_rejection(payload: Mapping[str, object], message_type: str) -> bool:
-    if payload.get("id") != 1:
-        return False
-    lowered = message_type.lower()
-    nested = payload.get("msg")
-    nested_error = (
-        nested.get("error") or nested.get("code") or nested.get("message")
-        if isinstance(nested, Mapping)
-        else None
-    )
-    return (
-        "reject" in lowered
-        or lowered == "error" and bool(payload.get("error") or nested_error or nested)
-        or str(payload.get("cmd") or "").lower() == "subscribe" and bool(payload.get("error"))
-    )
+    if (
+        expected_request_ids is not None
+        and expected_request_ids.get(envelope.channel) != envelope.request_id
+    ):
+        return set()
+    return {envelope.channel}
 
 
 def _write_result(

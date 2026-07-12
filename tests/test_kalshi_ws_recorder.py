@@ -21,7 +21,23 @@ from edmn_trader.adapters.kalshi.ws_recorder import (
     KalshiWsRecorderConfig,
     _loads,
     record_kalshi_demo_ws_orderbook,
+    subscription_ack_channels,
 )
+
+
+@pytest.mark.parametrize("sid_location", ["top", "nested"])
+def test_plural_channel_ack_with_one_sid_is_ambiguous_and_not_accepted(
+    sid_location: str,
+) -> None:
+    payload = {
+        "type": "subscribed",
+        "id": 1,
+        "msg": {"channels": ["orderbook_delta", "trade"]},
+    }
+    target = payload if sid_location == "top" else payload["msg"]
+    target["sid"] = 7
+
+    assert subscription_ack_channels(payload, "subscribed") == set()
 
 
 def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path) -> None:
@@ -31,7 +47,14 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
             {
                 "type": "subscribed",
                 "id": 1,
-                "msg": {"channels": ["orderbook_delta", "trade"]},
+                "sid": 11,
+                "msg": {"channel": "orderbook_delta"},
+            },
+            {
+                "type": "subscribed",
+                "id": 2,
+                "sid": 22,
+                "msg": {"channel": "trade"},
             },
             {
                 "type": "orderbook_snapshot",
@@ -54,7 +77,7 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
             market_tickers=("DEMO-MARKET",),
             raw_events_path=tmp_path / "raw.jsonl",
             duration_seconds=1,
-            max_events=3,
+            max_events=4,
         ),
         KalshiWsAuthConfig(api_key_id="fake", private_key_path=key_path),
         websocket_factory=lambda *_args, **_kwargs: websocket,
@@ -63,7 +86,7 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
 
     assert result.status == "ok"
     assert result.subscription_acknowledged is True
-    assert result.event_count == 3
+    assert result.event_count == 4
     assert result.snapshot_count == 1
     assert result.delta_count == 1
     assert result.raw_event_sha256
@@ -71,24 +94,33 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
     records = [json.loads(line) for line in raw_text.splitlines()]
     assert [record["schema_version"] for record in records] == [
         KALSHI_WS_RAW_SCHEMA_VERSION
-    ] * 3
-    assert [record["local_row_index"] for record in records] == [1, 2, 3]
-    assert [record["native_seq"] for record in records] == [None, 901, 902]
-    assert records[1]["native_sid"] == 11
-    assert records[1]["subscription_command_id"] == 1
-    assert records[1]["admission_status"] == AdmissionStatus.ADMITTED
+    ] * 4
+    assert [record["local_row_index"] for record in records] == [1, 2, 3, 4]
+    assert [record["native_seq"] for record in records] == [None, None, 901, 902]
+    assert records[2]["native_sid"] == 11
+    assert records[2]["subscription_command_id"] == 1
     assert records[2]["admission_status"] == AdmissionStatus.ADMITTED
-    assert records[2]["original_payload"]["type"] == "orderbook_delta"
+    assert records[3]["admission_status"] == AdmissionStatus.ADMITTED
+    assert records[3]["original_payload"]["type"] == "orderbook_delta"
     assert [json.loads(item) for item in websocket.sent] == [
         {
             "id": 1,
             "cmd": "subscribe",
             "params": {
-                    "channels": ["orderbook_delta", "trade"],
+                    "channels": ["orderbook_delta"],
                     "market_tickers": ["DEMO-MARKET"],
                     "use_yes_price": False,
             },
-        }
+        },
+        {
+            "id": 2,
+            "cmd": "subscribe",
+            "params": {
+                    "channels": ["trade"],
+                    "market_tickers": ["DEMO-MARKET"],
+                    "use_yes_price": False,
+            },
+        },
     ]
     assert "KALSHI-ACCESS" not in raw_text
 
@@ -103,11 +135,14 @@ def test_ws_recorder_reconnects_after_read_failure_with_existing_rows(
                 {
                     "type": "subscribed",
                     "id": 1,
-                    "msg": {"channels": ["orderbook_delta", "trade"]},
+                    "sid": 11,
+                    "msg": {"channel": "orderbook_delta"},
                 }
             ]
         ),
-        _FakeWebSocket([{"type": "orderbook_delta", "market_ticker": "DEMO-MARKET"}]),
+        _FakeWebSocket(
+            [{"type": "orderbook_delta", "sid": 11, "market_ticker": "DEMO-MARKET"}]
+        ),
     ]
     connection_events = []
 
@@ -139,10 +174,9 @@ def test_ws_recorder_reconnects_after_read_failure_with_existing_rows(
     assert records[1]["segment_id"] != records[0]["segment_id"]
     assert records[1]["segment_boundary_reason"] == SegmentBoundaryReason.RESUBSCRIPTION
     assert records[1]["admission_status"] == AdmissionStatus.EXCLUDED
-    assert records[1]["exclusion_reason"] == ExclusionReason.DELTA_BEFORE_SNAPSHOT
+    assert records[1]["exclusion_reason"] == ExclusionReason.PRE_ACKNOWLEDGMENT_DATA
     assert [event.event_type for event in connection_events] == [
         ConnectionEvidenceType.CONNECTION_OPEN,
-        ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED,
         ConnectionEvidenceType.CONNECTION_ERROR,
         ConnectionEvidenceType.CONNECTION_CLOSE,
         ConnectionEvidenceType.RECONNECT,
@@ -150,6 +184,54 @@ def test_ws_recorder_reconnects_after_read_failure_with_existing_rows(
         ConnectionEvidenceType.CONNECTION_CLOSE,
     ]
     assert connection_events[4].previous_connection_id == connection_events[0].connection_id
+
+
+def test_stale_rejection_does_not_emit_global_subscription_rejection(
+    tmp_path: Path,
+) -> None:
+    websocket = _FakeWebSocket(
+        [
+            {
+                "type": "subscribed",
+                "id": 1,
+                "sid": 11,
+                "msg": {"channel": "orderbook_delta"},
+            },
+            {
+                "type": "subscribed",
+                "id": 2,
+                "sid": 22,
+                "msg": {"channel": "trade"},
+            },
+            {
+                "type": "error",
+                "id": 999,
+                "msg": {"channel": "trade", "message": "stale"},
+            },
+        ]
+    )
+    connection_events = []
+
+    record_kalshi_demo_ws_orderbook(
+        KalshiWsRecorderConfig(
+            campaign_id="stale-rejection",
+            market_tickers=("DEMO-MARKET",),
+            raw_events_path=tmp_path / "raw.jsonl",
+            duration_seconds=1,
+            max_events=3,
+        ),
+        KalshiWsAuthConfig(
+            api_key_id="fake",
+            private_key_path=_fake_private_key_path(tmp_path),
+        ),
+        websocket_factory=lambda *_args, **_kwargs: websocket,
+        now=lambda: datetime(2026, 7, 3, 20, 0, tzinfo=UTC),
+        connection_callback=connection_events.append,
+    )
+
+    assert ConnectionEvidenceType.SUBSCRIPTION_REJECTED not in {
+        event.event_type for event in connection_events
+    }
 
 
 def test_ws_recorder_does_not_promote_partial_or_unbound_subscription_ack(
@@ -204,7 +286,15 @@ def test_ws_recorder_records_nested_subscription_rejection(tmp_path: Path) -> No
             private_key_path=_fake_private_key_path(tmp_path),
         ),
         websocket_factory=lambda *_args, **_kwargs: _FakeWebSocket(
-            [{"type": "error", "id": 1, "msg": {"code": "invalid_subscription"}}]
+            [
+                {
+                    "type": "error",
+                    "id": 1,
+                    "msg": {
+                        "code": "invalid_subscription",
+                    },
+                }
+            ]
         ),
         now=lambda: datetime(2026, 7, 3, 20, 0, tzinfo=UTC),
         connection_callback=connection_events.append,
@@ -293,7 +383,7 @@ def test_subscription_ack_event_is_not_persisted_before_completing_raw_frame(
                         "id": 1,
                         "msg": {"channel": "orderbook_delta"},
                     },
-                    {"type": "subscribed", "id": 1, "msg": {"channel": "trade"}},
+                    {"type": "subscribed", "id": 2, "msg": {"channel": "trade"}},
                 ]
             ),
             now=lambda: datetime(2026, 7, 3, 20, 0, tzinfo=UTC),
