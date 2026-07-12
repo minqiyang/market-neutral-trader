@@ -1,45 +1,57 @@
 # V2 Lifecycle Gate
 
-The seven-day read-only recorder uses a conservative lifecycle deadline rather
-than `close_time` alone.
+The canary and seven-day read-only profiles use a conservative lifecycle
+deadline rather than `close_time` alone. The reviewed field trust matrix is:
+
+| Field | Contract meaning | Selection use |
+| --- | --- | --- |
+| `close_time` | Scheduled or actual trading stop; may move earlier when `can_close_early=true`. | Required prospective deadline. |
+| `expected_expiration_time` | Forecast time when the outcome is expected to be known. | Required prospective deadline. |
+| `can_close_early` | Signals that the trading stop can move earlier. | Fail closed unless reviewed metadata provides an explicit early-close deadline beyond the required end. |
+| `occurrence_datetime` | Officially the recorded time when the event occurred; Demo has also returned a future value equal to close and expected expiration. | Dual-interpretation bound; never sole evidence and never relaxes another deadline. |
+| `latest_expiration_time` | Latest possible expiration. | Telemetry only; cannot override an earlier bound. |
+
+Sources were reviewed at `2026-07-12T20:59:11Z`: Kalshi's
+[market lifecycle](https://docs.kalshi.com/getting_started/market_lifecycle),
+[market list](https://docs.kalshi.com/api-reference/market/get-markets),
+[single market](https://docs.kalshi.com/api-reference/market/get-market),
+[event list](https://docs.kalshi.com/api-reference/events/get-events),
+[single event](https://docs.kalshi.com/api-reference/events/get-event),
+[AsyncAPI](https://docs.kalshi.com/asyncapi.yaml), and
+[April 16, 2026 changelog entry](https://docs.kalshi.com/changelog).
 
 ```text
 campaign_required_end = selected_at_utc + duration_seconds + safety_buffer_seconds
 lifecycle_deadline = min(close_time, expected_expiration_time,
-                         occurrence_datetime, explicit_early_close_deadline,
-                         settlement_time)
+                         explicit_early_close_deadline,
+                         future_occurrence_safety_bound)
 ```
 
-`latest_expiration_time` is retained as metadata but is never the sole safety
-deadline. A market must be `open` or `trading`, and every applicable
-conservative deadline must exceed `campaign_required_end`.
+Profile v4 resolves the observed occurrence contradiction without guessing its
+meaning. Missing occurrence may pass only when complete event metadata,
+`can_close_early=false`, and independently safe close and expected-expiration
+deadlines exist. An occurrence at or before selection plus the named 60-second
+clock-skew tolerance is treated as already occurred and rejected. A later value
+is classified `AMBIGUOUS_FUTURE_OCCURRENCE`, included only as an additional
+minimum bound, and must exceed the required end while close and expected
+expiration independently pass. Malformed values reject. Equality with close or
+expected expiration is anomaly telemetry, not a global stop. This policy is
+safe whether the field is retrospective metadata or a prospective Demo alias.
 
-`occurrence_datetime` remains a conservative deadline because its current
-contract is unresolved. Kalshi's changelog defines it as the recorded time when
-the underlying event occurred, when available, but independent Demo
-revalidation returned a future value equal to `close_time` and
-`expected_expiration_time`. Until Kalshi clarifies that contradiction, the gate
-fails closed and does not interpret the field as purely retrospective.
-`close_time` can move earlier when `can_close_early=true`, while
-`expected_expiration_time` is the forecast time when the outcome should be
-known. See Kalshi's
-[market lifecycle](https://docs.kalshi.com/getting_started/market_lifecycle) and
-[April 16, 2026 changelog](https://docs.kalshi.com/changelog).
-
-The long-horizon gate rejects early-close markets without expected-expiration
-or explicit early-close deadline metadata, early expected expiration or
-occurrence, missing event metadata, and sports/match markets unless an explicit
-future configuration allows that category. The manifest preserves the raw
-lifecycle fields, normalized status, event metadata, lifecycle deadline,
-required end, and structured rejection reason.
+`latest_expiration_time` remains telemetry only. Occurrence cannot substitute
+for missing close, expected-expiration, or explicit early-close guarantees.
+The long-horizon gate also rejects missing event metadata and sports/match
+markets. The manifest preserves raw occurrence, semantic classification,
+inclusion and equality flags, component deadlines, dual-interpretation result,
+normalized status, required end, and structured rejection reason.
 
 Selection is explicit across three profiles. Smoke uses a 900-second buffer.
 The 1,800-second canary uses a 3,600-second buffer, requires complete event
-category/title metadata from the core event endpoint, rejects sports and
-match-like events, and rejects any
-`can_close_early=true` candidate. Seven-day selection uses at least an
-86,400-second buffer and retains the stricter long-horizon rules. The manifest
-records the selected profile and buffer. None of these profiles implies
+category/title metadata from the core event endpoint and rejects sports and
+match-like events. Canary and seven-day profiles fail closed on early-close
+risk unless an explicit safe deadline exists; missing occurrence still cannot
+pass with early-close risk. Seven-day selection uses at least an 86,400-second
+buffer. Smoke remains intentionally separate. None of these profiles implies
 seven-day evidence before the corresponding bounded run completes.
 
 Discovery fetches at most 100 market pages before event hydration, deduplicates

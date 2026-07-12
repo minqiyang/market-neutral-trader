@@ -1,5 +1,31 @@
 # Current Handoff
 
+## Round 8J5 dual-interpretation occurrence policy
+
+Selection profile v4 replaces the Round 8J4 global occurrence hard stop with a
+reviewed dual-interpretation rule. Official documentation still describes
+`occurrence_datetime` as the recorded time when the event occurred, while Demo
+has returned future values equal to close and expected expiration. The selector
+now requires candidates to remain safe under both meanings: close and expected
+expiration must independently exceed the required horizon, and a future
+occurrence is only an additional minimum bound. It never extends another
+deadline and is never sole safety evidence.
+
+Missing occurrence can pass only with complete non-Sports/non-match event
+metadata, `can_close_early=false`, and independently safe close and expected
+expiration. Historical/current-within-60-seconds and malformed occurrence
+values reject. Future equality with close or expected expiration is recorded as
+an anomaly but does not stop selection when every deadline is independently
+safe. `latest_expiration_time` remains telemetry only. Early-close risk remains
+fail-closed without an explicit reviewed deadline beyond the required end.
+
+Discovery now reports occurrence semantic/equality distributions,
+dual-interpretation pass counts, rejection overlaps, and hashed near-miss
+margins alongside the Round 8J4 cursor-exhaustion evidence. The public live gate
+remains disabled; no production, credential, account, or order-write path was
+added. The next gate is review/merge/deploy followed by exactly one complete
+canary discovery, not an automatic WebSocket retry.
+
 ## Round 8J4 discovery integrity correction
 
 The prior canary availability monitor scanned exactly ten 1,000-market pages
