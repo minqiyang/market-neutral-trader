@@ -2379,6 +2379,47 @@ def _replay_channel_binding(
         if event.subscription_binding_observation is not expected_observation:
             raise ValueError("D2A acknowledgment observation contradicts replay")
         return
+    if envelope.native_type in {"error", "rejected"}:
+        request_matches = (
+            envelope.rejection is None
+            and request is not None
+            and request.send_outcome == "SENT"
+            and envelope.request_id == request.native_command_id
+            and event.subscription_command_id == request.native_command_id
+            and event.subscription_generation == request.subscription_generation
+            and event.connection_epoch == request.connection_epoch
+            and event.run_request_index == request.run_request_index
+        )
+        if request_matches:
+            if binding is None:
+                bindings[envelope.channel] = {
+                    "sid": None,
+                    "state": SubscriptionBindingState.REJECTED,
+                    "generation": request.subscription_generation,
+                    "request_id": request.native_command_id,
+                    "connection_id": event.connection_id,
+                    "connection_epoch": request.connection_epoch,
+                    "run_request_index": request.run_request_index,
+                }
+            elif (
+                binding["connection_id"] == event.connection_id
+                and binding["generation"] == request.subscription_generation
+                and binding["request_id"] == request.native_command_id
+            ):
+                binding["state"] = SubscriptionBindingState.REJECTED
+            else:
+                raise ValueError("D2A rejection contradicts active binding identity")
+            expected = SubscriptionBindingState.REJECTED
+        else:
+            expected = SubscriptionBindingState.REQUEST_MISMATCH
+        if event.subscription_binding_state is not expected:
+            raise ValueError("D2A rejection state contradicts independent replay")
+        if (
+            event.subscription_binding_observation
+            is not SubscriptionBindingObservation.REJECTED
+        ):
+            raise ValueError("D2A rejection observation contradicts replay")
+        return
     if envelope.native_type not in {"orderbook_snapshot", "orderbook_delta", "trade"}:
         return
     trusted = (

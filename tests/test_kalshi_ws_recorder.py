@@ -186,6 +186,54 @@ def test_ws_recorder_reconnects_after_read_failure_with_existing_rows(
     assert connection_events[4].previous_connection_id == connection_events[0].connection_id
 
 
+def test_stale_rejection_does_not_emit_global_subscription_rejection(
+    tmp_path: Path,
+) -> None:
+    websocket = _FakeWebSocket(
+        [
+            {
+                "type": "subscribed",
+                "id": 1,
+                "sid": 11,
+                "msg": {"channel": "orderbook_delta"},
+            },
+            {
+                "type": "subscribed",
+                "id": 2,
+                "sid": 22,
+                "msg": {"channel": "trade"},
+            },
+            {
+                "type": "error",
+                "id": 999,
+                "msg": {"channel": "trade", "message": "stale"},
+            },
+        ]
+    )
+    connection_events = []
+
+    record_kalshi_demo_ws_orderbook(
+        KalshiWsRecorderConfig(
+            campaign_id="stale-rejection",
+            market_tickers=("DEMO-MARKET",),
+            raw_events_path=tmp_path / "raw.jsonl",
+            duration_seconds=1,
+            max_events=3,
+        ),
+        KalshiWsAuthConfig(
+            api_key_id="fake",
+            private_key_path=_fake_private_key_path(tmp_path),
+        ),
+        websocket_factory=lambda *_args, **_kwargs: websocket,
+        now=lambda: datetime(2026, 7, 3, 20, 0, tzinfo=UTC),
+        connection_callback=connection_events.append,
+    )
+
+    assert ConnectionEvidenceType.SUBSCRIPTION_REJECTED not in {
+        event.event_type for event in connection_events
+    }
+
+
 def test_ws_recorder_does_not_promote_partial_or_unbound_subscription_ack(
     tmp_path: Path,
 ) -> None:
@@ -238,7 +286,16 @@ def test_ws_recorder_records_nested_subscription_rejection(tmp_path: Path) -> No
             private_key_path=_fake_private_key_path(tmp_path),
         ),
         websocket_factory=lambda *_args, **_kwargs: _FakeWebSocket(
-            [{"type": "error", "id": 1, "msg": {"code": "invalid_subscription"}}]
+            [
+                {
+                    "type": "error",
+                    "id": 1,
+                    "msg": {
+                        "channel": "orderbook_delta",
+                        "code": "invalid_subscription",
+                    },
+                }
+            ]
         ),
         now=lambda: datetime(2026, 7, 3, 20, 0, tzinfo=UTC),
         connection_callback=connection_events.append,

@@ -1517,6 +1517,49 @@ def test_validator_replay_rejects_tampered_request_identity_annotations() -> Non
             )
 
 
+def test_validator_replays_exact_and_stale_rejections_independently() -> None:
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="rejection-replay",
+        requested_market_tickers=(MARKET,),
+    )
+    tracker.start_connection()
+    request = replace(
+        tracker.bind_subscription(command_id=1, created_at_utc=START)[0],
+        send_outcome="SENT",
+    )
+    exact = tracker.record(
+        {
+            "type": "error",
+            "msg": {"id": 1, "channel": "orderbook_delta", "message": "denied"},
+        },
+        local_row_index=1,
+        received_at_utc=START,
+        received_monotonic_ns=1,
+    )
+    bindings: dict[object, dict[str, object]] = {}
+    requests = {(request.connection_id, request.channel): request}
+    ws_runtime._replay_channel_binding(exact, bindings, requests)
+    stale = tracker.record(
+        {
+            "type": "error",
+            "id": 999,
+            "msg": {"channel": "orderbook_delta", "message": "stale"},
+        },
+        local_row_index=2,
+        received_at_utc=START,
+        received_monotonic_ns=2,
+    )
+    ws_runtime._replay_channel_binding(stale, bindings, requests)
+
+    assert bindings["orderbook_delta"]["state"] is SubscriptionBindingState.REJECTED
+    with pytest.raises(ValueError, match="rejection state contradicts"):
+        ws_runtime._replay_channel_binding(
+            replace(stale, subscription_binding_state=SubscriptionBindingState.REJECTED),
+            bindings,
+            requests,
+        )
+
+
 def test_validator_rejects_duplicate_or_transitioned_send_outcome(tmp_path: Path) -> None:
     session = _session(tmp_path, configured_duration_seconds=1)
     summary = session.close(

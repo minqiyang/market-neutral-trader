@@ -218,7 +218,6 @@ def record_kalshi_demo_ws_orderbook(
                     received_monotonic_ns = monotonic_ns_clock()
                     payload = _loads(raw)
                     message_type = _message_type(payload)
-                    rejected = _is_subscription_rejection(payload, message_type)
                     event = integrity_tracker.record(
                         payload,
                         local_row_index=event_count + 1,
@@ -230,6 +229,11 @@ def record_kalshi_demo_ws_orderbook(
                             subscription_ack_channels(payload, message_type)
                         )
                     acknowledged = REQUIRED_PUBLIC_CHANNELS <= acknowledged_channels
+                    rejected = (
+                        event.native_type in {"error", "rejected"}
+                        and event.subscription_binding_state.value == "REJECTED"
+                        and event.subscription_id == event.subscription_command_id
+                    )
                     row = event.to_record()
                     if config.persist_legacy_raw_events:
                         append_jsonl_record(config.raw_events_path, row)
@@ -412,23 +416,6 @@ def subscription_ack_channels(
     ):
         return set()
     return {envelope.channel}
-
-
-def _is_subscription_rejection(payload: Mapping[str, object], message_type: str) -> bool:
-    if not isinstance(payload.get("id"), int) or isinstance(payload.get("id"), bool):
-        return False
-    lowered = message_type.lower()
-    nested = payload.get("msg")
-    nested_error = (
-        nested.get("error") or nested.get("code") or nested.get("message")
-        if isinstance(nested, Mapping)
-        else None
-    )
-    return (
-        "reject" in lowered
-        or lowered == "error" and bool(payload.get("error") or nested_error or nested)
-        or str(payload.get("cmd") or "").lower() == "subscribe" and bool(payload.get("error"))
-    )
 
 
 def _write_result(
