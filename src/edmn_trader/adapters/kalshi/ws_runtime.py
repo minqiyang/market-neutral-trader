@@ -37,11 +37,13 @@ from edmn_trader.adapters.kalshi.ws_book_rebuild import (
     SegmentValidity,
 )
 from edmn_trader.adapters.kalshi.ws_events import (
+    CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
     KALSHI_WS_RAW_SCHEMA_VERSION,
     AdmissionStatus,
     KalshiWsRawEvent,
     SegmentBoundaryReason,
     SequenceState,
+    SubscriptionBindingState,
 )
 from edmn_trader.adapters.kalshi.ws_recorder import (
     REQUIRED_PUBLIC_CHANNELS,
@@ -360,6 +362,7 @@ def write_d2_runtime_preflight_block(
         "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
         "schema_version": D2_RUNTIME_SCHEMA_VERSION,
         "raw_event_schema_version": KALSHI_WS_RAW_SCHEMA_VERSION,
+        "subscription_identity_model": CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
         "evidence_schema_version": EVIDENCE_CHAIN_SCHEMA_VERSION,
         "threshold_policy_version": V2_THRESHOLD_POLICY.version,
         "threshold_source_commit": provenance.public_code_commit,
@@ -613,6 +616,9 @@ class RuntimeEvidenceSession:
         return {
             "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
             "raw_event_schema_version": KALSHI_WS_RAW_SCHEMA_VERSION,
+            "subscription_identity_model": (
+                CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION
+            ),
             "evidence_schema_version": EVIDENCE_CHAIN_SCHEMA_VERSION,
             "threshold_policy_version": self.threshold_policy.version,
             "threshold_source_commit": self.provenance.public_code_commit,
@@ -670,6 +676,8 @@ class RuntimeEvidenceSession:
     def record_event(self, event: KalshiWsRawEvent) -> None:
         if event.campaign_id != self.campaign_id:
             raise ValueError("D2A event campaign does not match runtime campaign")
+        if event.native_type in {"orderbook_snapshot", "orderbook_delta", "trade"}:
+            _validate_channel_binding(event)
         validate_no_private_account_payload(
             event.original_payload,
             path="d2a_event.original_payload",
@@ -825,6 +833,9 @@ class RuntimeEvidenceSession:
             "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
             "schema_version": D2_RUNTIME_SCHEMA_VERSION,
             "raw_event_schema_version": KALSHI_WS_RAW_SCHEMA_VERSION,
+            "subscription_identity_model": (
+                CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION
+            ),
             "evidence_schema_version": EVIDENCE_CHAIN_SCHEMA_VERSION,
             "threshold_policy_version": self.threshold_policy.version,
             "threshold_source_commit": self.provenance.public_code_commit,
@@ -1075,6 +1086,9 @@ class RuntimeEvidenceSession:
             "runtime_schema_version": D2_RUNTIME_SCHEMA_VERSION,
             "schema_version": D2_RUNTIME_SCHEMA_VERSION,
             "raw_event_schema_version": KALSHI_WS_RAW_SCHEMA_VERSION,
+            "subscription_identity_model": (
+                CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION
+            ),
             "evidence_schema_version": EVIDENCE_CHAIN_SCHEMA_VERSION,
             "threshold_policy_version": self.threshold_policy.version,
             "threshold_source_commit": self.provenance.public_code_commit,
@@ -1244,6 +1258,7 @@ class RuntimeEvidenceSession:
                 "excluded_rows": 0,
                 "acknowledgement_count": 0,
                 "rejection_count": 0,
+                "channel_bindings": {},
             },
         )
         summary["segment_boundary_reasons"].add(event.segment_boundary_reason)
@@ -1260,6 +1275,7 @@ class RuntimeEvidenceSession:
             summary["acknowledgement_count"] += 1
         if event.native_type in {"error", "rejected"}:
             summary["rejection_count"] += 1
+        _observe_channel_binding(summary, event)
 
     def _update_rebuild_summary(self, event: KalshiWsRawEvent, result: Any) -> dict[str, object]:
         key = (
@@ -1963,6 +1979,7 @@ def _validate_d2_preflight_block(
     canonical_dimensions = _preflight_dimensions().to_record()
     for field, expected in {
         "raw_event_schema_version": KALSHI_WS_RAW_SCHEMA_VERSION,
+        "subscription_identity_model": CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
         "evidence_schema_version": EVIDENCE_CHAIN_SCHEMA_VERSION,
         "threshold_policy_version": V2_THRESHOLD_POLICY.version,
         "threshold_policy": V2_THRESHOLD_POLICY.to_record(),
@@ -2122,6 +2139,8 @@ def _update_validation_connection_state(
 def _validate_event_subscription_state(
     event: KalshiWsRawEvent,
     states: dict[str, dict[str, object]],
+    *,
+    require_channel_binding: bool,
 ) -> None:
     state = states.get(event.connection_id)
     if state is None:
@@ -2153,7 +2172,43 @@ def _validate_event_subscription_state(
         SegmentBoundaryReason.RESUBSCRIPTION,
     } and event.segment_id != state.get("acknowledged_segment_id"):
         raise ValueError("D2A subscription segment contradicts acknowledgment evidence")
+    if require_channel_binding:
+        _validate_channel_binding(event)
     state["last_event_at"] = event.received_at_utc
+
+
+def _validate_channel_binding(event: KalshiWsRawEvent) -> None:
+    if (
+        event.subscription_identity_model
+        != CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION
+    ):
+        raise ValueError("D2A event lacks channel-scoped subscription identity")
+    if event.subscription_binding_state is SubscriptionBindingState.REQUEST_MISMATCH:
+        raise ValueError("D2A subscription acknowledgment request ID mismatch")
+    binding_required = (
+        event.native_type in {"orderbook_snapshot", "orderbook_delta", "trade"}
+        or event.channel in REQUIRED_PUBLIC_CHANNELS
+    )
+    if not binding_required:
+        return
+    if (
+        event.subscription_generation is None
+        or event.subscription_binding_id is None
+        or event.subscription_command_id != 1
+        or event.subscription_binding_state
+        not in {
+            SubscriptionBindingState.REQUESTED,
+            SubscriptionBindingState.ACKNOWLEDGED,
+        }
+    ):
+        raise ValueError("D2A public channel row lacks a valid channel binding")
+    expected_suffix = (
+        f":subscription:{event.channel}:{event.subscription_generation:04d}"
+    )
+    if not event.subscription_binding_id.startswith(f"{event.connection_id}:") or not (
+        event.subscription_binding_id.endswith(expected_suffix)
+    ):
+        raise ValueError("D2A channel binding identity is inconsistent")
 
 
 def _validate_runtime_launch_record(
@@ -2172,6 +2227,12 @@ def _validate_runtime_launch_record(
     ):
         if launch.get(field) != expected:
             raise ValueError(f"durable runtime launch contradicts {field}")
+    identity_model = launch.get("subscription_identity_model")
+    if identity_model not in {
+        None,
+        CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
+    }:
+        raise ValueError("durable runtime launch identity model is unsupported")
     if launch.get("threshold_source_commit") != launch.get("public_code_commit"):
         raise ValueError("durable runtime launch threshold provenance contradicts code")
     if not isinstance(launch.get("use_yes_price"), bool):
@@ -2379,7 +2440,14 @@ def _derive_runtime_validation(
             raise ValueError("D2A campaign identity contradicts durable runtime record")
         if event.local_row_index != counts["event_count"] + 1:
             raise ValueError("D2A local row indices must be contiguous across the runtime")
-        _validate_event_subscription_state(event, connection_states)
+        _validate_event_subscription_state(
+            event,
+            connection_states,
+            require_channel_binding=(
+                launch_record.get("subscription_identity_model")
+                == CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION
+            ),
+        )
         counts["event_count"] += 1
         counts[f"native:{event.native_type or 'unknown'}"] += 1
         last_event_at = event.received_at_utc
@@ -2685,6 +2753,9 @@ def _derive_runtime_validation(
                 "use_yes_price",
             )
         },
+        "subscription_identity_model": launch_record.get(
+            "subscription_identity_model"
+        ),
         "campaign_id": durable_campaign_id,
         "market": selected_market,
         "market_ticker": selected_market,
@@ -2799,6 +2870,7 @@ def _accumulate_validation_sequence(
             "excluded_rows": 0,
             "acknowledgement_count": 0,
             "rejection_count": 0,
+            "channel_bindings": {},
         },
     )
     summary["segment_boundary_reasons"].add(event.segment_boundary_reason)
@@ -2815,6 +2887,7 @@ def _accumulate_validation_sequence(
         summary["acknowledgement_count"] += 1
     if event.native_type in {"error", "rejected"}:
         summary["rejection_count"] += 1
+    _observe_channel_binding(summary, event)
 
 
 def _accumulate_validation_rebuild(
@@ -2887,6 +2960,13 @@ def _sequence_summary_records(
             **summary,
             "segment_boundary_reasons": sorted(summary["segment_boundary_reasons"]),
             "native_sid_values": sorted(summary["native_sid_values"]),
+            "channel_bindings": {
+                channel: {
+                    field_name: sorted(values)
+                    for field_name, values in sorted(binding.items())
+                }
+                for channel, binding in sorted(summary["channel_bindings"].items())
+            },
             "sequence_states": dict(sorted(summary["sequence_states"].items())),
             "continuity_semantics_supported": (
                 SequenceState.SEQUENCE_CONTIGUITY_VERIFIED
@@ -2896,6 +2976,38 @@ def _sequence_summary_records(
         }
         for summary in summaries.values()
     ]
+
+
+def _observe_channel_binding(
+    summary: dict[str, object],
+    event: KalshiWsRawEvent,
+) -> None:
+    if (
+        event.subscription_binding_id is None
+        and event.subscription_generation is None
+        and event.subscription_command_id is None
+    ):
+        return
+    bindings = summary["channel_bindings"]
+    binding = bindings.setdefault(
+        event.channel,
+        {
+            "command_ids": set(),
+            "generations": set(),
+            "binding_ids": set(),
+            "native_sids": set(),
+            "states": set(),
+        },
+    )
+    if event.subscription_command_id is not None:
+        binding["command_ids"].add(str(event.subscription_command_id))
+    if event.subscription_generation is not None:
+        binding["generations"].add(str(event.subscription_generation))
+    if event.subscription_binding_id is not None:
+        binding["binding_ids"].add(event.subscription_binding_id)
+    if event.native_sid is not None:
+        binding["native_sids"].add(str(event.native_sid))
+    binding["states"].add(str(event.subscription_binding_state))
 
 
 def _rebuild_summary_records(

@@ -161,7 +161,10 @@ def record_kalshi_demo_ws_orderbook(
                         use_yes_price=config.use_yes_price,
                     )
                 )
-                integrity_tracker.bind_subscription(command_id=1)
+                integrity_tracker.bind_subscription(
+                    command_id=1,
+                    channels=tuple(sorted(REQUIRED_PUBLIC_CHANNELS)),
+                )
                 if reconnect_count:
                     _emit_connection(
                         connection_callback,
@@ -373,7 +376,7 @@ def subscription_ack_channels(
     if isinstance(channel, str):
         channels.add(channel)
     channel_list = source.get("channels")
-    if isinstance(channel_list, list):
+    if isinstance(channel_list, list) and payload.get("sid") is None:
         channels.update(str(item) for item in channel_list if isinstance(item, str))
     return channels & REQUIRED_PUBLIC_CHANNELS
 

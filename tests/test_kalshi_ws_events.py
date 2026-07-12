@@ -18,6 +18,7 @@ from edmn_trader.adapters.kalshi.ws_events import (
     SegmentBoundaryReason,
     SequenceContinuityPolicy,
     SequenceState,
+    SubscriptionBindingState,
     parse_kalshi_ws_raw_record,
     payload_sha256,
 )
@@ -111,6 +112,134 @@ def test_delta_before_snapshot_is_preserved_but_excluded() -> None:
     assert event.admission_status is AdmissionStatus.EXCLUDED
     assert event.exclusion_reason is ExclusionReason.DELTA_BEFORE_SNAPSHOT
     assert event.resync_state is ResyncState.RESYNC_REQUIRED
+
+
+def test_channel_scoped_acknowledgements_keep_independent_native_sids() -> None:
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="campaign-1",
+        requested_market_tickers=("DEMO-MARKET",),
+    )
+    tracker.start_connection()
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
+    )
+
+    orderbook_ack = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 1,
+            "sid": 41,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=1,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1,
+    )
+    trade_ack = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 1,
+            "sid": 99,
+            "msg": {"channel": "trade"},
+        },
+        local_row_index=2,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=2,
+    )
+    snapshot = tracker.record(
+        {
+            "type": "orderbook_snapshot",
+            "sid": 41,
+            "seq": 1,
+            "msg": {"market_ticker": "DEMO-MARKET"},
+        },
+        local_row_index=3,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=3,
+    )
+
+    assert orderbook_ack.subscription_sid == 41
+    assert trade_ack.subscription_sid == 99
+    assert orderbook_ack.subscription_binding_id != trade_ack.subscription_binding_id
+    assert snapshot.subscription_binding_id == orderbook_ack.subscription_binding_id
+    assert snapshot.subscription_binding_state is SubscriptionBindingState.ACKNOWLEDGED
+    assert snapshot.admission_status is AdmissionStatus.ADMITTED
+
+
+def test_acknowledgement_with_unknown_request_id_does_not_bind_sid() -> None:
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="campaign-1",
+        requested_market_tickers=("DEMO-MARKET",),
+    )
+    tracker.start_connection()
+    tracker.bind_subscription(command_id=1, channels=("orderbook_delta",))
+
+    mismatched = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 999,
+            "sid": 99,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=1,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1,
+    )
+    valid = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 1,
+            "sid": 41,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=2,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=2,
+    )
+
+    assert mismatched.subscription_binding_state is SubscriptionBindingState.REQUEST_MISMATCH
+    assert mismatched.subscription_sid == 99
+    assert valid.subscription_binding_state is SubscriptionBindingState.ACKNOWLEDGED
+    assert valid.subscription_sid == 41
+
+
+def test_late_ack_from_prior_orderbook_generation_cannot_rebind_current_sid() -> None:
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="campaign-1",
+        requested_market_tickers=("DEMO-MARKET",),
+    )
+    tracker.start_connection()
+    tracker.bind_subscription(command_id=1, channels=("orderbook_delta",))
+    tracker.bind_subscription(command_id=2, channels=("orderbook_delta",))
+
+    late = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 1,
+            "sid": 41,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=1,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1,
+    )
+    current = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 2,
+            "sid": 44,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=2,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=2,
+    )
+
+    assert late.subscription_binding_state is SubscriptionBindingState.REQUEST_MISMATCH
+    assert current.subscription_binding_state is SubscriptionBindingState.ACKNOWLEDGED
+    assert current.subscription_generation == 2
+    assert current.subscription_sid == 44
 
 
 def test_delta_envelope_preserves_native_timestamp_and_delta_fields() -> None:
@@ -353,7 +482,7 @@ def test_boolean_identifiers_are_not_treated_as_integers() -> None:
     assert event.sequence_state is SequenceState.SEQUENCE_NOT_OBSERVED
 
 
-def test_sid_change_starts_new_segment_without_inheriting_continuity() -> None:
+def test_sid_change_is_excluded_until_explicit_orderbook_resubscription() -> None:
     tracker = _tracker(continuity_policy=SequenceContinuityPolicy.CONTIGUOUS_INCREMENT)
     first = _record(tracker, "orderbook_snapshot", seq=100, local_row_index=1, sid=41)
     changed_sid_delta = _record(
@@ -363,6 +492,7 @@ def test_sid_change_starts_new_segment_without_inheriting_continuity() -> None:
         local_row_index=2,
         sid=42,
     )
+    tracker.bind_subscription(command_id=2)
     fresh_snapshot = _record(
         tracker,
         "orderbook_snapshot",
@@ -371,12 +501,15 @@ def test_sid_change_starts_new_segment_without_inheriting_continuity() -> None:
         sid=42,
     )
 
-    assert changed_sid_delta.segment_id != first.segment_id
-    assert changed_sid_delta.segment_boundary_reason is SegmentBoundaryReason.SID_CHANGE
-    assert changed_sid_delta.sequence_state is SequenceState.SEQUENCE_PRESENT_SEMANTICS_UNKNOWN
+    assert changed_sid_delta.segment_id == first.segment_id
+    assert changed_sid_delta.segment_boundary_reason is SegmentBoundaryReason.NEW_SUBSCRIPTION
     assert changed_sid_delta.admission_status is AdmissionStatus.EXCLUDED
-    assert changed_sid_delta.exclusion_reason is ExclusionReason.DELTA_BEFORE_SNAPSHOT
-    assert fresh_snapshot.segment_id == changed_sid_delta.segment_id
+    assert (
+        changed_sid_delta.exclusion_reason
+        is ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH
+    )
+    assert fresh_snapshot.segment_id != changed_sid_delta.segment_id
+    assert fresh_snapshot.segment_boundary_reason is SegmentBoundaryReason.RESUBSCRIPTION
     assert fresh_snapshot.admission_status is AdmissionStatus.ADMITTED
 
 
@@ -396,6 +529,8 @@ def test_reconnect_creates_new_connection_and_snapshot_required_segment() -> Non
     assert after_reconnect.exclusion_reason is ExclusionReason.DELTA_BEFORE_SNAPSHOT
     assert fresh_snapshot.segment_id == after_reconnect.segment_id
     assert fresh_snapshot.admission_status is AdmissionStatus.ADMITTED
+    assert fresh_snapshot.subscription_binding_id != first.subscription_binding_id
+    assert fresh_snapshot.subscription_generation == 2
 
 
 def test_resubscription_creates_new_segment_on_same_connection() -> None:
@@ -410,6 +545,50 @@ def test_resubscription_creates_new_segment_on_same_connection() -> None:
     assert after_resubscribe.segment_boundary_reason is SegmentBoundaryReason.RESUBSCRIPTION
     assert after_resubscribe.subscription_command_id == 2
     assert after_resubscribe.admission_status is AdmissionStatus.EXCLUDED
+
+
+def test_orderbook_resubscription_rejects_old_sid_and_requires_new_snapshot() -> None:
+    tracker = _tracker()
+    first = _record(tracker, "orderbook_snapshot", seq=1, local_row_index=1, sid=41)
+    tracker.bind_subscription(command_id=2, channels=("orderbook_delta",))
+    acknowledgement = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 2,
+            "sid": 44,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=2,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=2,
+    )
+    old_delta = _record(
+        tracker,
+        "orderbook_delta",
+        seq=2,
+        local_row_index=3,
+        sid=41,
+    )
+    new_delta = _record(
+        tracker,
+        "orderbook_delta",
+        seq=3,
+        local_row_index=4,
+        sid=44,
+    )
+    new_snapshot = _record(
+        tracker,
+        "orderbook_snapshot",
+        seq=4,
+        local_row_index=5,
+        sid=44,
+    )
+
+    assert acknowledgement.subscription_generation == 2
+    assert acknowledgement.subscription_binding_id != first.subscription_binding_id
+    assert old_delta.exclusion_reason is ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH
+    assert new_delta.exclusion_reason is ExclusionReason.DELTA_BEFORE_SNAPSHOT
+    assert new_snapshot.admission_status is AdmissionStatus.ADMITTED
 
 
 def test_initial_subscription_creates_a_segment_after_connection_boundary() -> None:
@@ -433,6 +612,27 @@ def test_v2_record_round_trip_verifies_payload_hash() -> None:
 
     assert isinstance(parsed, KalshiWsRawEvent)
     assert parsed == event
+
+
+def test_v2_parser_keeps_pre_binding_provenance_rows_readable() -> None:
+    record = _record(
+        _tracker(),
+        "orderbook_snapshot",
+        seq=100,
+        local_row_index=1,
+    ).to_record()
+    record.pop("subscription_generation")
+    record.pop("subscription_binding_id")
+    record.pop("subscription_binding_state")
+    record.pop("subscription_identity_model")
+
+    parsed = parse_kalshi_ws_raw_record(record)
+
+    assert isinstance(parsed, KalshiWsRawEvent)
+    assert parsed.subscription_generation is None
+    assert parsed.subscription_binding_id is None
+    assert parsed.subscription_binding_state is SubscriptionBindingState.UNKNOWN
+    assert parsed.subscription_identity_model is None
 
 
 def test_v2_parser_rejects_payload_hash_mismatch() -> None:

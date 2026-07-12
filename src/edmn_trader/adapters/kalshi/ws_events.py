@@ -18,6 +18,9 @@ from edmn_trader.data.payload_safety import (
 
 KALSHI_WS_RAW_SCHEMA_VERSION = "edmn.kalshi.ws.raw.v2"
 KALSHI_WS_RECORD_TYPE = "kalshi_demo_ws_message"
+CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION = (
+    "edmn.kalshi.ws.subscription_identity.v1"
+)
 
 
 class SequenceState(StrEnum):
@@ -44,6 +47,14 @@ class AdmissionStatus(StrEnum):
     NOT_APPLICABLE = "NOT_APPLICABLE"
 
 
+class SubscriptionBindingState(StrEnum):
+    UNKNOWN = "UNKNOWN"
+    REQUESTED = "REQUESTED"
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    REJECTED = "REJECTED"
+    REQUEST_MISMATCH = "REQUEST_MISMATCH"
+
+
 class ExclusionReason(StrEnum):
     DELTA_BEFORE_SNAPSHOT = "DELTA_BEFORE_SNAPSHOT"
     MISSING_MARKET_TICKER = "MISSING_MARKET_TICKER"
@@ -51,6 +62,7 @@ class ExclusionReason(StrEnum):
     SEQUENCE_DUPLICATE = "SEQUENCE_DUPLICATE"
     SEQUENCE_OUT_OF_ORDER = "SEQUENCE_OUT_OF_ORDER"
     SEQUENCE_GAP = "SEQUENCE_GAP"
+    SUBSCRIPTION_IDENTITY_MISMATCH = "SUBSCRIPTION_IDENTITY_MISMATCH"
 
 
 class ResyncState(StrEnum):
@@ -103,6 +115,10 @@ class KalshiWsRawEvent:
     native_exchange_ts: str | int | float | None
     native_exchange_ts_ms: int | None
     original_payload: Mapping[str, Any]
+    subscription_generation: int | None = None
+    subscription_binding_id: str | None = None
+    subscription_binding_state: SubscriptionBindingState = SubscriptionBindingState.UNKNOWN
+    subscription_identity_model: str | None = None
     schema_version: str = KALSHI_WS_RAW_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
@@ -146,6 +162,17 @@ class KalshiWsRawEvent:
                 raise ValueError(f"{field_name} does not match original_payload")
         if self.native_sid is not None and self.subscription_sid != self.native_sid:
             raise ValueError("subscription_sid does not match native_sid")
+        if self.subscription_identity_model not in {
+            None,
+            CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
+        }:
+            raise ValueError("unsupported subscription identity model")
+        if (self.subscription_generation is None) != (
+            self.subscription_binding_id is None
+        ):
+            raise ValueError("subscription generation and binding ID must appear together")
+        if self.subscription_generation is not None and self.subscription_generation < 1:
+            raise ValueError("subscription_generation must be positive")
         if self.sequence_state in {
             SequenceState.SEQUENCE_CONTIGUITY_VERIFIED,
             SequenceState.SEQUENCE_GAP_DETECTED,
@@ -212,6 +239,21 @@ class KalshiWsRawEvent:
             native_exchange_ts=_optional_scalar(record, "native_exchange_ts"),
             native_exchange_ts_ms=_optional_int(record, "native_exchange_ts_ms"),
             original_payload=original_payload,
+            subscription_generation=_optional_int(record, "subscription_generation"),
+            subscription_binding_id=_optional_str(record, "subscription_binding_id"),
+            subscription_binding_state=(
+                _expect_enum(
+                    record,
+                    "subscription_binding_state",
+                    SubscriptionBindingState,
+                )
+                if "subscription_binding_state" in record
+                else SubscriptionBindingState.UNKNOWN
+            ),
+            subscription_identity_model=_optional_str(
+                record,
+                "subscription_identity_model",
+            ),
         )
 
     def to_record(self) -> dict[str, object]:
@@ -232,6 +274,10 @@ class KalshiWsRawEvent:
             "subscription_id": self.subscription_id,
             "subscription_sid": self.subscription_sid,
             "subscription_command_id": self.subscription_command_id,
+            "subscription_generation": self.subscription_generation,
+            "subscription_binding_id": self.subscription_binding_id,
+            "subscription_binding_state": self.subscription_binding_state,
+            "subscription_identity_model": self.subscription_identity_model,
             "admission_status": self.admission_status,
             "exclusion_reason": self.exclusion_reason,
             "sequence_continuity_policy": self.sequence_continuity_policy,
@@ -323,6 +369,16 @@ def parse_kalshi_ws_raw_record(
     )
 
 
+@dataclass(slots=True)
+class _SubscriptionBinding:
+    channel: str
+    command_id: str | int
+    generation: int
+    binding_id: str
+    sid: str | int | None = None
+    state: SubscriptionBindingState = SubscriptionBindingState.REQUESTED
+
+
 class KalshiWsIntegrityTracker:
     """Assign local transport context without asserting native continuity."""
 
@@ -345,9 +401,8 @@ class KalshiWsIntegrityTracker:
         self._connection_id: str | None = None
         self._segment_id: str | None = None
         self._segment_boundary_reason = SegmentBoundaryReason.INITIAL_CONNECTION
-        self._has_bound_subscription = False
-        self._subscription_command_id: str | int | None = None
-        self._subscription_sid: str | int | None = None
+        self._binding_generations: dict[str, int] = {}
+        self._bindings: dict[str, _SubscriptionBinding] = {}
         self._snapshot_market_tickers: set[str] = set()
         self._last_native_seq: int | None = None
 
@@ -372,20 +427,36 @@ class KalshiWsIntegrityTracker:
         )
         self._connection_id = f"{self.campaign_id}:connection:{self._connection_number:04d}"
         self._start_segment(reason)
-        self._subscription_command_id = None
-        self._subscription_sid = None
+        self._bindings.clear()
 
-    def bind_subscription(self, *, command_id: str | int) -> None:
+    def bind_subscription(
+        self,
+        *,
+        command_id: str | int,
+        channels: tuple[str, ...] = ("orderbook_delta",),
+    ) -> None:
         if self._connection_id is None:
             raise RuntimeError("start_connection must be called before bind_subscription")
-        reason = (
-            SegmentBoundaryReason.RESUBSCRIPTION
-            if self._has_bound_subscription
-            else SegmentBoundaryReason.NEW_SUBSCRIPTION
-        )
-        self._start_segment(reason)
-        self._subscription_command_id = command_id
-        self._has_bound_subscription = True
+        if not channels:
+            raise ValueError("channels must not be empty")
+        if "orderbook_delta" in channels:
+            reason = (
+                SegmentBoundaryReason.RESUBSCRIPTION
+                if self._binding_generations.get("orderbook_delta", 0) > 0
+                else SegmentBoundaryReason.NEW_SUBSCRIPTION
+            )
+            self._start_segment(reason)
+        for channel in channels:
+            generation = self._binding_generations.get(channel, 0) + 1
+            self._binding_generations[channel] = generation
+            self._bindings[channel] = _SubscriptionBinding(
+                channel=channel,
+                command_id=command_id,
+                generation=generation,
+                binding_id=(
+                    f"{self.connection_id}:subscription:{channel}:{generation:04d}"
+                ),
+            )
 
     def record(
         self,
@@ -407,14 +478,42 @@ class KalshiWsIntegrityTracker:
         validate_no_private_account_payload(payload)
 
         native_type = _native_str(payload, "type")
+        channel = _native_channel(payload, native_type)
+        binding = self._bindings.get(channel)
         native_market_ticker = _native_str(payload, "market_ticker")
         is_orderbook = native_type in {"orderbook_snapshot", "orderbook_delta"}
         has_requested_market = native_market_ticker in self.requested_market_tickers
         native_sid = _native_identifier(payload, "sid")
-        if is_orderbook and native_sid is not None:
-            if self._subscription_sid is not None and native_sid != self._subscription_sid:
-                self._start_segment(SegmentBoundaryReason.SID_CHANGE)
-            self._subscription_sid = native_sid
+        native_command_id = _native_identifier(payload, "id")
+        native_channels = _native_channels(payload)
+        if (
+            binding is None
+            and native_type in {"subscribed", "ack", "ok"}
+            and len(native_channels) > 1
+            and native_sid is None
+        ):
+            for acknowledged_channel in native_channels:
+                acknowledged_binding = self._bindings.get(acknowledged_channel)
+                if (
+                    acknowledged_binding is not None
+                    and native_command_id == acknowledged_binding.command_id
+                ):
+                    acknowledged_binding.state = SubscriptionBindingState.ACKNOWLEDGED
+        if binding is not None and native_type in {"subscribed", "ack", "ok"}:
+            if native_command_id != binding.command_id:
+                binding.state = SubscriptionBindingState.REQUEST_MISMATCH
+            else:
+                binding.state = SubscriptionBindingState.ACKNOWLEDGED
+                if native_sid is not None and binding.sid is None:
+                    binding.sid = native_sid
+        elif binding is not None and native_type in {"error", "rejected"}:
+            binding.state = (
+                SubscriptionBindingState.REJECTED
+                if native_command_id == binding.command_id
+                else SubscriptionBindingState.REQUEST_MISMATCH
+            )
+        elif is_orderbook and binding is not None and binding.sid is None:
+            binding.sid = native_sid
         native_seq = _native_identifier(payload, "seq")
         if (
             native_type == "orderbook_snapshot"
@@ -429,6 +528,15 @@ class KalshiWsIntegrityTracker:
         admission_status = AdmissionStatus.NOT_APPLICABLE
         exclusion_reason = _sequence_exclusion_reason(sequence_state)
         integrity_failure = exclusion_reason is not None
+        if (
+            is_orderbook
+            and binding is not None
+            and binding.sid is not None
+            and native_sid is not None
+            and native_sid != binding.sid
+        ):
+            exclusion_reason = ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH
+            integrity_failure = True
         resync_state = ResyncState.RESYNC_REQUIRED
         if integrity_failure:
             admission_status = AdmissionStatus.EXCLUDED
@@ -462,10 +570,10 @@ class KalshiWsIntegrityTracker:
             received_at_utc=received_at_utc,
             received_monotonic_ns=received_monotonic_ns,
             payload_sha256=payload_sha256(original_payload),
-            channel=_native_channel(payload, native_type),
-            subscription_id=_native_identifier(payload, "id"),
-            subscription_sid=(self._subscription_sid if is_orderbook else native_sid),
-            subscription_command_id=self._subscription_command_id,
+            channel=channel,
+            subscription_id=native_command_id,
+            subscription_sid=native_sid,
+            subscription_command_id=(binding.command_id if binding is not None else None),
             admission_status=admission_status,
             exclusion_reason=exclusion_reason,
             sequence_continuity_policy=self.continuity_policy,
@@ -482,8 +590,17 @@ class KalshiWsIntegrityTracker:
                 ("exchange_ts_ms", "timestamp_ms", "ts_ms"),
             ),
             original_payload=original_payload,
+            subscription_generation=(binding.generation if binding is not None else None),
+            subscription_binding_id=(binding.binding_id if binding is not None else None),
+            subscription_binding_state=(
+                binding.state if binding is not None else SubscriptionBindingState.UNKNOWN
+            ),
+            subscription_identity_model=CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
         )
-        if integrity_failure:
+        if (
+            integrity_failure
+            and exclusion_reason is not ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH
+        ):
             self._start_segment(SegmentBoundaryReason.INTEGRITY_FAILURE)
         return event
 
@@ -491,7 +608,6 @@ class KalshiWsIntegrityTracker:
         self._segment_number += 1
         self._segment_id = f"{self.campaign_id}:segment:{self._segment_number:04d}"
         self._segment_boundary_reason = reason
-        self._subscription_sid = None
         self._snapshot_market_tickers.clear()
         self._last_native_seq = None
 
@@ -584,6 +700,14 @@ def _native_channel(payload: Mapping[str, Any], native_type: str | None) -> str:
     if native_type in {"orderbook_snapshot", "orderbook_delta"}:
         return "orderbook_delta"
     return native_type or "unknown"
+
+
+def _native_channels(payload: Mapping[str, Any]) -> tuple[str, ...]:
+    nested = _native_object(payload)
+    values = nested.get("channels", payload.get("channels"))
+    if not isinstance(values, list):
+        return ()
+    return tuple(value for value in values if isinstance(value, str))
 
 
 def _expect_mapping(record: Mapping[str, Any], field_name: str) -> Mapping[str, Any]:

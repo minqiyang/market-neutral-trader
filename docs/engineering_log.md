@@ -30,6 +30,39 @@ completeness.
 
 ## D2E runtime integration
 
+### D2E-F1 channel-scoped identity correction
+
+The first post-D2E Real5M supplied two valid acknowledgments for one subscribe
+command: orderbook SID `1` and trade SID `2`. D2A preserved both correctly, but
+D2B's segment metadata was channel-blind and interpreted the trade SID as an
+orderbook identity contradiction. It quarantined the subsequent orderbook
+snapshot and the run failed closed.
+
+The correction reuses the D2A integrity tracker as the subscription registry.
+Each requested channel receives a connection-local generation and deterministic
+binding ID, and acknowledgment state/SID stay with that channel. D2B ignores
+trade control frames as well as trade data, while D2C still persists them.
+Orderbook SID mismatch is excluded without inventing a new segment; an explicit
+orderbook resubscription is required to create a fresh generation and segment.
+The raw v2 parser tolerates historical rows without the new optional binding
+provenance, and runtime validation independently reconstructs channel-binding
+summaries from durable D2A rows.
+
+The exact split-ack fixture now proves that orderbook SID `11`, trade SID `22`,
+and a later orderbook snapshot/delta on SID `11` produce a valid two-frame
+native rebuild and validator pass. No threshold, network, credential, market
+selection, production, or order behavior changed.
+
+Independent review then found that optional fields alone did not distinguish
+new formal rows from historical compatibility rows, plural-channel ACKs with
+one SID were ambiguous, and late ACKs were not matched to the active command.
+The correction records `edmn.kalshi.ws.subscription_identity.v1` in launch,
+summary, and new D2A rows; validator replay requires coherent connection,
+channel, generation, binding ID, and command provenance under that marker.
+No-SID plural acknowledgments may acknowledge the request, but a plural ACK
+carrying one SID cannot bind multiple channels. Late or unknown command IDs are
+typed `REQUEST_MISMATCH` and cannot rebind the active generation.
+
 D2A-D2D originally merged as independently verified software contracts, while
 the operational `kalshi-ws-smoke` entrypoint still wrote the historical
 campaign schema. D2E fixes that assembly gap rather than weakening the Real5M

@@ -21,7 +21,19 @@ from edmn_trader.adapters.kalshi.ws_recorder import (
     KalshiWsRecorderConfig,
     _loads,
     record_kalshi_demo_ws_orderbook,
+    subscription_ack_channels,
 )
+
+
+def test_plural_channel_ack_with_one_sid_is_ambiguous_and_not_accepted() -> None:
+    payload = {
+        "type": "subscribed",
+        "id": 1,
+        "sid": 7,
+        "msg": {"channels": ["orderbook_delta", "trade"]},
+    }
+
+    assert subscription_ack_channels(payload, "subscribed") == set()
 
 
 def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path) -> None:

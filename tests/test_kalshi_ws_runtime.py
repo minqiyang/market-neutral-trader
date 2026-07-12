@@ -180,10 +180,13 @@ def test_actual_runtime_assembly_uses_d2_writer_and_mocked_transports(
                 "type": "subscribed",
                 "id": 1,
                 "sid": 41,
-                "msg": {
-                    "channels": ["orderbook_delta", "trade"],
-                    "use_yes_price": False,
-                },
+                "msg": {"channel": "orderbook_delta", "use_yes_price": False},
+            },
+            {
+                "type": "subscribed",
+                "id": 1,
+                "sid": 41,
+                "msg": {"channel": "trade"},
             },
             {
                 "type": "orderbook_snapshot",
@@ -245,7 +248,7 @@ def test_actual_runtime_assembly_uses_d2_writer_and_mocked_transports(
 
     assert summary["runtime_schema_version"] == D2_RUNTIME_SCHEMA_VERSION
     assert Decimal(summary["actual_elapsed_seconds"]) >= 300
-    assert summary["event_count"] == 5
+    assert summary["event_count"] == 6
     assert summary["snapshot_count"] == 1
     assert summary["delta_count"] == 2
     assert summary["public_trade_count"] == 1
@@ -431,6 +434,17 @@ def test_actual_runtime_accepts_split_public_channel_acknowledgments(tmp_path: P
     assert orderbook_rebuild["native_state_valid"] is True
     assert orderbook_rebuild["latest_frame_hash"]
     assert orderbook_rebuild["terminal_state_hash"]
+    rebuilt = [item for item in summary["rebuild_summaries"] if item["frame_count"]]
+    assert len(rebuilt) == 1
+    assert rebuilt[0]["snapshot_first_admitted"] is True
+    assert rebuilt[0]["native_state_valid"] is True
+    assert rebuilt[0]["frame_count"] == 2
+    bindings = summary["sequence_summaries"][0]["channel_bindings"]
+    assert bindings["orderbook_delta"]["native_sids"] == ["11"]
+    assert bindings["trade"]["native_sids"] == ["22"]
+    assert bindings["orderbook_delta"]["binding_ids"] != bindings["trade"][
+        "binding_ids"
+    ]
     assert validate_d2_runtime_artifacts(tmp_path / "run")["status"] == "pass"
 
 
@@ -859,7 +873,10 @@ def test_unknown_current_segment_cannot_inherit_historical_sequence_or_rebuild_p
         ),
     ]
     tracker.start_connection()
-    tracker.bind_subscription(command_id=1)
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
+    )
     current_unknown = tracker.record(
         {
             "type": "orderbook_delta",
@@ -952,7 +969,7 @@ def test_runtime_preserves_duplicate_and_out_of_order_states(
     assert summary["independent_evidence_classifications"]["sequence_integrity"] == "FAIL"
 
 
-def test_sid_change_creates_a_new_isolated_runtime_segment(tmp_path: Path) -> None:
+def test_sid_change_is_excluded_without_resetting_runtime_segment(tmp_path: Path) -> None:
     session = _session(tmp_path, configured_duration_seconds=2)
     tracker = _tracker()
     for index, sid in enumerate((41, 42), start=1):
@@ -982,9 +999,12 @@ def test_sid_change_creates_a_new_isolated_runtime_segment(tmp_path: Path) -> No
         blocker_code=None,
     )
 
-    assert len(summary["sequence_summaries"]) == 2
-    assert summary["sequence_summaries"][1]["segment_boundary_reasons"] == ["SID_CHANGE"]
-    assert len([item for item in summary["rebuild_summaries"] if item["frame_count"]]) == 2
+    assert len(summary["sequence_summaries"]) == 1
+    assert summary["sequence_summaries"][0]["segment_boundary_reasons"] == [
+        "NEW_SUBSCRIPTION"
+    ]
+    assert len([item for item in summary["rebuild_summaries"] if item["frame_count"]]) == 1
+    assert summary["rebuild_excluded_count"] == 1
 
 
 def test_runtime_keeps_two_markets_isolated_and_records_explicit_pricing_modes(
@@ -3429,7 +3449,10 @@ def _tracker(
         continuity_policy=continuity_policy,
     )
     tracker.start_connection()
-    tracker.bind_subscription(command_id=1)
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
+    )
     return _OffsetTracker(tracker) if offset else tracker
 
 

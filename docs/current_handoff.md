@@ -1,21 +1,28 @@
 # Current Handoff
 
-## D2B channel-scoped subscription identity correction
+## D2E-F1 channel-scoped subscription identity
 
-The failed Real5M D2E regression exposed a mismatch between the documented
-contract and the D2B implementation: Kalshi returned SID `1` for
-`orderbook_delta` and SID `2` for `trade`, while segment metadata compared both
-as one global SID. D2B now maintains subscription identity per channel within
-the existing connection/segment generation. Native book state binds only the
-`orderbook_delta` request ID and SID; trade identity remains available to D2C
-and cannot invalidate or rebind the book.
+The first owner-controlled post-D2E Real5M stopped fail-closed after separate
+public-channel acknowledgments used orderbook SID `1` and trade SID `2`. The
+D2B rebuilder had treated both control frames as one segment-wide identity, so
+the trade acknowledgment invalidated the later valid orderbook snapshot.
 
-Synthetic tests cover split channel acknowledgments, trade messages before and
-after the first snapshot, equal sequence numbers across channels, equal numeric
-SIDs across channels, true same-channel SID mismatch quarantine, deterministic
-frame/state hashes, and independent validator replay. This checkpoint is a
-software correction only until a fresh bounded Demo regression completes. The
-live gate remains disabled and no production or order-write path was added.
+D2E-F1 keeps subscription generation, binding ID, acknowledgment state, and
+native SID scoped by channel. Only the `orderbook_delta` binding can establish
+D2B identity; trade control/data rows remain durable D2C evidence without
+mutating orderbook state. An unexpected orderbook SID is excluded and cannot
+silently create a new segment; only explicit orderbook resubscription does so.
+Raw v2 rows written before these optional provenance fields remain readable.
+Runtime and validator summaries independently expose the channel bindings.
+The post-review correction adds an explicit identity-model marker, validates
+coherent binding IDs/generations for new runtime rows, matches acknowledgments
+to their native request ID, and rejects a plural-channel acknowledgment that
+ambiguously carries one SID. Historical unmarked rows remain compatibility
+evidence only.
+
+This fix is fixture-only until a separately authorized post-fix Real5M. It does
+not weaken thresholds, use credentials or market network, or add any order
+path. Public live trading remains disabled.
 
 ## Round 8J-B discovery reliability
 
@@ -1604,21 +1611,20 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended action
 
-Independent adversarial review of the focused D2E PR, followed by correction,
-100k benchmark verification, merge, and merged-main verification. Then stop at
-the external owner gates; do not deploy or run a market campaign.
+After D2E-F1 review, merge, merged-main verification, and Phase 0B software-only
+VPS refresh, stop. The next task may only be a separately owner-authorized
+post-fix Real5M. Do not reuse the consumed authorization or retry from this
+task.
 
 ## Exact next prompt suggestion
 
-Review the D2E runtime assembly, D2D classifier, timing, append-chain,
-checkpoint, rotation, recovery, and benchmark contracts against synthetic
-fixtures only. After merged-main
-verification, stop before deployment, market network, campaign, credentials,
-retention deletion, or any order path.
+Authorize one bounded post-D2E-F1 Real5M only after confirming the reviewed
+public commit and Phase 0B software-only VPS acceptance evidence. Keep Demo,
+read-only, raw-private, disabled-live-gate, and zero-submit boundaries.
 
 ## Last updated timestamp
 
-2026-07-10 12:26:38 -07:00
+2026-07-11 21:05:44 -07:00
 
 ## Round 8G lifecycle gate v2 checkpoint
 
