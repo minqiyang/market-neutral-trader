@@ -22,7 +22,11 @@ from edmn_trader.adapters.kalshi.ws_auth import (
     KalshiWsAuthConfig,
     build_kalshi_ws_headers,
 )
-from edmn_trader.adapters.kalshi.ws_events import KalshiWsIntegrityTracker, KalshiWsRawEvent
+from edmn_trader.adapters.kalshi.ws_events import (
+    KalshiWsIntegrityTracker,
+    KalshiWsRawEvent,
+    normalize_native_envelope,
+)
 from edmn_trader.data.jsonl import append_jsonl_record, write_jsonl_records
 
 WebSocketFactory = Callable[..., Any]
@@ -362,28 +366,17 @@ def _message_type(payload: Mapping[str, object]) -> str:
 
 def subscription_ack_channels(
     payload: Mapping[str, object],
-    message_type: str,
+    _message_type: str,
 ) -> set[str]:
-    lowered = message_type.lower()
-    if payload.get("id") != 1 or not (
-        "subscribed" in lowered or lowered == "ack"
+    envelope = normalize_native_envelope(payload)
+    if (
+        envelope.rejection is not None
+        or envelope.request_id != 1
+        or envelope.native_type not in {"subscribed", "ack", "ok"}
+        or envelope.channel not in REQUIRED_PUBLIC_CHANNELS
     ):
         return set()
-    nested = payload.get("msg")
-    source = nested if isinstance(nested, Mapping) else payload
-    channels: set[str] = set()
-    channel = source.get("channel")
-    if isinstance(channel, str):
-        channels.add(channel)
-    channel_list = source.get("channels")
-    nested_sid = source.get("sid") if isinstance(source, Mapping) else None
-    if (
-        isinstance(channel_list, list)
-        and payload.get("sid") is None
-        and nested_sid is None
-    ):
-        channels.update(str(item) for item in channel_list if isinstance(item, str))
-    return channels & REQUIRED_PUBLIC_CHANNELS
+    return {envelope.channel}
 
 
 def _is_subscription_rejection(payload: Mapping[str, object], message_type: str) -> bool:

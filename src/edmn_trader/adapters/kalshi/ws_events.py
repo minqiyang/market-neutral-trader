@@ -53,6 +53,31 @@ class SubscriptionBindingState(StrEnum):
     ACKNOWLEDGED = "ACKNOWLEDGED"
     REJECTED = "REJECTED"
     REQUEST_MISMATCH = "REQUEST_MISMATCH"
+    CONFLICTED = "CONFLICTED"
+    RESUBSCRIBE_REQUIRED = "RESUBSCRIBE_REQUIRED"
+
+
+class NativeEnvelopeRejection(StrEnum):
+    CONFLICTING_NATIVE_TYPE = "CONFLICTING_NATIVE_TYPE"
+    CONFLICTING_NATIVE_CHANNEL = "CONFLICTING_NATIVE_CHANNEL"
+    CONFLICTING_NATIVE_ID = "CONFLICTING_NATIVE_ID"
+    CONFLICTING_NATIVE_SID = "CONFLICTING_NATIVE_SID"
+    INVALID_NATIVE_TYPE = "INVALID_NATIVE_TYPE"
+    INVALID_NATIVE_CHANNEL = "INVALID_NATIVE_CHANNEL"
+    INVALID_NATIVE_ID = "INVALID_NATIVE_ID"
+    INVALID_NATIVE_SID = "INVALID_NATIVE_SID"
+    MISSING_NATIVE_TYPE = "MISSING_NATIVE_TYPE"
+    MISSING_ACK_CHANNEL = "MISSING_ACK_CHANNEL"
+    MISSING_ACK_ID = "MISSING_ACK_ID"
+    MISSING_ACK_SID = "MISSING_ACK_SID"
+
+
+class SubscriptionBindingObservation(StrEnum):
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    DUPLICATE_ACK = "DUPLICATE_ACK"
+    CONFLICTING_ACK = "CONFLICTING_ACK"
+    STALE_ACK = "STALE_ACK"
+    REJECTED = "REJECTED"
 
 
 class ExclusionReason(StrEnum):
@@ -64,6 +89,9 @@ class ExclusionReason(StrEnum):
     SEQUENCE_GAP = "SEQUENCE_GAP"
     SUBSCRIPTION_IDENTITY_MISMATCH = "SUBSCRIPTION_IDENTITY_MISMATCH"
     CHANNEL_TYPE_MISMATCH = "CHANNEL_TYPE_MISMATCH"
+    NATIVE_ENVELOPE_REJECTED = "NATIVE_ENVELOPE_REJECTED"
+    PRE_ACKNOWLEDGMENT_DATA = "PRE_ACKNOWLEDGMENT_DATA"
+    SUBSCRIPTION_BINDING_CONFLICTED = "SUBSCRIPTION_BINDING_CONFLICTED"
 
 
 class ResyncState(StrEnum):
@@ -120,6 +148,9 @@ class KalshiWsRawEvent:
     subscription_binding_id: str | None = None
     subscription_binding_state: SubscriptionBindingState = SubscriptionBindingState.UNKNOWN
     subscription_identity_model: str | None = None
+    native_envelope_rejection: NativeEnvelopeRejection | None = None
+    native_field_provenance: Mapping[str, str] | None = None
+    subscription_binding_observation: SubscriptionBindingObservation | None = None
     schema_version: str = KALSHI_WS_RAW_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
@@ -140,10 +171,11 @@ class KalshiWsRawEvent:
         validate_no_private_account_payload(copied_payload, path="original_payload")
         if self.payload_sha256 != payload_sha256(copied_payload):
             raise ValueError("payload_sha256 does not match original_payload")
-        native_type = _native_str(copied_payload, "type")
+        envelope = normalize_native_envelope(copied_payload)
+        native_type = envelope.native_type
         expected_native_fields = {
             "native_type": native_type,
-            "native_sid": _native_identifier(copied_payload, "sid"),
+            "native_sid": envelope.sid,
             "native_seq": _native_identifier(copied_payload, "seq"),
             "native_market_ticker": _native_str(copied_payload, "market_ticker"),
             "native_market_id": _native_str(copied_payload, "market_id"),
@@ -155,12 +187,16 @@ class KalshiWsRawEvent:
                 copied_payload,
                 ("exchange_ts_ms", "timestamp_ms", "ts_ms"),
             ),
-            "subscription_id": _native_identifier(copied_payload, "id"),
-            "channel": _native_channel(copied_payload, native_type),
+            "subscription_id": envelope.request_id,
+            "channel": envelope.channel,
         }
         for field_name, expected in expected_native_fields.items():
             if getattr(self, field_name) != expected:
                 raise ValueError(f"{field_name} does not match original_payload")
+        if self.native_envelope_rejection != envelope.rejection:
+            raise ValueError("native_envelope_rejection does not match original_payload")
+        if dict(self.native_field_provenance or {}) != dict(envelope.provenance):
+            raise ValueError("native_field_provenance does not match original_payload")
         if self.native_sid is not None and self.subscription_sid != self.native_sid:
             raise ValueError("subscription_sid does not match native_sid")
         if self.subscription_identity_model not in {
@@ -255,6 +291,25 @@ class KalshiWsRawEvent:
                 record,
                 "subscription_identity_model",
             ),
+            native_envelope_rejection=(
+                _optional_enum(
+                    record,
+                    "native_envelope_rejection",
+                    NativeEnvelopeRejection,
+                )
+                if "native_envelope_rejection" in record
+                else normalize_native_envelope(original_payload).rejection
+            ),
+            native_field_provenance=(
+                _expect_mapping(record, "native_field_provenance")
+                if "native_field_provenance" in record
+                else normalize_native_envelope(original_payload).provenance
+            ),
+            subscription_binding_observation=_optional_enum(
+                record,
+                "subscription_binding_observation",
+                SubscriptionBindingObservation,
+            ),
         )
 
     def to_record(self) -> dict[str, object]:
@@ -279,6 +334,9 @@ class KalshiWsRawEvent:
             "subscription_binding_id": self.subscription_binding_id,
             "subscription_binding_state": self.subscription_binding_state,
             "subscription_identity_model": self.subscription_identity_model,
+            "native_envelope_rejection": self.native_envelope_rejection,
+            "native_field_provenance": dict(self.native_field_provenance or {}),
+            "subscription_binding_observation": self.subscription_binding_observation,
             "admission_status": self.admission_status,
             "exclusion_reason": self.exclusion_reason,
             "sequence_continuity_policy": self.sequence_continuity_policy,
@@ -370,6 +428,93 @@ def parse_kalshi_ws_raw_record(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class NormalizedNativeEnvelope:
+    native_type: str | None
+    channel: str
+    request_id: str | int | None
+    sid: str | int | None
+    rejection: NativeEnvelopeRejection | None
+    provenance: Mapping[str, str]
+
+
+def normalize_native_envelope(payload: Mapping[str, Any]) -> NormalizedNativeEnvelope:
+    """Resolve duplicated routing fields without silent precedence."""
+
+    native_type, type_source, rejection = _coherent_field(payload, "type", str)
+    channel, channel_source, channel_rejection = _coherent_field(
+        payload, "channel", str
+    )
+    request_id, id_source, id_rejection = _coherent_field(
+        payload, "id", (str, int)
+    )
+    sid, sid_source, sid_rejection = _coherent_field(payload, "sid", (str, int))
+    rejection = rejection or channel_rejection or id_rejection or sid_rejection
+    if native_type is None and rejection is None:
+        rejection = NativeEnvelopeRejection.MISSING_NATIVE_TYPE
+    if channel is None:
+        if native_type in {"orderbook_snapshot", "orderbook_delta"}:
+            channel, channel_source = "orderbook_delta", "derived_from_type"
+        elif native_type == "trade":
+            channel, channel_source = "trade", "derived_from_type"
+        else:
+            channel = native_type or "unknown"
+            channel_source = "derived_from_type" if native_type else "missing"
+    if native_type in {"subscribed", "ack", "ok"} and rejection is None:
+        if channel in {native_type, "unknown"}:
+            rejection = NativeEnvelopeRejection.MISSING_ACK_CHANNEL
+        elif request_id is None:
+            rejection = NativeEnvelopeRejection.MISSING_ACK_ID
+        elif sid is None:
+            rejection = NativeEnvelopeRejection.MISSING_ACK_SID
+    return NormalizedNativeEnvelope(
+        native_type=native_type if isinstance(native_type, str) else None,
+        channel=channel if isinstance(channel, str) else "unknown",
+        request_id=request_id if isinstance(request_id, str | int) else None,
+        sid=sid if isinstance(sid, str | int) else None,
+        rejection=rejection,
+        provenance={
+            "type": type_source,
+            "channel": channel_source,
+            "id": id_source,
+            "sid": sid_source,
+        },
+    )
+
+
+def _coherent_field(
+    payload: Mapping[str, Any],
+    key: str,
+    expected_type: type | tuple[type, ...],
+) -> tuple[object | None, str, NativeEnvelopeRejection | None]:
+    nested = _native_object(payload)
+    top_present = key in payload
+    nested_present = key in nested
+    top = payload.get(key)
+    inner = nested.get(key)
+    conflict = NativeEnvelopeRejection[f"CONFLICTING_NATIVE_{key.upper()}"]
+    invalid = NativeEnvelopeRejection[f"INVALID_NATIVE_{key.upper()}"]
+    if top_present and nested_present and (
+        type(top) is not type(inner) or top != inner
+    ):
+        return None, "conflicting", conflict
+    value = top if top_present else inner if nested_present else None
+    source = (
+        "duplicate_equal"
+        if top_present and nested_present
+        else "top_level"
+        if top_present
+        else "nested_msg"
+        if nested_present
+        else "missing"
+    )
+    if value is None:
+        return None, source, None
+    if isinstance(value, bool) or not isinstance(value, expected_type):
+        return None, source, invalid
+    return value, source, None
+
+
 @dataclass(slots=True)
 class _SubscriptionBinding:
     channel: str
@@ -378,6 +523,7 @@ class _SubscriptionBinding:
     binding_id: str
     sid: str | int | None = None
     state: SubscriptionBindingState = SubscriptionBindingState.REQUESTED
+    duplicate_ack_count: int = 0
 
 
 class KalshiWsIntegrityTracker:
@@ -478,47 +624,49 @@ class KalshiWsIntegrityTracker:
         validate_no_secret_payload(payload)
         validate_no_private_account_payload(payload)
 
-        native_type = _native_str(payload, "type")
-        channel = _native_channel(payload, native_type)
+        envelope = normalize_native_envelope(payload)
+        native_type = envelope.native_type
+        channel = envelope.channel
         binding = self._bindings.get(channel)
         native_market_ticker = _native_str(payload, "market_ticker")
         is_orderbook = native_type in {"orderbook_snapshot", "orderbook_delta"}
         has_requested_market = native_market_ticker in self.requested_market_tickers
-        native_sid = _native_identifier(payload, "sid")
-        native_command_id = _native_identifier(payload, "id")
-        native_channels = _native_channels(payload)
+        native_sid = envelope.sid
+        native_command_id = envelope.request_id
+        binding_observation: SubscriptionBindingObservation | None = None
+        event_binding_state: SubscriptionBindingState | None = None
         if (
-            binding is None
+            envelope.rejection is None
+            and binding is not None
             and native_type in {"subscribed", "ack", "ok"}
-            and len(native_channels) > 1
-            and native_sid is None
         ):
-            for acknowledged_channel in native_channels:
-                acknowledged_binding = self._bindings.get(acknowledged_channel)
-                if (
-                    acknowledged_binding is not None
-                    and native_command_id == acknowledged_binding.command_id
-                ):
-                    acknowledged_binding.state = SubscriptionBindingState.ACKNOWLEDGED
-        if binding is not None and native_type in {"subscribed", "ack", "ok"}:
             if native_command_id != binding.command_id:
-                binding.state = SubscriptionBindingState.REQUEST_MISMATCH
+                binding_observation = SubscriptionBindingObservation.STALE_ACK
+                event_binding_state = SubscriptionBindingState.REQUEST_MISMATCH
+            elif binding.state is SubscriptionBindingState.CONFLICTED:
+                binding_observation = SubscriptionBindingObservation.CONFLICTING_ACK
+            elif binding.state is SubscriptionBindingState.ACKNOWLEDGED:
+                if native_sid == binding.sid:
+                    binding.duplicate_ack_count += 1
+                    binding_observation = SubscriptionBindingObservation.DUPLICATE_ACK
+                else:
+                    binding.state = SubscriptionBindingState.CONFLICTED
+                    binding_observation = SubscriptionBindingObservation.CONFLICTING_ACK
             else:
                 binding.state = SubscriptionBindingState.ACKNOWLEDGED
-                if native_sid is not None and binding.sid is None:
-                    binding.sid = native_sid
-        elif binding is not None and native_type in {"error", "rejected"}:
+                binding.sid = native_sid
+                binding_observation = SubscriptionBindingObservation.ACKNOWLEDGED
+        elif (
+            envelope.rejection is None
+            and binding is not None
+            and native_type in {"error", "rejected"}
+        ):
             binding.state = (
                 SubscriptionBindingState.REJECTED
                 if native_command_id == binding.command_id
                 else SubscriptionBindingState.REQUEST_MISMATCH
             )
-        elif (
-            native_type in {"orderbook_snapshot", "orderbook_delta", "trade"}
-            and binding is not None
-            and binding.sid is None
-        ):
-            binding.sid = native_sid
+            binding_observation = SubscriptionBindingObservation.REJECTED
         native_seq = _native_identifier(payload, "seq")
         if (
             native_type == "orderbook_snapshot"
@@ -528,11 +676,20 @@ class KalshiWsIntegrityTracker:
             self._last_native_seq = None
         sequence_state = self._sequence_state(
             native_seq,
-            continuity_eligible=is_orderbook and has_requested_market,
+            continuity_eligible=(
+                is_orderbook
+                and has_requested_market
+                and envelope.rejection is None
+                and binding is not None
+                and binding.state is SubscriptionBindingState.ACKNOWLEDGED
+            ),
         )
         admission_status = AdmissionStatus.NOT_APPLICABLE
         exclusion_reason = _sequence_exclusion_reason(sequence_state)
         integrity_failure = exclusion_reason is not None
+        if envelope.rejection is not None:
+            exclusion_reason = ExclusionReason.NATIVE_ENVELOPE_REJECTED
+            integrity_failure = True
         expected_channel = (
             "orderbook_delta"
             if is_orderbook
@@ -545,7 +702,27 @@ class KalshiWsIntegrityTracker:
             integrity_failure = True
         if (
             native_type in {"orderbook_snapshot", "orderbook_delta", "trade"}
+            and exclusion_reason
+            not in {
+                ExclusionReason.NATIVE_ENVELOPE_REJECTED,
+                ExclusionReason.CHANNEL_TYPE_MISMATCH,
+            }
+            and (
+                binding is None
+                or binding.state is not SubscriptionBindingState.ACKNOWLEDGED
+            )
+        ):
+            exclusion_reason = (
+                ExclusionReason.SUBSCRIPTION_BINDING_CONFLICTED
+                if binding is not None
+                and binding.state is SubscriptionBindingState.CONFLICTED
+                else ExclusionReason.PRE_ACKNOWLEDGMENT_DATA
+            )
+            integrity_failure = True
+        if (
+            native_type in {"orderbook_snapshot", "orderbook_delta", "trade"}
             and binding is not None
+            and binding.state is SubscriptionBindingState.ACKNOWLEDGED
             and binding.sid is not None
             and native_sid is not None
             and native_sid != binding.sid
@@ -608,9 +785,13 @@ class KalshiWsIntegrityTracker:
             subscription_generation=(binding.generation if binding is not None else None),
             subscription_binding_id=(binding.binding_id if binding is not None else None),
             subscription_binding_state=(
-                binding.state if binding is not None else SubscriptionBindingState.UNKNOWN
+                event_binding_state
+                or (binding.state if binding is not None else SubscriptionBindingState.UNKNOWN)
             ),
             subscription_identity_model=CHANNEL_SCOPED_SUBSCRIPTION_IDENTITY_VERSION,
+            native_envelope_rejection=envelope.rejection,
+            native_field_provenance=envelope.provenance,
+            subscription_binding_observation=binding_observation,
         )
         if (
             integrity_failure
@@ -618,6 +799,9 @@ class KalshiWsIntegrityTracker:
             not in {
                 ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH,
                 ExclusionReason.CHANNEL_TYPE_MISMATCH,
+                ExclusionReason.NATIVE_ENVELOPE_REJECTED,
+                ExclusionReason.PRE_ACKNOWLEDGMENT_DATA,
+                ExclusionReason.SUBSCRIPTION_BINDING_CONFLICTED,
             }
             and is_orderbook
         ):

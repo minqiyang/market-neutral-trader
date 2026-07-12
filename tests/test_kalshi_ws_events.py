@@ -14,10 +14,12 @@ from edmn_trader.adapters.kalshi.ws_events import (
     KalshiWsSchemaCompatibilityError,
     LegacyCompatibilityStatus,
     LegacyKalshiWsRawEvent,
+    NativeEnvelopeRejection,
     ResyncState,
     SegmentBoundaryReason,
     SequenceContinuityPolicy,
     SequenceState,
+    SubscriptionBindingObservation,
     SubscriptionBindingState,
     parse_kalshi_ws_raw_record,
     payload_sha256,
@@ -26,13 +28,125 @@ from edmn_trader.adapters.kalshi.ws_events import (
 RECEIVED_AT = datetime(2026, 7, 10, 1, 2, 3, tzinfo=UTC)
 
 
-def test_snapshot_envelope_preserves_native_fields_and_local_order() -> None:
-    tracker = KalshiWsIntegrityTracker(
-        campaign_id="campaign-1",
-        requested_market_tickers=("DEMO-MARKET",),
+@pytest.mark.parametrize(
+    ("field", "top", "nested", "reason"),
+    [
+        ("type", "orderbook_snapshot", "trade", NativeEnvelopeRejection.CONFLICTING_NATIVE_TYPE),
+        ("channel", "orderbook_delta", "trade", NativeEnvelopeRejection.CONFLICTING_NATIVE_CHANNEL),
+        ("id", 1, 2, NativeEnvelopeRejection.CONFLICTING_NATIVE_ID),
+        ("sid", 41, 42, NativeEnvelopeRejection.CONFLICTING_NATIVE_SID),
+    ],
+)
+def test_conflicting_native_routing_fields_are_typed_and_excluded(
+    field: str,
+    top: object,
+    nested: object,
+    reason: NativeEnvelopeRejection,
+) -> None:
+    tracker = _pending_tracker()
+    payload: dict[str, object] = {
+        "type": "orderbook_snapshot",
+        "sid": 41,
+        "msg": {"market_ticker": "DEMO-MARKET"},
+    }
+    payload[field] = top
+    payload["msg"][field] = nested
+
+    event = tracker.record(
+        payload,
+        local_row_index=1,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1,
     )
-    tracker.start_connection()
-    tracker.bind_subscription(command_id=1)
+
+    assert event.native_envelope_rejection is reason
+    assert event.admission_status is AdmissionStatus.EXCLUDED
+    assert event.exclusion_reason is ExclusionReason.NATIVE_ENVELOPE_REJECTED
+
+
+@pytest.mark.parametrize(
+    ("field", "reason"),
+    [
+        ("id", NativeEnvelopeRejection.INVALID_NATIVE_ID),
+        ("sid", NativeEnvelopeRejection.INVALID_NATIVE_SID),
+    ],
+)
+def test_boolean_native_identifiers_are_typed_rejections(
+    field: str,
+    reason: NativeEnvelopeRejection,
+) -> None:
+    payload = {
+        "type": "subscribed",
+        "id": 1,
+        "sid": 41,
+        "msg": {"channel": "orderbook_delta"},
+    }
+    payload[field] = True
+
+    event = _pending_tracker().record(
+        payload,
+        local_row_index=1,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1,
+    )
+
+    assert event.native_envelope_rejection is reason
+
+
+@pytest.mark.parametrize(
+    ("payload", "reason"),
+    [
+        ({}, NativeEnvelopeRejection.MISSING_NATIVE_TYPE),
+        (
+            {"type": "subscribed", "id": 1, "sid": 41},
+            NativeEnvelopeRejection.MISSING_ACK_CHANNEL,
+        ),
+        (
+            {"type": "subscribed", "sid": 41, "msg": {"channel": "orderbook_delta"}},
+            NativeEnvelopeRejection.MISSING_ACK_ID,
+        ),
+        (
+            {"type": "subscribed", "id": 1, "msg": {"channel": "orderbook_delta"}},
+            NativeEnvelopeRejection.MISSING_ACK_SID,
+        ),
+    ],
+)
+def test_missing_required_native_fields_are_typed_rejections(
+    payload: dict[str, object],
+    reason: NativeEnvelopeRejection,
+) -> None:
+    event = _pending_tracker().record(
+        payload,
+        local_row_index=1,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1,
+    )
+
+    assert event.native_envelope_rejection is reason
+
+
+def test_error_frame_cannot_acknowledge_a_binding() -> None:
+    event = _pending_tracker().record(
+        {
+            "type": "error",
+            "id": 1,
+            "sid": 41,
+            "msg": {"channel": "orderbook_delta", "error": "rejected"},
+        },
+        local_row_index=1,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1,
+    )
+
+    assert event.subscription_binding_state is SubscriptionBindingState.REJECTED
+    assert (
+        event.subscription_binding_observation
+        is SubscriptionBindingObservation.REJECTED
+    )
+
+
+def test_snapshot_envelope_preserves_native_fields_and_local_order() -> None:
+    tracker = _tracker()
     payload = {
         "type": "orderbook_snapshot",
         "sid": 41,
@@ -80,18 +194,7 @@ def test_snapshot_envelope_preserves_native_fields_and_local_order() -> None:
 
 
 def test_delta_before_snapshot_is_preserved_but_excluded() -> None:
-    tracker = KalshiWsIntegrityTracker(
-        campaign_id="campaign-1",
-        requested_market_tickers=("DEMO-MARKET",),
-    )
-    tracker.start_connection()
-    tracker.bind_subscription(command_id=1)
-    acknowledgement = _record(
-        tracker,
-        "subscribed",
-        seq=None,
-        local_row_index=1,
-    )
+    tracker = _tracker()
     payload = {
         "type": "orderbook_delta",
         "sid": 41,
@@ -106,8 +209,6 @@ def test_delta_before_snapshot_is_preserved_but_excluded() -> None:
         received_monotonic_ns=123_456,
     )
 
-    assert acknowledgement.admission_status is AdmissionStatus.NOT_APPLICABLE
-    assert acknowledgement.resync_state is ResyncState.RESYNC_REQUIRED
     assert event.original_payload == payload
     assert event.admission_status is AdmissionStatus.EXCLUDED
     assert event.exclusion_reason is ExclusionReason.DELTA_BEFORE_SNAPSHOT
@@ -234,6 +335,105 @@ def test_acknowledgement_with_unknown_request_id_does_not_bind_sid() -> None:
     assert mismatched.subscription_sid == 99
     assert valid.subscription_binding_state is SubscriptionBindingState.ACKNOWLEDGED
     assert valid.subscription_sid == 41
+
+
+def test_duplicate_ack_is_idempotent_but_conflicting_sid_conflicts_binding() -> None:
+    tracker = _pending_tracker()
+    first = _ack_channel(
+        tracker,
+        command_id=1,
+        channel="trade",
+        sid=22,
+    )
+    duplicate = _ack_channel(
+        tracker,
+        command_id=1,
+        channel="trade",
+        sid=22,
+    )
+    conflict = _ack_channel(
+        tracker,
+        command_id=1,
+        channel="trade",
+        sid=99,
+    )
+    after_conflict = _record(
+        tracker,
+        "trade",
+        seq=1,
+        local_row_index=4,
+        sid=22,
+    )
+
+    assert first.subscription_binding_state is SubscriptionBindingState.ACKNOWLEDGED
+    assert duplicate.subscription_binding_state is SubscriptionBindingState.ACKNOWLEDGED
+    assert (
+        duplicate.subscription_binding_observation
+        is SubscriptionBindingObservation.DUPLICATE_ACK
+    )
+    assert conflict.subscription_binding_state is SubscriptionBindingState.CONFLICTED
+    assert (
+        conflict.subscription_binding_observation
+        is SubscriptionBindingObservation.CONFLICTING_ACK
+    )
+    assert after_conflict.exclusion_reason is ExclusionReason.SUBSCRIPTION_BINDING_CONFLICTED
+
+
+def test_exact_duplicate_orderbook_ack_is_idempotent() -> None:
+    tracker = _pending_tracker()
+    _ack_channel(
+        tracker,
+        command_id=1,
+        channel="orderbook_delta",
+        sid=41,
+    )
+    duplicate = _ack_channel(
+        tracker,
+        command_id=1,
+        channel="orderbook_delta",
+        sid=41,
+    )
+
+    assert duplicate.subscription_binding_state is SubscriptionBindingState.ACKNOWLEDGED
+    assert (
+        duplicate.subscription_binding_observation
+        is SubscriptionBindingObservation.DUPLICATE_ACK
+    )
+
+
+def test_pre_ack_orderbook_data_stays_excluded_after_ack_until_fresh_snapshot() -> None:
+    tracker = _pending_tracker()
+    early_snapshot = _record(
+        tracker,
+        "orderbook_snapshot",
+        seq=1,
+        local_row_index=1,
+        sid=41,
+    )
+    _ack_channel(
+        tracker,
+        command_id=1,
+        channel="orderbook_delta",
+        sid=41,
+    )
+    early_delta = _record(
+        tracker,
+        "orderbook_delta",
+        seq=2,
+        local_row_index=3,
+        sid=41,
+    )
+    fresh_snapshot = _record(
+        tracker,
+        "orderbook_snapshot",
+        seq=3,
+        local_row_index=4,
+        sid=41,
+    )
+
+    assert early_snapshot.exclusion_reason is ExclusionReason.PRE_ACKNOWLEDGMENT_DATA
+    assert early_delta.exclusion_reason is ExclusionReason.DELTA_BEFORE_SNAPSHOT
+    assert fresh_snapshot.admission_status is AdmissionStatus.ADMITTED
 
 
 def test_late_ack_from_prior_orderbook_generation_cannot_rebind_current_sid() -> None:
@@ -475,7 +675,7 @@ def test_missing_sequence_is_explicitly_not_observed() -> None:
 
 
 def test_nested_string_identifiers_are_preserved_without_numeric_inference() -> None:
-    event = _tracker().record(
+    event = _tracker(orderbook_sid="sid-41").record(
         {
             "msg": {
                 "type": "orderbook_snapshot",
@@ -525,6 +725,7 @@ def test_sid_change_is_excluded_until_explicit_orderbook_resubscription() -> Non
         sid=42,
     )
     tracker.bind_subscription(command_id=2)
+    _ack_channel(tracker, command_id=2, channel="orderbook_delta", sid=42)
     fresh_snapshot = _record(
         tracker,
         "orderbook_snapshot",
@@ -551,6 +752,7 @@ def test_reconnect_creates_new_connection_and_snapshot_required_segment() -> Non
 
     tracker.start_connection()
     tracker.bind_subscription(command_id=1)
+    _ack_channel(tracker, command_id=1, channel="orderbook_delta", sid=41)
     after_reconnect = _record(tracker, "orderbook_delta", seq=101, local_row_index=2)
     fresh_snapshot = _record(tracker, "orderbook_snapshot", seq=500, local_row_index=3)
 
@@ -814,7 +1016,7 @@ def test_private_account_keys_nested_in_nested_sequences_are_rejected() -> None:
 
 
 def test_public_trade_sid_does_not_reset_orderbook_integrity_segment() -> None:
-    tracker = _tracker()
+    tracker = _tracker(orderbook_sid=11, trade_sid=22)
     snapshot = _record(
         tracker,
         "orderbook_snapshot",
@@ -863,6 +1065,8 @@ def _tracker(
     *,
     continuity_policy: SequenceContinuityPolicy = SequenceContinuityPolicy.UNKNOWN,
     requested_market_tickers: tuple[str, ...] = ("DEMO-MARKET",),
+    orderbook_sid: str | int = 41,
+    trade_sid: str | int = 22,
 ) -> KalshiWsIntegrityTracker:
     tracker = KalshiWsIntegrityTracker(
         campaign_id="campaign-1",
@@ -870,7 +1074,38 @@ def _tracker(
         continuity_policy=continuity_policy,
     )
     tracker.start_connection()
-    tracker.bind_subscription(command_id=1)
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
+    )
+    for index, (channel, sid) in enumerate(
+        (("orderbook_delta", orderbook_sid), ("trade", trade_sid)),
+        start=1,
+    ):
+        tracker.record(
+            {
+                "type": "subscribed",
+                "id": 1,
+                "sid": sid,
+                "msg": {"channel": channel},
+            },
+            local_row_index=index,
+            received_at_utc=RECEIVED_AT,
+            received_monotonic_ns=index,
+        )
+    return tracker
+
+
+def _pending_tracker() -> KalshiWsIntegrityTracker:
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="campaign-1",
+        requested_market_tickers=("DEMO-MARKET",),
+    )
+    tracker.start_connection()
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
+    )
     return tracker
 
 
@@ -895,4 +1130,24 @@ def _record(
         local_row_index=local_row_index,
         received_at_utc=RECEIVED_AT,
         received_monotonic_ns=123_456 + local_row_index,
+    )
+
+
+def _ack_channel(
+    tracker: KalshiWsIntegrityTracker,
+    *,
+    command_id: int,
+    channel: str,
+    sid: int,
+):
+    return tracker.record(
+        {
+            "type": "subscribed",
+            "id": command_id,
+            "sid": sid,
+            "msg": {"channel": channel},
+        },
+        local_row_index=1,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1,
     )

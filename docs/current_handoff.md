@@ -1,5 +1,23 @@
 # Current Handoff
 
+## D2E-F2 native-envelope and binding coherence
+
+D2E-F2 closes the three findings that blocked PR #129. One pure native-envelope
+normalizer now rejects conflicting top-level/`msg` copies of `type`, `channel`,
+`id`, and `sid` before binding or trusted evidence mutation, with typed rejection
+and field-provenance evidence. Boolean identifiers fail closed.
+
+Channel bindings now distinguish first ACK, exact duplicate ACK, conflicting
+duplicate ACK, stale ACK, and rejection. A conflicting ACK leaves that channel
+`CONFLICTED` until an explicit new generation; trade conflicts remain isolated
+from D2B, while orderbook recovery requires resubscription and a fresh snapshot.
+Data before ACK is preserved raw but excluded from D2B/D2C. Runtime open status,
+monitor, terminal summary, and independent validator replay all report the
+binding failure immediately and consistently.
+
+All F2 work remains mocked/synthetic until review, merge, Phase 0B, and the
+separately gated single owner-authorized Real5M stage. Live trading is disabled.
+
 ## D2E-F1 channel-scoped subscription identity
 
 The first owner-controlled post-D2E Real5M stopped fail-closed after separate

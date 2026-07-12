@@ -47,7 +47,14 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
             {
                 "type": "subscribed",
                 "id": 1,
-                "msg": {"channels": ["orderbook_delta", "trade"]},
+                "sid": 11,
+                "msg": {"channel": "orderbook_delta"},
+            },
+            {
+                "type": "subscribed",
+                "id": 1,
+                "sid": 22,
+                "msg": {"channel": "trade"},
             },
             {
                 "type": "orderbook_snapshot",
@@ -70,7 +77,7 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
             market_tickers=("DEMO-MARKET",),
             raw_events_path=tmp_path / "raw.jsonl",
             duration_seconds=1,
-            max_events=3,
+            max_events=4,
         ),
         KalshiWsAuthConfig(api_key_id="fake", private_key_path=key_path),
         websocket_factory=lambda *_args, **_kwargs: websocket,
@@ -79,7 +86,7 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
 
     assert result.status == "ok"
     assert result.subscription_acknowledged is True
-    assert result.event_count == 3
+    assert result.event_count == 4
     assert result.snapshot_count == 1
     assert result.delta_count == 1
     assert result.raw_event_sha256
@@ -87,14 +94,14 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
     records = [json.loads(line) for line in raw_text.splitlines()]
     assert [record["schema_version"] for record in records] == [
         KALSHI_WS_RAW_SCHEMA_VERSION
-    ] * 3
-    assert [record["local_row_index"] for record in records] == [1, 2, 3]
-    assert [record["native_seq"] for record in records] == [None, 901, 902]
-    assert records[1]["native_sid"] == 11
-    assert records[1]["subscription_command_id"] == 1
-    assert records[1]["admission_status"] == AdmissionStatus.ADMITTED
+    ] * 4
+    assert [record["local_row_index"] for record in records] == [1, 2, 3, 4]
+    assert [record["native_seq"] for record in records] == [None, None, 901, 902]
+    assert records[2]["native_sid"] == 11
+    assert records[2]["subscription_command_id"] == 1
     assert records[2]["admission_status"] == AdmissionStatus.ADMITTED
-    assert records[2]["original_payload"]["type"] == "orderbook_delta"
+    assert records[3]["admission_status"] == AdmissionStatus.ADMITTED
+    assert records[3]["original_payload"]["type"] == "orderbook_delta"
     assert [json.loads(item) for item in websocket.sent] == [
         {
             "id": 1,
@@ -116,10 +123,11 @@ def test_ws_recorder_reconnects_after_read_failure_with_existing_rows(
     websockets = [
         _FailingWebSocket(
             [
-                {
-                    "type": "subscribed",
-                    "id": 1,
-                    "msg": {"channels": ["orderbook_delta", "trade"]},
+                    {
+                        "type": "subscribed",
+                        "id": 1,
+                        "sid": 11,
+                        "msg": {"channel": "orderbook_delta"},
                 }
             ]
         ),
@@ -155,10 +163,9 @@ def test_ws_recorder_reconnects_after_read_failure_with_existing_rows(
     assert records[1]["segment_id"] != records[0]["segment_id"]
     assert records[1]["segment_boundary_reason"] == SegmentBoundaryReason.RESUBSCRIPTION
     assert records[1]["admission_status"] == AdmissionStatus.EXCLUDED
-    assert records[1]["exclusion_reason"] == ExclusionReason.DELTA_BEFORE_SNAPSHOT
+    assert records[1]["exclusion_reason"] == ExclusionReason.PRE_ACKNOWLEDGMENT_DATA
     assert [event.event_type for event in connection_events] == [
         ConnectionEvidenceType.CONNECTION_OPEN,
-        ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED,
         ConnectionEvidenceType.CONNECTION_ERROR,
         ConnectionEvidenceType.CONNECTION_CLOSE,
         ConnectionEvidenceType.RECONNECT,

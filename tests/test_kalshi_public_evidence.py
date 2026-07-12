@@ -188,23 +188,13 @@ def test_trade_with_wrong_channel_sid_is_quarantined() -> None:
     assert stream.status is PublicTradeStreamStatus.QUARANTINED_INPUT
 
 
-def test_first_trade_sid_after_sidless_ack_is_bound_and_changes_are_quarantined() -> None:
+def test_trade_before_ack_is_excluded_and_only_later_trade_is_trusted() -> None:
     tracker = KalshiWsIntegrityTracker(
         campaign_id="campaign-1",
         requested_market_tickers=(MARKET,),
     )
     tracker.start_connection()
     tracker.bind_subscription(command_id=1, channels=("orderbook_delta", "trade"))
-    tracker.record(
-        {
-            "type": "subscribed",
-            "id": 1,
-            "msg": {"channels": ["orderbook_delta", "trade"]},
-        },
-        local_row_index=1,
-        received_at_utc=NOW,
-        received_monotonic_ns=1,
-    )
     first = tracker.record(
         {
             "type": "trade",
@@ -216,16 +206,27 @@ def test_first_trade_sid_after_sidless_ack_is_bound_and_changes_are_quarantined(
         received_at_utc=NOW,
         received_monotonic_ns=2,
     )
-    changed = tracker.record(
+    tracker.record(
         {
-            "type": "trade",
-            "sid": 99,
-            "seq": 2,
-            "msg": {"trade_id": "changed", "market_ticker": MARKET},
+            "type": "subscribed",
+            "id": 1,
+            "sid": 22,
+            "msg": {"channel": "trade"},
         },
         local_row_index=3,
         received_at_utc=NOW,
         received_monotonic_ns=3,
+    )
+    changed = tracker.record(
+        {
+            "type": "trade",
+            "sid": 22,
+            "seq": 2,
+            "msg": {"trade_id": "changed", "market_ticker": MARKET},
+        },
+        local_row_index=4,
+        received_at_utc=NOW,
+        received_monotonic_ns=4,
     )
 
     stream = build_public_trade_stream(
@@ -233,8 +234,8 @@ def test_first_trade_sid_after_sidless_ack_is_bound_and_changes_are_quarantined(
         selected_market_tickers=(MARKET,),
     )
 
-    assert first.exclusion_reason is None
-    assert changed.exclusion_reason is ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH
+    assert first.exclusion_reason is ExclusionReason.PRE_ACKNOWLEDGMENT_DATA
+    assert changed.exclusion_reason is None
     assert stream.trade_count == 1
     assert stream.quarantined_count == 1
 
@@ -561,7 +562,25 @@ def _tracker(
         requested_market_tickers=markets,
     )
     tracker.start_connection()
-    tracker.bind_subscription(command_id=1)
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
+    )
+    for index, (channel, sid) in enumerate(
+        (("orderbook_delta", 41), ("trade", 7)),
+        start=1,
+    ):
+        tracker.record(
+            {
+                "type": "subscribed",
+                "id": 1,
+                "sid": sid,
+                "msg": {"channel": channel},
+            },
+            local_row_index=index,
+            received_at_utc=NOW,
+            received_monotonic_ns=index,
+        )
     return tracker
 
 

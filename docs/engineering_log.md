@@ -1,5 +1,25 @@
 # Engineering Log
 
+## D2E-F2 coherence and pre-ACK parity
+
+The F2 correction moves duplicated routing-field resolution into one pure gate.
+It requires type-safe equality between top-level and nested `type`, `channel`,
+`id`, and `sid`, records where each accepted field came from, and preserves
+conflicting frames as typed exclusions without mutating subscription state.
+
+The channel registry now treats an exact duplicate ACK as idempotent and a
+different-SID duplicate as a permanent conflict for that generation. Unknown
+request ACKs are evidence-only and do not alter the pending binding. Data under
+pending, rejected, conflicted, wrong-SID, or wrong-channel bindings is excluded
+before D2B/D2C. The validator reconstructs the same state machine from immutable
+D2A rows rather than trusting persisted states. Binding failures force an open
+status refresh, block monitor health, and remain failed in terminal evidence.
+
+The regression matrix includes all four duplicate-field conflicts, Boolean
+identifiers, ACK idempotency/conflict, pre-ACK snapshot/trade exclusion,
+post-ACK fresh-snapshot recovery, channel isolation, reconnect/generation
+boundaries, exact split-SID reproduction, D2B hashes, and monitor parity.
+
 ## Why this project exists
 
 This project exists to demonstrate professional trading-system engineering in a

@@ -19,8 +19,10 @@ from edmn_trader.adapters.kalshi.public_evidence import (
 from edmn_trader.adapters.kalshi.ws_auth import KalshiWsAuthBlocked, KalshiWsAuthConfig
 from edmn_trader.adapters.kalshi.ws_book_rebuild import KalshiWsBookRebuilder
 from edmn_trader.adapters.kalshi.ws_events import (
+    ExclusionReason,
     KalshiWsIntegrityTracker,
     SequenceContinuityPolicy,
+    SubscriptionBindingState,
 )
 from edmn_trader.adapters.kalshi.ws_runtime import (
     D2_RUNTIME_SCHEMA_VERSION,
@@ -185,7 +187,7 @@ def test_actual_runtime_assembly_uses_d2_writer_and_mocked_transports(
             {
                 "type": "subscribed",
                 "id": 1,
-                "sid": 41,
+                "sid": 22,
                 "msg": {"channel": "trade"},
             },
             {
@@ -222,7 +224,7 @@ def test_actual_runtime_assembly_uses_d2_writer_and_mocked_transports(
             },
             {
                 "type": "trade",
-                "sid": 41,
+                "sid": 22,
                 "seq": 4,
                 "msg": {"market_ticker": MARKET, "trade_id": "trade-1"},
             },
@@ -638,11 +640,11 @@ def test_runtime_session_wires_d2_pipeline_and_closes_verified_artifacts(
             received_at_utc=START + timedelta(seconds=3),
             received_monotonic_ns=3,
         ),
-        tracker.record(
-            {
-                "type": "trade",
-                "sid": 41,
-                "seq": 102,
+            tracker.record(
+                {
+                    "type": "trade",
+                    "sid": 22,
+                    "seq": 102,
                 "msg": {
                     "market_ticker": MARKET,
                     "trade_id": "trade-1",
@@ -729,7 +731,7 @@ def test_runtime_preserves_unknown_sequence_and_excluded_delta(tmp_path: Path) -
         blocker_code=None,
     )
 
-    assert summary["raw_event_count"] == 2
+    assert summary["raw_event_count"] == 3
     assert summary["rebuild_frame_count"] == 0
     assert summary["rebuild_excluded_count"] == 1
     assert summary["independent_evidence_classifications"]["sequence_integrity"] == "UNKNOWN"
@@ -1235,6 +1237,107 @@ def test_running_monitor_never_reports_paper_ok(tmp_path: Path) -> None:
     assert snapshot["run_info"]["health"] == "WARNING"
 
 
+def test_pre_ack_snapshot_fails_closed_in_runtime_open_monitor_and_validator(
+    tmp_path: Path,
+) -> None:
+    session = _session(tmp_path, configured_duration_seconds=1)
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="d2e-runtime-test",
+        requested_market_tickers=(MARKET,),
+    )
+    tracker.start_connection()
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
+    )
+    event = tracker.record(
+        {
+            "type": "orderbook_snapshot",
+            "sid": 41,
+            "seq": 1,
+            "msg": {
+                "market_ticker": MARKET,
+                "yes_dollars_fp": [["0.42", "3"]],
+                "no_dollars_fp": [],
+            },
+        },
+        local_row_index=3,
+        received_at_utc=START,
+        received_monotonic_ns=3,
+    )
+
+    session.record_event(event)
+    open_summary = json.loads((tmp_path / "campaign_summary.json").read_text())
+    monitor = build_monitor_snapshot(tmp_path, now=START)
+    summary = session.close(
+        ended_at_utc=START + timedelta(seconds=1),
+        terminal_reason="bounded_duration_complete",
+        stop_requested=False,
+        connection_established=True,
+        subscription_acknowledged=True,
+        blocker_code=None,
+    )
+    validation = validate_d2_runtime_artifacts(tmp_path)
+
+    assert event.exclusion_reason is ExclusionReason.PRE_ACKNOWLEDGMENT_DATA
+    assert open_summary["rebuild_frame_count"] == 0
+    assert open_summary["independent_evidence_classifications"]["subscription_status"] == "FAIL"
+    assert monitor["run_info"]["health"] == "BLOCKED"
+    assert summary["rebuild_frame_count"] == 0
+    assert summary["independent_evidence_classifications"]["subscription_status"] == "FAIL"
+    assert validation["status"] == "fail"
+
+
+def test_conflicting_trade_ack_fails_subscription_without_invalidating_d2b(
+    tmp_path: Path,
+) -> None:
+    session = _session(tmp_path, configured_duration_seconds=1)
+    tracker = _tracker()
+    conflict = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 1,
+            "sid": 99,
+            "msg": {"channel": "trade"},
+        },
+        local_row_index=1,
+        received_at_utc=START,
+        received_monotonic_ns=1,
+    )
+    snapshot = tracker.record(
+        {
+            "type": "orderbook_snapshot",
+            "sid": 41,
+            "seq": 1,
+            "msg": {
+                "market_ticker": MARKET,
+                "yes_dollars_fp": [["0.42", "3"]],
+                "no_dollars_fp": [],
+            },
+        },
+        local_row_index=2,
+        received_at_utc=START,
+        received_monotonic_ns=2,
+    )
+
+    session.record_event(conflict)
+    session.record_event(snapshot)
+    summary = session.close(
+        ended_at_utc=START + timedelta(seconds=1),
+        terminal_reason="bounded_duration_complete",
+        stop_requested=False,
+        connection_established=True,
+        subscription_acknowledged=True,
+        blocker_code=None,
+    )
+    validation = validate_d2_runtime_artifacts(tmp_path)
+
+    assert conflict.subscription_binding_state is SubscriptionBindingState.CONFLICTED
+    assert summary["rebuild_frame_count"] == 1
+    assert summary["independent_evidence_classifications"]["subscription_status"] == "FAIL"
+    assert validation["subscription_status"] == "FAIL", validation["failures"]
+
+
 def test_running_monitor_blocks_tampered_safety_scalars(tmp_path: Path) -> None:
     _session(tmp_path, configured_duration_seconds=300)
     summary_path = tmp_path / "campaign_summary.json"
@@ -1590,7 +1693,15 @@ def test_validator_requires_contiguous_d2a_runtime_indices(tmp_path: Path) -> No
 
 def test_validator_rejects_reused_connection_identity(tmp_path: Path) -> None:
     session = _session_without_connection(tmp_path, configured_duration_seconds=2)
-    tracker = _tracker(offset=False)
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="d2e-runtime-test",
+        requested_market_tickers=(MARKET,),
+    )
+    tracker.start_connection()
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
+    )
     for event_type, observed_at, segment_id in (
         (ConnectionEvidenceType.CONNECTION_OPEN, START, "segment-1"),
         (ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED, START, "segment-2"),
@@ -1612,18 +1723,23 @@ def test_validator_rejects_reused_connection_identity(tmp_path: Path) -> None:
             )
         )
         if event_type is ConnectionEvidenceType.CONNECTION_OPEN:
-            session.record_event(
-                tracker.record(
-                    {
-                        "type": "subscribed",
-                        "id": 1,
-                        "msg": {"channels": ["orderbook_delta", "trade"]},
-                    },
-                    local_row_index=1,
-                    received_at_utc=START,
-                    received_monotonic_ns=1,
+            for index, (channel, sid) in enumerate(
+                (("orderbook_delta", 41), ("trade", 22)),
+                start=1,
+            ):
+                session.record_event(
+                    tracker.record(
+                        {
+                            "type": "subscribed",
+                            "id": 1,
+                            "sid": sid,
+                            "msg": {"channel": channel},
+                        },
+                        local_row_index=index,
+                        received_at_utc=START,
+                        received_monotonic_ns=index,
+                    )
                 )
-            )
     session.close(
         ended_at_utc=START + timedelta(seconds=2),
         terminal_reason="bounded_duration_complete",
@@ -1640,7 +1756,15 @@ def test_validator_rejects_reused_connection_identity(tmp_path: Path) -> None:
 
 def test_validator_rejects_connection_outside_terminal_interval(tmp_path: Path) -> None:
     session = _session_without_connection(tmp_path, configured_duration_seconds=1)
-    tracker = _tracker(offset=False)
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="d2e-runtime-test",
+        requested_market_tickers=(MARKET,),
+    )
+    tracker.start_connection()
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
+    )
     session.record_connection_event(
         ConnectionEvidenceEvent(
             event_type=ConnectionEvidenceType.CONNECTION_OPEN,
@@ -1650,18 +1774,23 @@ def test_validator_rejects_connection_outside_terminal_interval(tmp_path: Path) 
             reason="pre_runtime_connection",
         )
     )
-    session.record_event(
-        tracker.record(
-            {
-                "type": "subscribed",
-                "id": 1,
-                "msg": {"channels": ["orderbook_delta", "trade"]},
-            },
-            local_row_index=1,
-            received_at_utc=START,
-            received_monotonic_ns=1,
+    for index, (channel, sid) in enumerate(
+        (("orderbook_delta", 41), ("trade", 22)),
+        start=1,
+    ):
+        session.record_event(
+            tracker.record(
+                {
+                    "type": "subscribed",
+                    "id": 1,
+                    "sid": sid,
+                    "msg": {"channel": channel},
+                },
+                local_row_index=index,
+                received_at_utc=START,
+                received_monotonic_ns=index,
+            )
         )
-    )
     session.record_connection_event(
         ConnectionEvidenceEvent(
             event_type=ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED,
@@ -1971,7 +2100,21 @@ def test_runtime_open_status_and_rebuild_hash_memory_are_bounded(
         continuity_policy=SequenceContinuityPolicy.CONTIGUOUS_INCREMENT,
     )
     tracker.start_connection()
-    tracker.bind_subscription(command_id=1)
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
+    )
+    tracker.record(
+        {
+            "type": "subscribed",
+            "id": 1,
+            "sid": 41,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=1,
+        received_at_utc=START,
+        received_monotonic_ns=1,
+    )
     for event_type, reason in (
         (ConnectionEvidenceType.CONNECTION_OPEN, "bounded_connection_open"),
         (ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED, "bounded_subscription_ack"),
@@ -2048,7 +2191,10 @@ def test_runtime_validation_accumulator_is_bounded_at_100k_events() -> None:
     )
     tracker.start_connection()
     opening_segment = tracker.segment_id
-    tracker.bind_subscription(command_id=1)
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
+    )
     subscription_segment = tracker.segment_id
 
     def records():
@@ -2087,27 +2233,32 @@ def test_runtime_validation_accumulator_is_bounded_at_100k_events() -> None:
                 reason="synthetic_100k_validation",
             ).to_record(),
         }
-        raw_ack = tracker.record(
-            {
-                "type": "subscribed",
-                "id": 1,
-                "msg": {"channels": ["orderbook_delta", "trade"]},
-            },
-            local_row_index=1,
-            received_at_utc=START,
-            received_monotonic_ns=1,
-        )
-        yield {
-            "record_type": "raw_transport_event",
-            "campaign_id": campaign_id,
-            "d2a_event": raw_ack.to_record(),
-            "d2b_rebuild": {
-                "disposition": "IGNORED_NON_ORDERBOOK",
-                "reason": None,
-                "frame": None,
-            },
-            "d2c_public_trades": [],
-        }
+        for index, (channel, sid) in enumerate(
+            (("orderbook_delta", 41), ("trade", 22)),
+            start=1,
+        ):
+            raw_ack = tracker.record(
+                {
+                    "type": "subscribed",
+                    "id": 1,
+                    "sid": sid,
+                    "msg": {"channel": channel},
+                },
+                local_row_index=index,
+                received_at_utc=START,
+                received_monotonic_ns=index,
+            )
+            yield {
+                "record_type": "raw_transport_event",
+                "campaign_id": campaign_id,
+                "d2a_event": raw_ack.to_record(),
+                "d2b_rebuild": {
+                    "disposition": "IGNORED_NON_ORDERBOOK",
+                    "reason": None,
+                    "frame": None,
+                },
+                "d2c_public_trades": [],
+            }
         yield {
             "record_type": "connection_evidence",
             "campaign_id": campaign_id,
@@ -2119,7 +2270,7 @@ def test_runtime_validation_accumulator_is_bounded_at_100k_events() -> None:
                 reason="synthetic_100k_validation",
             ).to_record(),
         }
-        for index in range(2, 100_001):
+        for index in range(3, 100_001):
             event = tracker.record(
                 {"type": "heartbeat"},
                 local_row_index=index,
@@ -2613,8 +2764,8 @@ def test_runtime_crash_recovery_reconciles_complete_tail_record_counts(
     summary = json.loads((tmp_path / "campaign_summary.json").read_text())
 
     assert recovery["validation_status"] == "pass"
-    assert summary["event_count"] == 2
-    assert summary["raw_event_count"] == 2
+    assert summary["event_count"] == 3
+    assert summary["raw_event_count"] == 3
     assert summary["sequence_summaries"]
     assert summary["rebuild_summaries"]
     assert summary["freshness_dimensions"]["transport_keepalive_status"] == "OBSERVED"
@@ -2730,7 +2881,10 @@ def test_runtime_recovers_rotation_finalized_before_manifest_sync(
         requested_market_tickers=(MARKET,),
     )
     tracker.start_connection()
-    tracker.bind_subscription(command_id=1)
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
+    )
     session.record_connection_event(
         ConnectionEvidenceEvent(
             event_type=ConnectionEvidenceType.CONNECTION_OPEN,
@@ -2740,18 +2894,23 @@ def test_runtime_recovers_rotation_finalized_before_manifest_sync(
             reason="rotation_connection_open",
         )
     )
-    session.record_event(
-        tracker.record(
-            {
-                "type": "subscribed",
-                "id": 1,
-                "msg": {"channels": ["orderbook_delta", "trade"]},
-            },
-            local_row_index=1,
-            received_at_utc=START,
-            received_monotonic_ns=1,
+    for index, (channel, sid) in enumerate(
+        (("orderbook_delta", 41), ("trade", 22)),
+        start=1,
+    ):
+        session.record_event(
+            tracker.record(
+                {
+                    "type": "subscribed",
+                    "id": 1,
+                    "sid": sid,
+                    "msg": {"channel": channel},
+                },
+                local_row_index=index,
+                received_at_utc=START,
+                received_monotonic_ns=index,
+            )
         )
-    )
 
     def crash_before_rotated_manifest(_observed_at_utc: datetime) -> None:
         raise RuntimeError("synthetic rotation manifest crash")
@@ -2776,7 +2935,7 @@ def test_runtime_recovers_rotation_finalized_before_manifest_sync(
     summary = json.loads((tmp_path / "campaign_summary.json").read_text())
 
     assert recovery["validation_status"] == "pass"
-    assert len(summary["segment_summaries"]) == 5
+    assert len(summary["segment_summaries"]) == 6
     assert summary["segment_summaries"][0]["terminal_reason"] == "rotation"
     assert any(
         segment["recovery_status"] == "FINALIZED_BEFORE_MANIFEST_SYNC"
@@ -3045,10 +3204,10 @@ def test_validator_semantically_reconstructs_all_d2c_evidence(tmp_path: Path) ->
     )
     session.record_event(
         _tracker().record(
-            {
-                "type": "trade",
-                "sid": 41,
-                "seq": 1,
+                {
+                    "type": "trade",
+                    "sid": 22,
+                    "seq": 1,
                 "msg": {"market_ticker": MARKET, "trade_id": "trade-1"},
             },
             local_row_index=1,
@@ -3388,19 +3547,27 @@ def _session(
             reason="test_connection_open",
         )
     )
-    tracker.bind_subscription(command_id=1)
-    session.record_event(
-        tracker.record(
-            {
-                "type": "subscribed",
-                "id": 1,
-                "msg": {"channels": ["orderbook_delta", "trade"]},
-            },
-            local_row_index=1,
-            received_at_utc=START,
-            received_monotonic_ns=1,
-        )
+    tracker.bind_subscription(
+        command_id=1,
+        channels=("orderbook_delta", "trade"),
     )
+    for index, (channel, sid) in enumerate(
+        (("orderbook_delta", 41), ("trade", 22)),
+        start=1,
+    ):
+        session.record_event(
+            tracker.record(
+                {
+                    "type": "subscribed",
+                    "id": 1,
+                    "sid": sid,
+                    "msg": {"channel": channel},
+                },
+                local_row_index=index,
+                received_at_utc=START,
+                received_monotonic_ns=index,
+            )
+        )
     session.record_connection_event(
         ConnectionEvidenceEvent(
             event_type=ConnectionEvidenceType.SUBSCRIPTION_ACKNOWLEDGED,
@@ -3462,16 +3629,21 @@ def _tracker(
         command_id=1,
         channels=("orderbook_delta", "trade"),
     )
-    tracker.record(
-        {
-            "type": "subscribed",
-            "id": 1,
-            "msg": {"channels": ["orderbook_delta", "trade"]},
-        },
-        local_row_index=1,
-        received_at_utc=START,
-        received_monotonic_ns=1,
-    )
+    for index, (channel, sid) in enumerate(
+        (("orderbook_delta", 41), ("trade", 22)),
+        start=1,
+    ):
+        tracker.record(
+            {
+                "type": "subscribed",
+                "id": 1,
+                "sid": sid,
+                "msg": {"channel": channel},
+            },
+            local_row_index=index,
+            received_at_utc=START,
+            received_monotonic_ns=index,
+        )
     return _OffsetTracker(tracker) if offset else tracker
 
 
@@ -3485,7 +3657,7 @@ class _OffsetTracker:
     def record(self, payload, *, local_row_index: int, **kwargs):
         return self._tracker.record(
             payload,
-            local_row_index=local_row_index + 1,
+            local_row_index=local_row_index + 2,
             **kwargs,
         )
 

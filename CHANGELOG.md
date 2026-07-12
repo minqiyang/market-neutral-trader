@@ -6,6 +6,13 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added D2E-F2 native-envelope coherence and binding-state fail-close behavior.
+  Conflicting top-level/nested `type`, `channel`, `id`, or `sid` values and
+  Boolean identifiers are typed exclusions; exact duplicate ACKs are
+  idempotent, contradictory ACKs conflict only their channel, and pre-ACK data
+  remains raw but cannot enter D2B/D2C. Runtime, monitor, terminal summary, and
+  independent validator replay now agree on binding failures. No network,
+  credential, production, or order-write behavior was added.
 - Corrected D2E subscription identity to be channel-scoped. Split public
   acknowledgments may now bind distinct orderbook and trade SIDs under one
   command without trade evidence invalidating D2B. D2A records optional
