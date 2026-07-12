@@ -70,6 +70,7 @@ class NativeEnvelopeRejection(StrEnum):
     MISSING_ACK_CHANNEL = "MISSING_ACK_CHANNEL"
     MISSING_ACK_ID = "MISSING_ACK_ID"
     MISSING_ACK_SID = "MISSING_ACK_SID"
+    MISSING_DATA_SID = "MISSING_DATA_SID"
 
 
 class SubscriptionBindingObservation(StrEnum):
@@ -467,6 +468,12 @@ def normalize_native_envelope(payload: Mapping[str, Any]) -> NormalizedNativeEnv
             rejection = NativeEnvelopeRejection.MISSING_ACK_ID
         elif sid is None:
             rejection = NativeEnvelopeRejection.MISSING_ACK_SID
+    if (
+        native_type in {"orderbook_snapshot", "orderbook_delta", "trade"}
+        and sid is None
+        and rejection is None
+    ):
+        rejection = NativeEnvelopeRejection.MISSING_DATA_SID
     return NormalizedNativeEnvelope(
         native_type=native_type if isinstance(native_type, str) else None,
         channel=channel if isinstance(channel, str) else "unknown",

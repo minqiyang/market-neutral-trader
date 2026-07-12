@@ -123,15 +123,17 @@ def test_ws_recorder_reconnects_after_read_failure_with_existing_rows(
     websockets = [
         _FailingWebSocket(
             [
-                    {
-                        "type": "subscribed",
-                        "id": 1,
-                        "sid": 11,
-                        "msg": {"channel": "orderbook_delta"},
+                {
+                    "type": "subscribed",
+                    "id": 1,
+                    "sid": 11,
+                    "msg": {"channel": "orderbook_delta"},
                 }
             ]
         ),
-        _FakeWebSocket([{"type": "orderbook_delta", "market_ticker": "DEMO-MARKET"}]),
+        _FakeWebSocket(
+            [{"type": "orderbook_delta", "sid": 11, "market_ticker": "DEMO-MARKET"}]
+        ),
     ]
     connection_events = []
 

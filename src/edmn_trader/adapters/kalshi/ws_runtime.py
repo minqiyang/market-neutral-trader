@@ -2280,6 +2280,18 @@ def _replay_channel_binding(
             }
             expected = SubscriptionBindingState.ACKNOWLEDGED
             expected_observation = SubscriptionBindingObservation.ACKNOWLEDGED
+        elif (
+            isinstance(event.subscription_generation, int)
+            and isinstance(binding["generation"], int)
+            and event.subscription_generation > binding["generation"]
+        ):
+            binding.update(
+                sid=envelope.sid,
+                state=SubscriptionBindingState.ACKNOWLEDGED,
+                generation=event.subscription_generation,
+            )
+            expected = SubscriptionBindingState.ACKNOWLEDGED
+            expected_observation = SubscriptionBindingObservation.ACKNOWLEDGED
         elif binding["state"] is SubscriptionBindingState.ACKNOWLEDGED:
             if binding["sid"] == envelope.sid:
                 expected = SubscriptionBindingState.ACKNOWLEDGED

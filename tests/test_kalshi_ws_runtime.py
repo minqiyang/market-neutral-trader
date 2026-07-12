@@ -1338,6 +1338,47 @@ def test_conflicting_trade_ack_fails_subscription_without_invalidating_d2b(
     assert validation["subscription_status"] == "FAIL", validation["failures"]
 
 
+def test_validator_replay_accepts_new_subscription_generation() -> None:
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="generation-replay",
+        requested_market_tickers=(MARKET,),
+    )
+    tracker.start_connection()
+    tracker.bind_subscription(command_id=1)
+    first = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 1,
+            "sid": 41,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=1,
+        received_at_utc=START,
+        received_monotonic_ns=1,
+    )
+    tracker.bind_subscription(command_id=2)
+    second = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 2,
+            "sid": 44,
+            "msg": {"channel": "orderbook_delta"},
+        },
+        local_row_index=2,
+        received_at_utc=START,
+        received_monotonic_ns=2,
+    )
+    bindings: dict[tuple[str, str], dict[str, object]] = {}
+
+    ws_runtime._replay_channel_binding(first, bindings)
+    ws_runtime._replay_channel_binding(second, bindings)
+
+    binding = bindings[(tracker.connection_id, "orderbook_delta")]
+    assert binding["generation"] == 2
+    assert binding["sid"] == 44
+    assert binding["state"] is SubscriptionBindingState.ACKNOWLEDGED
+
+
 def test_running_monitor_blocks_tampered_safety_scalars(tmp_path: Path) -> None:
     _session(tmp_path, configured_duration_seconds=300)
     summary_path = tmp_path / "campaign_summary.json"

@@ -145,6 +145,24 @@ def test_error_frame_cannot_acknowledge_a_binding() -> None:
     )
 
 
+@pytest.mark.parametrize("native_type", ["orderbook_snapshot", "orderbook_delta", "trade"])
+def test_bound_data_without_sid_is_typed_and_excluded(native_type: str) -> None:
+    tracker = _tracker()
+    event = tracker.record(
+        {
+            "type": native_type,
+            "msg": {"market_ticker": "DEMO-MARKET"},
+        },
+        local_row_index=1,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1,
+    )
+
+    assert event.native_envelope_rejection is NativeEnvelopeRejection.MISSING_DATA_SID
+    assert event.admission_status is AdmissionStatus.EXCLUDED
+    assert event.exclusion_reason is ExclusionReason.NATIVE_ENVELOPE_REJECTED
+
+
 def test_snapshot_envelope_preserves_native_fields_and_local_order() -> None:
     tracker = _tracker()
     payload = {
