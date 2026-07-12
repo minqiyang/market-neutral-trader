@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "edmn-trader"
 version = "0.1.0"
-description = "Demo-first, risk-controlled research platform for event-driven prediction markets."
+description = "Evidence-gated research for same-market YES/NO complement parity in prediction markets."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
