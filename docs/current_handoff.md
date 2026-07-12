@@ -40,6 +40,32 @@ binding failure immediately and consistently.
 All F2 work remains mocked/synthetic until review, merge, Phase 0B, and the
 separately gated single owner-authorized Real5M stage. Live trading is disabled.
 
+## Round 8J5 dual-interpretation occurrence policy
+
+Selection profile v4 replaces the Round 8J4 global occurrence hard stop with a
+reviewed dual-interpretation rule. Official documentation still describes
+`occurrence_datetime` as the recorded time when the event occurred, while Demo
+has returned future values equal to close and expected expiration. The selector
+now requires candidates to remain safe under both meanings: close and expected
+expiration must independently exceed the required horizon, and a future
+occurrence is only an additional minimum bound. It never extends another
+deadline and is never sole safety evidence.
+
+Missing occurrence can pass only with complete non-Sports/non-match event
+metadata, `can_close_early=false`, and independently safe close and expected
+expiration. Historical/current-within-60-seconds and malformed occurrence
+values reject. Future equality with close or expected expiration is recorded as
+an anomaly but does not stop selection when every deadline is independently
+safe. `latest_expiration_time` remains telemetry only. Early-close risk remains
+fail-closed without an explicit reviewed deadline beyond the required end.
+
+Discovery now reports occurrence semantic/equality distributions,
+dual-interpretation pass counts, rejection overlaps, and hashed near-miss
+margins alongside the Round 8J4 cursor-exhaustion evidence. The public live gate
+remains disabled; no production, credential, account, or order-write path was
+added. The next gate is review/merge/deploy followed by exactly one complete
+canary discovery, not an automatic WebSocket retry.
+
 ## Round 8J4 discovery integrity correction
 
 The prior canary availability monitor scanned exactly ten 1,000-market pages
@@ -60,15 +86,18 @@ lifecycle candidate's orderbook before reporting the eligible count, and emits
 cursor-exhaustion fields, a versioned policy hash, primary and multi-label
 rejection totals, and up to 100 hashed near-miss summaries.
 
-The same audit found a separate authoritative field-contract error:
-Kalshi defines `occurrence_datetime` as the recorded time when the underlying
-event occurred. It remains preserved in evidence but no longer participates in
-the prospective lifecycle deadline. This correction did not create any
-additional candidate in the audit shadow policy. The strict canary rejection
-of every `can_close_early=true` market remains unchanged because the official
-schema provides no structured earliest-close guarantee. Sports/match, complete
-event metadata, expected-expiration, nonempty orderbook, Demo-only, and
-disabled-live boundaries also remain unchanged.
+The post-audit candidate revalidation found a separate contract ambiguity.
+Kalshi's changelog defines `occurrence_datetime` as the recorded time when the
+underlying event occurred, but Demo returned a future value equal to
+`close_time` and `expected_expiration_time`. The audit shadow policy showed that
+removing occurrence from the deadline created no additional candidate, but the
+official/Demo contradiction still blocks live progression. Selection profile
+v3 therefore retains occurrence as a conservative deadline until the venue
+clarifies the field. The strict canary rejection of every
+`can_close_early=true` market remains unchanged because the official schema
+provides no structured earliest-close guarantee. Sports/match, complete event
+metadata, expected-expiration, nonempty orderbook, Demo-only, and disabled-live
+boundaries also remain unchanged.
 
 ## D2B omitted empty-side contract correction
 

@@ -56,7 +56,8 @@ MAX_MARKET_DISCOVERY_PAGES = 100
 EVENT_DISCOVERY_BATCH_SIZE = 50
 DISCOVERY_MAX_ATTEMPTS = 3
 DISCOVERY_NEAR_MISS_LIMIT = 100
-SELECTION_PROFILE_VERSION = "edmn.kalshi.selection_profile.v2"
+OCCURRENCE_CLOCK_SKEW_TOLERANCE_SECONDS = 60
+SELECTION_PROFILE_VERSION = "edmn.kalshi.selection_profile.v4"
 OPEN_MARKET_STATUSES = {"open", "trading"}
 MARKET_STATUS_REJECTION_REASONS = {
     "initialized": "MARKET_STATUS_UNOPENED",
@@ -88,7 +89,7 @@ CONSERVATIVE_LIFECYCLE_TIME_FIELDS = (
     "expected_expiration",
     "early_close_deadline",
     "early_close_time",
-    "settlement_time",
+    "early_close_condition_deadline",
 )
 EXPECTED_EXPIRATION_FIELDS = ("expected_expiration_time", "expected_expiration")
 OCCURRENCE_FIELDS = ("occurrence_datetime", "occurrence_time")
@@ -144,13 +145,15 @@ def selection_profile_hash(
         "duration_seconds": duration_seconds,
         "safety_buffer_seconds": safety_buffer_seconds,
         "conservative_lifecycle_time_fields": CONSERVATIVE_LIFECYCLE_TIME_FIELDS,
-        "observational_only_time_fields": OCCURRENCE_FIELDS,
-        "complete_event_metadata_required": profile is not SelectionProfile.SMOKE,
-        "early_close_rule": (
-            "reject_any"
-            if profile is SelectionProfile.CANARY
-            else "require_expected_or_explicit_deadline"
+        "occurrence_policy": "dual_interpretation_no_relaxation",
+        "occurrence_fields": OCCURRENCE_FIELDS,
+        "occurrence_clock_skew_tolerance_seconds": (
+            OCCURRENCE_CLOCK_SKEW_TOLERANCE_SECONDS
         ),
+        "complete_event_metadata_required": profile is not SelectionProfile.SMOKE,
+        "early_close_rule": "require_authoritative_explicit_deadline_beyond_required_end",
+        "can_close_early_must_be_explicit": profile is not SelectionProfile.SMOKE,
+        "close_time_must_exceed_required_end": profile is not SelectionProfile.SMOKE,
         "expected_expiration_must_exceed_required_end": True,
         "earliest_deadline_must_exceed_required_end": True,
         "reject_sports_or_match": profile is not SelectionProfile.SMOKE,
@@ -218,6 +221,7 @@ def evaluate_market_selection(
     )
     reasons = _market_selection_rejection_reasons(
         market_metadata,
+        selected_at_utc=selected_at_utc,
         campaign_required_end=campaign_required_end,
         profile=profile,
         require_non_empty_orderbook=require_non_empty_orderbook,
@@ -238,9 +242,101 @@ def evaluate_market_selection(
     )
 
 
+def _lifecycle_policy_evidence(
+    market_metadata: Mapping[str, object],
+    *,
+    selected_at_utc: datetime,
+    campaign_required_end: datetime,
+    profile: SelectionProfile,
+) -> dict[str, Any]:
+    close_time = _parse_time(market_metadata.get("close_time"))
+    expected_expiration = _first_metadata_time(
+        market_metadata, *EXPECTED_EXPIRATION_FIELDS
+    )
+    early_close_deadline = _first_metadata_time(
+        market_metadata, *EARLY_CLOSE_DEADLINE_FIELDS
+    )
+    early_close_deadline_authoritative = (
+        market_metadata.get("early_close_deadline_authoritative") is True
+    )
+    occurrence_raw = _first_metadata_value(market_metadata, *OCCURRENCE_FIELDS)
+    occurrence_time = _parse_time(occurrence_raw)
+    occurrence_included = False
+
+    if occurrence_raw is None:
+        occurrence_semantics = "MISSING"
+    elif occurrence_time is None:
+        occurrence_semantics = "INVALID"
+    elif profile is SelectionProfile.SMOKE:
+        occurrence_semantics = "SMOKE_UNINTERPRETED_OCCURRENCE"
+        occurrence_included = True
+    elif occurrence_time <= selected_at_utc + timedelta(
+        seconds=OCCURRENCE_CLOCK_SKEW_TOLERANCE_SECONDS
+    ):
+        occurrence_semantics = "HISTORICAL_OR_ALREADY_OCCURRED"
+    else:
+        occurrence_semantics = "AMBIGUOUS_FUTURE_OCCURRENCE"
+        occurrence_included = True
+
+    components = {
+        "close_time": close_time,
+        "expected_expiration_time": expected_expiration,
+        "early_close_deadline": early_close_deadline,
+        "occurrence_safety_bound": occurrence_time if occurrence_included else None,
+    }
+    deadlines = [value for value in components.values() if value is not None]
+    conservative_deadline = min(deadlines) if deadlines else None
+    can_close_early = _as_optional_bool(market_metadata.get("can_close_early"))
+    dual_interpretation_pass: bool | None = None
+    if profile is not SelectionProfile.SMOKE:
+        trusted_deadlines_safe = (
+            close_time is not None
+            and close_time > campaign_required_end
+            and expected_expiration is not None
+            and expected_expiration > campaign_required_end
+        )
+        occurrence_safe = occurrence_semantics == "MISSING" or (
+            occurrence_semantics == "AMBIGUOUS_FUTURE_OCCURRENCE"
+            and occurrence_time is not None
+            and occurrence_time > campaign_required_end
+        )
+        early_close_safe = can_close_early is False or (
+            can_close_early is True
+            and occurrence_semantics != "MISSING"
+            and early_close_deadline_authoritative
+            and early_close_deadline is not None
+            and early_close_deadline > campaign_required_end
+        )
+        dual_interpretation_pass = (
+            trusted_deadlines_safe and occurrence_safe and early_close_safe
+        )
+
+    raw_text = (
+        occurrence_raw.isoformat()
+        if isinstance(occurrence_raw, datetime)
+        else occurrence_raw
+    )
+    return {
+        **components,
+        "conservative_lifecycle_deadline": conservative_deadline,
+        "early_close_deadline_authoritative": early_close_deadline_authoritative,
+        "occurrence_raw_value": raw_text,
+        "occurrence_semantic_classification": occurrence_semantics,
+        "occurrence_included_as_safety_bound": occurrence_included,
+        "occurrence_equals_close_time": (
+            occurrence_time is not None and occurrence_time == close_time
+        ),
+        "occurrence_equals_expected_expiration_time": (
+            occurrence_time is not None and occurrence_time == expected_expiration
+        ),
+        "dual_interpretation_pass": dual_interpretation_pass,
+    }
+
+
 def _market_selection_rejection_reasons(
     market_metadata: Mapping[str, object],
     *,
+    selected_at_utc: datetime,
     campaign_required_end: datetime,
     profile: SelectionProfile,
     require_non_empty_orderbook: bool,
@@ -265,25 +361,63 @@ def _market_selection_rejection_reasons(
             else "EVENT_METADATA_MISSING"
         )
 
-    expected_expiration = _first_metadata_time(market_metadata, *EXPECTED_EXPIRATION_FIELDS)
-    early_close_deadline = _first_metadata_time(market_metadata, *EARLY_CLOSE_DEADLINE_FIELDS)
-    lifecycle_deadline = _earliest_metadata_time(
-        market_metadata, *CONSERVATIVE_LIFECYCLE_TIME_FIELDS
+    policy = _lifecycle_policy_evidence(
+        market_metadata,
+        selected_at_utc=selected_at_utc,
+        campaign_required_end=campaign_required_end,
+        profile=profile,
     )
-    can_close_early = _as_bool(market_metadata.get("can_close_early"))
-    if profile is SelectionProfile.CANARY and can_close_early:
-        reasons.append("CAN_CLOSE_EARLY_UNSAFE_FOR_CANARY")
-    if can_close_early and expected_expiration is None and early_close_deadline is None:
-        reasons.append("CAN_CLOSE_EARLY_UNSAFE_FOR_DURATION")
-    if expected_expiration is not None and expected_expiration <= campaign_required_end:
-        reasons.append("EXPECTED_EXPIRATION_TOO_SHORT")
+    close_time = policy["close_time"]
+    expected_expiration = policy["expected_expiration_time"]
+    early_close_deadline = policy["early_close_deadline"]
+    lifecycle_deadline = policy["conservative_lifecycle_deadline"]
+    can_close_early = _as_optional_bool(market_metadata.get("can_close_early"))
+    if profile is not SelectionProfile.SMOKE and can_close_early is None:
+        reasons.append("CAN_CLOSE_EARLY_STATUS_UNKNOWN")
+    if profile is not SelectionProfile.SMOKE and can_close_early is True and (
+        policy["early_close_deadline_authoritative"] is not True
+        or early_close_deadline is None
+        or early_close_deadline <= campaign_required_end
+    ):
+        reasons.append(
+            "CAN_CLOSE_EARLY_UNSAFE_FOR_CANARY"
+            if profile is SelectionProfile.CANARY
+            else "CAN_CLOSE_EARLY_UNSAFE_FOR_DURATION"
+        )
+    if profile is not SelectionProfile.SMOKE:
+        if close_time is None:
+            reasons.append("MISSING_CLOSE_TIME")
+        elif close_time <= campaign_required_end:
+            reasons.append("TIME_TO_CLOSE_TOO_SHORT")
+        if expected_expiration is None:
+            reasons.append("MISSING_EXPECTED_EXPIRATION_TIME")
+        elif expected_expiration <= campaign_required_end:
+            reasons.append("EXPECTED_EXPIRATION_TOO_SHORT")
+
+        occurrence_semantics = policy["occurrence_semantic_classification"]
+        if occurrence_semantics == "INVALID":
+            reasons.append("OCCURRENCE_DATETIME_INVALID")
+        elif occurrence_semantics == "HISTORICAL_OR_ALREADY_OCCURRED":
+            reasons.append("OCCURRENCE_ALREADY_OCCURRED_UNSAFE")
+        elif (
+            occurrence_semantics == "AMBIGUOUS_FUTURE_OCCURRENCE"
+            and policy["occurrence_safety_bound"] <= campaign_required_end
+        ):
+            reasons.append("OCCURRENCE_SAFETY_BOUND_TOO_SHORT")
+        if can_close_early is True and occurrence_semantics == "MISSING":
+            reasons.append(
+                "CAN_CLOSE_EARLY_UNSAFE_FOR_CANARY"
+                if profile is SelectionProfile.CANARY
+                else "CAN_CLOSE_EARLY_UNSAFE_FOR_DURATION"
+            )
     if lifecycle_deadline is None:
-        reasons.append("MISSING_CLOSE_TIME")
+        if profile is SelectionProfile.SMOKE:
+            reasons.append("MISSING_CLOSE_TIME")
     elif lifecycle_deadline <= campaign_required_end:
         if profile is SelectionProfile.CANARY:
             reasons.append("CANARY_LIFECYCLE_DEADLINE_TOO_SHORT")
         elif (
-            _parse_time(market_metadata.get("close_time")) == lifecycle_deadline
+            close_time == lifecycle_deadline
             and expected_expiration is None
             and early_close_deadline is None
         ):
@@ -1052,12 +1186,27 @@ def _write_campaign_manifest(
         "latest_expiration_time": summary.get("latest_expiration_time"),
         "occurrence_time": summary.get("occurrence_time"),
         "occurrence_datetime": summary.get("occurrence_datetime"),
+        "occurrence_raw_value": summary.get("occurrence_raw_value"),
+        "occurrence_semantic_classification": summary.get(
+            "occurrence_semantic_classification"
+        ),
+        "occurrence_included_as_safety_bound": summary.get(
+            "occurrence_included_as_safety_bound"
+        ),
+        "occurrence_equals_close_time": summary.get("occurrence_equals_close_time"),
+        "occurrence_equals_expected_expiration_time": summary.get(
+            "occurrence_equals_expected_expiration_time"
+        ),
+        "dual_interpretation_pass": summary.get("dual_interpretation_pass"),
         "settlement_time": summary.get("settlement_time"),
         "settlement_ts": summary.get("settlement_ts"),
         "listed_expiration": summary.get("listed_expiration"),
         "can_close_early": summary.get("can_close_early"),
         "early_close_condition": summary.get("early_close_condition"),
         "early_close_deadline": summary.get("early_close_deadline"),
+        "early_close_deadline_authoritative": summary.get(
+            "early_close_deadline_authoritative"
+        ),
         "selected_at_utc": summary.get("selected_at_utc"),
         "campaign_expected_end_utc": summary.get("campaign_expected_end_utc"),
         "campaign_required_end_utc": summary.get("campaign_required_end_utc"),
@@ -1066,7 +1215,12 @@ def _write_campaign_manifest(
             "time_to_lifecycle_deadline_at_launch_seconds"
         ),
         "lifecycle_deadline": summary.get("lifecycle_deadline"),
+        "lifecycle_deadline_components": summary.get(
+            "lifecycle_deadline_components", {}
+        ),
         "selection_profile": summary.get("selection_profile"),
+        "selection_profile_version": summary.get("selection_profile_version"),
+        "selection_profile_hash": summary.get("selection_profile_hash"),
         "selection_safety_buffer_seconds": summary.get("selection_safety_buffer_seconds"),
         "selection_reason": summary.get("selection_reason"),
         "selection_gate_result": summary.get("selection_gate_result"),
@@ -1345,6 +1499,7 @@ def discover_kalshi_demo_ws_market(
                         reasons.append("EVENT_METADATA_INCOMPLETE")
             policy_reasons = _market_selection_rejection_reasons(
                 candidate_metadata,
+                selected_at_utc=selected_at_utc,
                 campaign_required_end=selected_at_utc
                 + timedelta(seconds=duration_seconds + safety_buffer_seconds),
                 profile=profile,
@@ -1411,6 +1566,20 @@ def discover_kalshi_demo_ws_market(
                     duration_seconds=duration_seconds,
                     safety_buffer_seconds=safety_buffer_seconds,
                 )
+                diagnostics.update(
+                    {
+                        "rejection_overlap_counts": audit["rejection_overlap_counts"],
+                        "occurrence_semantic_counts": audit[
+                            "occurrence_semantic_counts"
+                        ],
+                        "occurrence_equality_counts": audit[
+                            "occurrence_equality_counts"
+                        ],
+                        "dual_interpretation_pass_count": audit[
+                            "dual_interpretation_pass_count"
+                        ],
+                    }
+                )
                 return _market_discovery_blocker(
                     "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR",
                     pages_fetched=pages_fetched,
@@ -1437,6 +1606,7 @@ def discover_kalshi_demo_ws_market(
             )
             final_reasons = _market_selection_rejection_reasons(
                 selected_metadata,
+                selected_at_utc=selected_at_utc,
                 campaign_required_end=selected_at_utc
                 + timedelta(seconds=duration_seconds + safety_buffer_seconds),
                 profile=profile,
@@ -1461,6 +1631,12 @@ def discover_kalshi_demo_ws_market(
                 "eligible_count": len(eligible_candidates),
                 "all_markets_multilabel_evaluated": len(audit_rows)
                 == len(normalized_markets),
+                "rejection_overlap_counts": audit["rejection_overlap_counts"],
+                "occurrence_semantic_counts": audit["occurrence_semantic_counts"],
+                "occurrence_equality_counts": audit["occurrence_equality_counts"],
+                "dual_interpretation_pass_count": audit[
+                    "dual_interpretation_pass_count"
+                ],
             }
         )
         if eligible_candidates:
@@ -1474,6 +1650,12 @@ def discover_kalshi_demo_ws_market(
                 "rejection_counts": audit["rejection_counts"],
                 "multi_label_rejection_counts": audit[
                     "multi_label_rejection_counts"
+                ],
+                "rejection_overlap_counts": audit["rejection_overlap_counts"],
+                "occurrence_semantic_counts": audit["occurrence_semantic_counts"],
+                "occurrence_equality_counts": audit["occurrence_equality_counts"],
+                "dual_interpretation_pass_count": audit[
+                    "dual_interpretation_pass_count"
                 ],
                 "near_misses": audit["near_misses"],
                 "cursor_remaining": False,
@@ -1528,26 +1710,54 @@ def _discovery_audit_summary(
 ) -> dict[str, Any]:
     rejection_counts: Counter[str] = Counter()
     multi_label_rejection_counts: Counter[str] = Counter()
+    rejection_overlap_counts: Counter[str] = Counter()
+    occurrence_semantic_counts: Counter[str] = Counter()
+    occurrence_equality_counts: Counter[str] = Counter()
+    dual_interpretation_pass_count = 0
     near_misses: list[dict[str, object]] = []
     required_end = selected_at_utc + timedelta(
         seconds=duration_seconds + safety_buffer_seconds
     )
+    profile = selection_profile_for_duration(duration_seconds)
     for metadata, reasons in rows:
         if reasons:
             rejection_counts[reasons[0]] += 1
             multi_label_rejection_counts.update(reasons)
-        deadline = _earliest_metadata_time(metadata, *CONSERVATIVE_LIFECYCLE_TIME_FIELDS)
+            for index, left in enumerate(sorted(set(reasons))):
+                for right in sorted(set(reasons))[index + 1 :]:
+                    rejection_overlap_counts[f"{left}|{right}"] += 1
+        policy = _lifecycle_policy_evidence(
+            metadata,
+            selected_at_utc=selected_at_utc,
+            campaign_required_end=required_end,
+            profile=profile,
+        )
+        occurrence_semantic_counts[
+            str(policy["occurrence_semantic_classification"])
+        ] += 1
+        if policy["dual_interpretation_pass"] is True:
+            dual_interpretation_pass_count += 1
+        if policy["occurrence_equals_close_time"] is True:
+            occurrence_equality_counts["equals_close_time"] += 1
+        if policy["occurrence_equals_expected_expiration_time"] is True:
+            occurrence_equality_counts["equals_expected_expiration_time"] += 1
+        deadline = policy["conservative_lifecycle_deadline"]
         deadline_source = next(
             (
                 field
-                for field in CONSERVATIVE_LIFECYCLE_TIME_FIELDS
-                if _parse_time(metadata.get(field)) == deadline
+                for field in (
+                    "close_time",
+                    "expected_expiration_time",
+                    "early_close_deadline",
+                    "occurrence_safety_bound",
+                )
+                if policy[field] == deadline
             ),
             None,
         )
         margin = int((deadline - required_end).total_seconds()) if deadline else None
-        close_time = _parse_time(metadata.get("close_time"))
-        expected_expiration = _first_metadata_time(metadata, *EXPECTED_EXPIRATION_FIELDS)
+        close_time = policy["close_time"]
+        expected_expiration = policy["expected_expiration_time"]
         market_id = str(
             metadata.get("ticker") or metadata.get("market_ticker") or ""
         ).strip()
@@ -1571,7 +1781,16 @@ def _discovery_audit_summary(
                 )
                 if expected_expiration
                 else None,
-                "can_close_early": _as_bool(metadata.get("can_close_early")),
+                "occurrence_semantic_classification": policy[
+                    "occurrence_semantic_classification"
+                ],
+                "occurrence_margin_seconds": int(
+                    (policy["occurrence_safety_bound"] - required_end).total_seconds()
+                )
+                if policy["occurrence_safety_bound"]
+                else None,
+                "dual_interpretation_pass": policy["dual_interpretation_pass"],
+                "can_close_early": _as_optional_bool(metadata.get("can_close_early")),
                 "event_category_class": (
                     "sports" if _is_sports_market(metadata) else "non_sports"
                 ),
@@ -1592,6 +1811,10 @@ def _discovery_audit_summary(
         "multi_label_rejection_counts": dict(
             sorted(multi_label_rejection_counts.items())
         ),
+        "rejection_overlap_counts": dict(sorted(rejection_overlap_counts.items())),
+        "occurrence_semantic_counts": dict(sorted(occurrence_semantic_counts.items())),
+        "occurrence_equality_counts": dict(sorted(occurrence_equality_counts.items())),
+        "dual_interpretation_pass_count": dual_interpretation_pass_count,
         "near_misses": near_misses[:DISCOVERY_NEAR_MISS_LIMIT],
     }
 
@@ -1643,6 +1866,12 @@ def _market_discovery_blocker(
         "rejection_counts": dict(sorted(rejection_counts.items())),
         "multi_label_rejection_counts": dict(
             sorted((multi_label_rejection_counts or {}).items())
+        ),
+        "rejection_overlap_counts": detail.get("rejection_overlap_counts", {}),
+        "occurrence_semantic_counts": detail.get("occurrence_semantic_counts", {}),
+        "occurrence_equality_counts": detail.get("occurrence_equality_counts", {}),
+        "dual_interpretation_pass_count": detail.get(
+            "dual_interpretation_pass_count", 0
         ),
         "near_misses": list(near_misses or []),
         "cursor_remaining": cursor_remaining,
@@ -1802,12 +2031,25 @@ def _default_lifecycle_record(
         "latest_expiration_time": None,
         "occurrence_time": None,
         "occurrence_datetime": None,
+        "occurrence_raw_value": None,
+        "occurrence_semantic_classification": "MISSING",
+        "occurrence_included_as_safety_bound": False,
+        "occurrence_equals_close_time": False,
+        "occurrence_equals_expected_expiration_time": False,
+        "dual_interpretation_pass": None,
+        "lifecycle_deadline_components": {
+            "close_time": None,
+            "expected_expiration_time": None,
+            "early_close_deadline": None,
+            "occurrence_safety_bound": None,
+        },
         "settlement_time": None,
         "settlement_ts": None,
         "listed_expiration": None,
         "can_close_early": None,
         "early_close_condition": None,
         "early_close_deadline": None,
+        "early_close_deadline_authoritative": False,
         "selected_at_utc": selected_at_utc.isoformat(),
         "campaign_expected_end_utc": (
             selected_at_utc + timedelta(seconds=duration_seconds)
@@ -1845,13 +2087,17 @@ def _market_lifecycle_record(
     reason: str | None,
     selection_profile: SelectionProfile,
 ) -> dict[str, object]:
-    close_time = _parse_time(market_metadata.get("close_time"))
-    lifecycle_deadline = _earliest_metadata_time(
-        market_metadata, *CONSERVATIVE_LIFECYCLE_TIME_FIELDS
-    )
     campaign_required_end = selected_at_utc + timedelta(
         seconds=duration_seconds + safety_buffer_seconds
     )
+    policy = _lifecycle_policy_evidence(
+        market_metadata,
+        selected_at_utc=selected_at_utc,
+        campaign_required_end=campaign_required_end,
+        profile=selection_profile,
+    )
+    close_time = policy["close_time"]
+    lifecycle_deadline = policy["conservative_lifecycle_deadline"]
     market_ticker = (
         market_metadata.get("market_ticker")
         or market_metadata.get("ticker")
@@ -1883,6 +2129,27 @@ def _market_lifecycle_record(
         "latest_expiration_time": _time_text(market_metadata.get("latest_expiration_time")),
         "occurrence_time": _time_text(market_metadata.get("occurrence_time")),
         "occurrence_datetime": _time_text(market_metadata.get("occurrence_datetime")),
+        "occurrence_raw_value": policy["occurrence_raw_value"],
+        "occurrence_semantic_classification": policy[
+            "occurrence_semantic_classification"
+        ],
+        "occurrence_included_as_safety_bound": policy[
+            "occurrence_included_as_safety_bound"
+        ],
+        "occurrence_equals_close_time": policy["occurrence_equals_close_time"],
+        "occurrence_equals_expected_expiration_time": policy[
+            "occurrence_equals_expected_expiration_time"
+        ],
+        "dual_interpretation_pass": policy["dual_interpretation_pass"],
+        "lifecycle_deadline_components": {
+            field: _time_text(policy[field])
+            for field in (
+                "close_time",
+                "expected_expiration_time",
+                "early_close_deadline",
+                "occurrence_safety_bound",
+            )
+        },
         "settlement_time": _time_text(market_metadata.get("settlement_time")),
         "settlement_ts": _time_text(market_metadata.get("settlement_ts")),
         "listed_expiration": _time_text(market_metadata.get("listed_expiration")),
@@ -1891,6 +2158,9 @@ def _market_lifecycle_record(
         "early_close_deadline": _time_text(
             _first_metadata_value(market_metadata, *EARLY_CLOSE_DEADLINE_FIELDS)
         ),
+        "early_close_deadline_authoritative": policy[
+            "early_close_deadline_authoritative"
+        ],
         "selected_at_utc": selected_at_utc.isoformat(),
         "campaign_expected_end_utc": (
             selected_at_utc + timedelta(seconds=duration_seconds)
@@ -1928,17 +2198,6 @@ def _first_metadata_time(market_metadata: Mapping[str, object], *keys: str) -> d
     return None
 
 
-def _earliest_metadata_time(
-    market_metadata: Mapping[str, object], *keys: str
-) -> datetime | None:
-    parsed = [
-        value
-        for key in keys
-        if (value := _parse_time(market_metadata.get(key))) is not None
-    ]
-    return min(parsed) if parsed else None
-
-
 def _first_metadata_value(market_metadata: Mapping[str, object], *keys: str) -> object:
     for key in keys:
         value = market_metadata.get(key)
@@ -1962,9 +2221,19 @@ def _event_category(market_metadata: Mapping[str, object]) -> str:
 
 
 def _as_bool(value: object) -> bool:
+    return _as_optional_bool(value) is True
+
+
+def _as_optional_bool(value: object) -> bool | None:
     if isinstance(value, bool):
         return value
-    return isinstance(value, str) and value.strip().lower() in {"1", "true", "yes"}
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes"}:
+            return True
+        if normalized in {"0", "false", "no"}:
+            return False
+    return None
 
 
 def _is_sports_market(market_metadata: Mapping[str, object]) -> bool:

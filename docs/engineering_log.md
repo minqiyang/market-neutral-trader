@@ -1572,12 +1572,11 @@ lifecycle made the campaign evidence invalid; the campaign and watcher were
 terminated with their root-specific supervisors using bounded TERM handling.
 
 The public lifecycle gate treats `close_time` as insufficient when earlier
-expected-expiration or explicit early-close metadata exists. It preserves
-occurrence as observational evidence, fetches event metadata for long-horizon
-discovery, rejects unsafe early-close and sports/match markets by default,
-records the conservative deadline in the manifest, and separates
-data-integrity status from market-lifecycle evidence validity. The public live
-gate remains disabled.
+expected-expiration, occurrence, or explicit early-close metadata exists. It
+fetches event metadata for long-horizon discovery, rejects unsafe early-close
+and sports/match markets by default, records the conservative deadline in the
+manifest, and separates data-integrity status from market-lifecycle evidence
+validity. The public live gate remains disabled.
 
 ## D2B channel-scoped identity correction
 
@@ -1666,11 +1665,13 @@ The audit also compared lifecycle fields against current official
 documentation. `close_time` is the trading stop and may move earlier when
 `can_close_early` is true. `expected_expiration_time` is the forecast time when
 the outcome should be known. The April 16, 2026 changelog defines
-`occurrence_datetime` as the recorded time when the underlying event occurred,
-not a future deadline. The selector now preserves occurrence evidence without
-using it in the prospective lifecycle minimum. This semantic correction added
-zero candidates in the audit shadow policy; early-close strictness remains
-unchanged.
+`occurrence_datetime` as the recorded time when the underlying event occurred.
+However, the independently revalidated Demo candidate returned a future
+occurrence equal to close and expected expiration. That contradiction is
+classified as `OCCURRENCE_DATETIME_OFFICIAL_DEMO_CONTRADICTION`. The audit
+shadow policy showed zero candidate-count change from removing occurrence, but
+the selector retains it in the conservative minimum until the venue contract
+is clarified. No live canary is authorized under the ambiguity.
 
 The public correction raises the bounded scan ceiling to 100 pages, requires
 cursor exhaustion for complete coverage, deduplicates markets, evaluates all
@@ -1678,3 +1679,26 @@ lifecycle candidates before reporting eligibility, and adds versioned policy,
 multi-label rejection, and hashed near-miss telemetry. The audit and code path
 remain Demo read-only. No credential, production, submit, cancel, wallet,
 account-order, private-fill, or real-money behavior was added.
+
+## Round 8J5 dual-interpretation occurrence policy
+
+Round 8J5 rechecked Kalshi's lifecycle, market/event schemas, AsyncAPI, and
+April 16 changelog at `2026-07-12T20:59:11Z`. The public contract still says
+`occurrence_datetime` records when the event occurred; it does not explain the
+future Demo value retained in Round 8J4. The correction therefore does not pick
+one meaning. Profile v4 requires close and expected expiration to clear the
+required horizon independently. Missing occurrence is allowed only when those
+deadlines are safe and `can_close_early=false`; historical/current-within-60
+seconds and malformed values reject; and a future occurrence is an additional
+minimum bound that must also clear the horizon. Equality with close or expected
+expiration is explicit anomaly telemetry.
+
+The existing selector remains the policy owner. It now emits raw occurrence,
+semantic classification, inclusion/equality flags, component deadlines, and a
+dual-interpretation result. Complete discovery adds aggregate occurrence
+distributions, rejection overlaps, and dual-pass counts without exposing raw
+market payloads or identifiers in near-miss output. Synthetic tests cover past,
+tolerance-bound, future-safe, future-short, equality, missing, malformed,
+early-close, profile separation, manifest evidence, and existing safety paths.
+The public live gate remains disabled and no production or order-write behavior
+was introduced.

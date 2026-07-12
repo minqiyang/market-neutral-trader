@@ -41,15 +41,25 @@ numbers while the repository is still in early research scaffolding.
   SID after a supported no-SID ACK binds that channel. This is a fixture-only
   correction with no threshold, credential, network, production, or
   order-write change.
+- Replaced the Round 8J4 global `occurrence_datetime` hard stop with selection
+  profile v4's dual-interpretation policy. Canary and seven-day candidates now
+  require independently safe close and expected-expiration deadlines;
+  historical/current and malformed occurrence values reject, while a future
+  value is only an additional conservative bound. Missing occurrence may pass
+  only without early-close risk. Manifests and discovery diagnostics record
+  semantic/equality, component-deadline, dual-pass, overlap, and near-miss
+  evidence. Smoke remains separate, and no live, production, or write path was
+  added.
 - Corrected Round 8J discovery completeness and lifecycle semantics. Market
   scans now report complete only after cursor exhaustion, fail closed at a
   100-page bound, deduplicate markets before eligibility counting, evaluate all
   usable lifecycle candidates, and emit versioned profile hashes, multi-label
-  rejection totals, and hashed near-miss margins. `occurrence_datetime` remains
-  observational metadata rather than a prospective deadline, matching Kalshi's
-  published field definition. Canary early-close, Sports/match, event metadata,
-  expected-expiration, orderbook, Demo-only, and disabled-live gates remain
-  intact.
+  rejection totals, and hashed near-miss margins. Official documentation calls
+  `occurrence_datetime` retrospective while Demo returned it as a future value,
+  so profile v3 retains the field as a conservative deadline and blocks live
+  progression pending clarification. Canary early-close, Sports/match, event
+  metadata, expected-expiration, orderbook, Demo-only, and disabled-live gates
+  remain intact.
 - Aligned D2B snapshots with Kalshi's official AsyncAPI omitted-side contract.
   A single omitted `yes_dollars_fp` or `no_dollars_fp` field now becomes an
   explicit empty native side when the opposite side is valid; both omitted,
@@ -140,11 +150,11 @@ numbers while the repository is still in early research scaffolding.
   subscriptions, rebuild, campaign, or order behavior; public live trading
   remains disabled.
 - Added lifecycle gate v2 for long-horizon read-only campaigns: conservative
-  deadline selection uses expected expiration and early-close metadata while
-  retaining occurrence as observational metadata; event metadata is fetched for
-  seven-day discovery; sports/match and unsafe early-close markets are rejected;
-  manifests preserve lifecycle fields; and validation separates data integrity
-  from invalid market-lifecycle evidence. The live gate remains disabled.
+  deadline selection uses expected expiration, occurrence, and early-close
+  metadata; event metadata is fetched for seven-day discovery; sports/match and
+  unsafe early-close markets are rejected; manifests preserve lifecycle fields;
+  and validation separates data integrity from invalid market-lifecycle
+  evidence. The live gate remains disabled.
 - Corrected Kalshi Demo market discovery for bounded read-only WebSocket runs:
   paginate `status=open` results, normalize REST lifecycle statuses, preserve
   raw status metadata, separate discovery HTTP/parse failures from empty or

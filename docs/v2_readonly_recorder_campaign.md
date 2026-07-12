@@ -46,15 +46,17 @@ reuse or weaken the seven-day duration plus 24-hour safety requirement.
 ## Lifecycle gate v2
 
 The seven-day gate now uses the earliest conservative lifecycle deadline from
-`close_time`, `expected_expiration_time`, any explicit early-close deadline,
-and settlement-time metadata when present. It requires that deadline to exceed
+`close_time`, `expected_expiration_time`, `occurrence_datetime`, any explicit
+early-close deadline, and settlement-time metadata when present. It requires that deadline to exceed
 `campaign_required_end`, which is the selected time plus campaign duration and
 the safety buffer. `latest_expiration_time` is metadata only and cannot
 override an earlier expected expiration.
 
-`occurrence_datetime` remains in manifests as observational metadata. Kalshi
-defines it as the recorded time when the underlying event occurred, so it is
-not treated as a prospective close or resolution deadline.
+`occurrence_datetime` remains contract-ambiguous. Kalshi documents it as the
+recorded time when the event occurred, while Demo independently returned a
+future value equal to close and expected expiration. The selector therefore
+retains it as a conservative deadline and does not authorize a live canary from
+that ambiguous interpretation.
 
 `can_close_early=true` requires expected-expiration or explicit early-close
 deadline metadata. Long-horizon selection also fetches event metadata, rejects
