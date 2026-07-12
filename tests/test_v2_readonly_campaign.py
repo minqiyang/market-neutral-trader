@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -43,6 +43,8 @@ def _market_metadata(**overrides: object) -> dict[str, object]:
         "status": "open",
         "open_time": "2026-07-01T00:00:00Z",
         "close_time": "2026-07-20T00:00:00Z",
+        "expected_expiration_time": "2026-07-20T00:00:00Z",
+        "can_close_early": False,
         "orderbook_level_count": 2,
         "event_category": "Finance",
         "event_title": "Long-horizon finance event",
@@ -125,7 +127,7 @@ def test_market_selection_rejects_unsafe_early_close_without_expected_expiration
     assert result["selection_gate_rejection_reason"] == "CAN_CLOSE_EARLY_UNSAFE_FOR_DURATION"
 
 
-def test_market_selection_keeps_occurrence_conservative_while_contract_is_ambiguous() -> None:
+def test_market_selection_rejects_historical_occurrence() -> None:
     result = evaluate_market_selection(
         _market_metadata(
             close_time="2026-07-20T00:00:00Z",
@@ -139,8 +141,148 @@ def test_market_selection_keeps_occurrence_conservative_while_contract_is_ambigu
     )
 
     assert result["selection_gate_result"] == "reject"
-    assert result["selection_gate_rejection_reason"] == "EVENT_OCCURRENCE_TOO_EARLY"
-    assert result["lifecycle_deadline"] == "2026-07-02T00:00:00+00:00"
+    assert result["selection_gate_rejection_reason"] == "OCCURRENCE_ALREADY_OCCURRED_UNSAFE"
+    assert result["occurrence_semantic_classification"] == (
+        "HISTORICAL_OR_ALREADY_OCCURRED"
+    )
+    assert result["occurrence_included_as_safety_bound"] is False
+    assert result["dual_interpretation_pass"] is False
+
+
+def test_market_selection_rejects_occurrence_within_clock_skew_tolerance() -> None:
+    result = evaluate_market_selection(
+        _market_metadata(occurrence_datetime=(NOW + timedelta(seconds=60)).isoformat()),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert result["selection_gate_rejection_reason"] == "OCCURRENCE_ALREADY_OCCURRED_UNSAFE"
+    assert result["occurrence_semantic_classification"] == (
+        "HISTORICAL_OR_ALREADY_OCCURRED"
+    )
+
+
+def test_market_selection_accepts_future_occurrence_under_both_interpretations() -> None:
+    result = evaluate_market_selection(
+        _market_metadata(
+            close_time="2026-07-04T00:00:00Z",
+            expected_expiration_time="2026-07-04T00:00:00Z",
+            occurrence_datetime="2026-07-03T23:00:00Z",
+        ),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert result["selection_gate_result"] == "pass"
+    assert result["occurrence_semantic_classification"] == (
+        "AMBIGUOUS_FUTURE_OCCURRENCE"
+    )
+    assert result["occurrence_included_as_safety_bound"] is True
+    assert result["dual_interpretation_pass"] is True
+
+
+def test_market_selection_rejects_future_occurrence_before_required_end() -> None:
+    result = evaluate_market_selection(
+        _market_metadata(occurrence_datetime="2026-07-03T19:00:00Z"),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert result["selection_gate_rejection_reason"] == (
+        "OCCURRENCE_SAFETY_BOUND_TOO_SHORT"
+    )
+    assert result["dual_interpretation_pass"] is False
+
+
+def test_equal_future_occurrence_records_anomaly_without_global_stop() -> None:
+    deadline = "2026-07-04T00:00:00Z"
+    result = evaluate_market_selection(
+        _market_metadata(
+            close_time=deadline,
+            expected_expiration_time=deadline,
+            occurrence_datetime=deadline,
+        ),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert result["selection_gate_result"] == "pass"
+    assert result["occurrence_equals_close_time"] is True
+    assert result["occurrence_equals_expected_expiration_time"] is True
+    assert result["dual_interpretation_pass"] is True
+
+
+def test_missing_occurrence_passes_only_with_independent_safe_deadlines() -> None:
+    result = evaluate_market_selection(
+        _market_metadata(),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert result["selection_gate_result"] == "pass"
+    assert result["occurrence_semantic_classification"] == "MISSING"
+    assert result["occurrence_included_as_safety_bound"] is False
+    assert result["dual_interpretation_pass"] is True
+
+
+def test_missing_occurrence_with_early_close_risk_is_rejected() -> None:
+    result = evaluate_market_selection(
+        _market_metadata(
+            can_close_early=True,
+            early_close_deadline="2026-07-10T00:00:00Z",
+        ),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert result["selection_gate_rejection_reason"] == (
+        "CAN_CLOSE_EARLY_UNSAFE_FOR_CANARY"
+    )
+    assert result["dual_interpretation_pass"] is False
+
+
+def test_missing_can_close_early_status_is_not_treated_as_false() -> None:
+    metadata = _market_metadata()
+    del metadata["can_close_early"]
+
+    result = evaluate_market_selection(
+        metadata,
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert result["selection_gate_rejection_reason"] == (
+        "CAN_CLOSE_EARLY_STATUS_UNKNOWN"
+    )
+    assert result["dual_interpretation_pass"] is False
+
+
+def test_malformed_occurrence_is_rejected_and_preserved_as_raw_telemetry() -> None:
+    result = evaluate_market_selection(
+        _market_metadata(occurrence_datetime="not-a-timestamp"),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert result["selection_gate_rejection_reason"] == "OCCURRENCE_DATETIME_INVALID"
+    assert result["occurrence_raw_value"] == "not-a-timestamp"
+    assert result["occurrence_semantic_classification"] == "INVALID"
+
+
+def test_occurrence_cannot_override_unsafe_early_close() -> None:
+    result = evaluate_market_selection(
+        _market_metadata(
+            can_close_early=True,
+            occurrence_datetime="2026-07-20T00:00:00Z",
+        ),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert result["selection_gate_rejection_reason"] == (
+        "CAN_CLOSE_EARLY_UNSAFE_FOR_CANARY"
+    )
+    assert result["dual_interpretation_pass"] is False
 
 
 def test_market_selection_accepts_all_conservative_deadlines_beyond_required_end() -> None:
@@ -151,6 +293,8 @@ def test_market_selection_accepts_all_conservative_deadlines_beyond_required_end
             occurrence_datetime="2026-07-18T00:00:00Z",
             latest_expiration_time="2026-07-30T00:00:00Z",
             can_close_early=True,
+            early_close_deadline="2026-07-17T00:00:00Z",
+            early_close_deadline_authoritative=True,
             event_category="Finance",
             event_metadata_fetched=True,
         ),
@@ -159,7 +303,8 @@ def test_market_selection_accepts_all_conservative_deadlines_beyond_required_end
     )
 
     assert result["selection_gate_result"] == "pass"
-    assert result["lifecycle_deadline"] == "2026-07-18T00:00:00+00:00"
+    assert result["lifecycle_deadline"] == "2026-07-17T00:00:00+00:00"
+    assert result["dual_interpretation_pass"] is True
 
 
 def test_short_smoke_accepts_sufficiently_long_short_lived_market() -> None:
@@ -171,6 +316,7 @@ def test_short_smoke_accepts_sufficiently_long_short_lived_market() -> None:
     )
 
     assert result["selection_gate_result"] == "pass"
+    assert result["dual_interpretation_pass"] is None
 
 
 def test_thirty_minute_canary_uses_its_own_duration_gate() -> None:
@@ -191,7 +337,7 @@ def test_thirty_minute_canary_uses_its_own_duration_gate() -> None:
     assert smoke["selection_gate_result"] == "pass"
     assert canary["selection_profile"] == "canary"
     assert canary["selection_safety_buffer_seconds"] == 3_600
-    assert canary["selection_gate_rejection_reason"] == "CANARY_LIFECYCLE_DEADLINE_TOO_SHORT"
+    assert canary["selection_gate_rejection_reason"] == "TIME_TO_CLOSE_TOO_SHORT"
 
 
 def test_selection_profiles_are_explicit_and_distinct() -> None:
@@ -492,8 +638,10 @@ def test_market_discovery_emits_complete_multilabel_profile_evidence() -> None:
         "EXPECTED_EXPIRATION_TOO_SHORT": 1,
         "SPORTS_UNSUITABLE_FOR_CANARY": 1,
     }
-    assert result["selection_profile_version"] == "edmn.kalshi.selection_profile.v3"
+    assert result["selection_profile_version"] == "edmn.kalshi.selection_profile.v4"
     assert len(result["selection_profile_hash"]) == 64
+    assert result["occurrence_semantic_counts"] == {"MISSING": 2}
+    assert result["dual_interpretation_pass_count"] == 1
     assert result["near_misses"]
     assert "RISKY-MARKET" not in json.dumps(result["near_misses"])
 
@@ -1363,6 +1511,8 @@ def test_manifest_preserves_lifecycle_v2_fields(tmp_path: Path) -> None:
             occurrence_datetime="2026-07-18T00:00:00Z",
             can_close_early=True,
             early_close_condition="after outcome",
+            early_close_deadline="2026-07-17T00:00:00Z",
+            early_close_deadline_authoritative=True,
             event_category="Finance",
             event_metadata_fetched=True,
         ),
@@ -1373,7 +1523,19 @@ def test_manifest_preserves_lifecycle_v2_fields(tmp_path: Path) -> None:
     assert manifest["can_close_early"] is True
     assert manifest["expected_expiration_time"] == "2026-07-19T00:00:00+00:00"
     assert manifest["occurrence_datetime"] == "2026-07-18T00:00:00+00:00"
-    assert manifest["lifecycle_deadline"] == "2026-07-18T00:00:00+00:00"
+    assert manifest["lifecycle_deadline"] == "2026-07-17T00:00:00+00:00"
+    assert manifest["occurrence_semantic_classification"] == (
+        "AMBIGUOUS_FUTURE_OCCURRENCE"
+    )
+    assert manifest["occurrence_included_as_safety_bound"] is True
+    assert manifest["dual_interpretation_pass"] is True
+    assert manifest["early_close_deadline_authoritative"] is True
+    assert manifest["lifecycle_deadline_components"] == {
+        "close_time": "2026-07-20T00:00:00+00:00",
+        "early_close_deadline": "2026-07-17T00:00:00+00:00",
+        "expected_expiration_time": "2026-07-19T00:00:00+00:00",
+        "occurrence_safety_bound": "2026-07-18T00:00:00+00:00",
+    }
     assert manifest["selection_gate_rejection_reason"] is None
 
 

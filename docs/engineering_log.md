@@ -1596,3 +1596,26 @@ lifecycle candidates before reporting eligibility, and adds versioned policy,
 multi-label rejection, and hashed near-miss telemetry. The audit and code path
 remain Demo read-only. No credential, production, submit, cancel, wallet,
 account-order, private-fill, or real-money behavior was added.
+
+## Round 8J5 dual-interpretation occurrence policy
+
+Round 8J5 rechecked Kalshi's lifecycle, market/event schemas, AsyncAPI, and
+April 16 changelog at `2026-07-12T20:59:11Z`. The public contract still says
+`occurrence_datetime` records when the event occurred; it does not explain the
+future Demo value retained in Round 8J4. The correction therefore does not pick
+one meaning. Profile v4 requires close and expected expiration to clear the
+required horizon independently. Missing occurrence is allowed only when those
+deadlines are safe and `can_close_early=false`; historical/current-within-60
+seconds and malformed values reject; and a future occurrence is an additional
+minimum bound that must also clear the horizon. Equality with close or expected
+expiration is explicit anomaly telemetry.
+
+The existing selector remains the policy owner. It now emits raw occurrence,
+semantic classification, inclusion/equality flags, component deadlines, and a
+dual-interpretation result. Complete discovery adds aggregate occurrence
+distributions, rejection overlaps, and dual-pass counts without exposing raw
+market payloads or identifiers in near-miss output. Synthetic tests cover past,
+tolerance-bound, future-safe, future-short, equality, missing, malformed,
+early-close, profile separation, manifest evidence, and existing safety paths.
+The public live gate remains disabled and no production or order-write behavior
+was introduced.

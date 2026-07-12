@@ -6,6 +6,15 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Replaced the Round 8J4 global `occurrence_datetime` hard stop with selection
+  profile v4's dual-interpretation policy. Canary and seven-day candidates now
+  require independently safe close and expected-expiration deadlines;
+  historical/current and malformed occurrence values reject, while a future
+  value is only an additional conservative bound. Missing occurrence may pass
+  only without early-close risk. Manifests and discovery diagnostics record
+  semantic/equality, component-deadline, dual-pass, overlap, and near-miss
+  evidence. Smoke remains separate, and no live, production, or write path was
+  added.
 - Corrected Round 8J discovery completeness and lifecycle semantics. Market
   scans now report complete only after cursor exhaustion, fail closed at a
   100-page bound, deduplicate markets before eligibility counting, evaluate all
