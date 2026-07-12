@@ -66,8 +66,14 @@ not rewritten for every frame.
   acknowledgment frames for every connection and cross-checked against typed
   connection evidence; the complete raw channel acknowledgment must precede
   the typed acknowledgment, and typed acknowledgment alone cannot pass.
+- Subscription identity is scoped by connection/segment generation and
+  channel. The registry retains request/command ID, SID, and observed market
+  tickers independently for `orderbook_delta` and `trade`; a SID alone is not
+  a global identity.
 - Public trade/status channel SIDs cannot reset orderbook snapshot or sequence
-  state; orderbook integrity follows only the orderbook channel SID.
+  state. Native book identity and hashes bind only the active
+  `orderbook_delta` request ID and SID, while D2C retains public trade identity
+  independently.
 - Increasing sequence values under unknown semantics remain unknown; they do
   not establish continuity.
 - REST lifecycle fallback proves lifecycle only, never WebSocket transport.

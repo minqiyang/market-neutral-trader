@@ -6,6 +6,13 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Corrected D2B subscription identity to be channel-scoped within each
+  connection/segment generation. Distinct `orderbook_delta` and public `trade`
+  SIDs no longer cross-invalidate native book state, while true same-channel
+  SID changes still fail closed. Deterministic runtime tests cover trades
+  before/after snapshot, cross-channel sequence reuse, frame/state hashes, and
+  independent validator replay. No schema, production, credential, or
+  order-write behavior was added.
 - Reworked Demo candidate discovery to fetch market pages before event
   hydration, deduplicate and batch core event requests, cache event records,
   bound retryable 429/5xx/transport failures, distinguish incomplete coverage,

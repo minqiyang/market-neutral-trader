@@ -1,5 +1,22 @@
 # Current Handoff
 
+## D2B channel-scoped subscription identity correction
+
+The failed Real5M D2E regression exposed a mismatch between the documented
+contract and the D2B implementation: Kalshi returned SID `1` for
+`orderbook_delta` and SID `2` for `trade`, while segment metadata compared both
+as one global SID. D2B now maintains subscription identity per channel within
+the existing connection/segment generation. Native book state binds only the
+`orderbook_delta` request ID and SID; trade identity remains available to D2C
+and cannot invalidate or rebind the book.
+
+Synthetic tests cover split channel acknowledgments, trade messages before and
+after the first snapshot, equal sequence numbers across channels, equal numeric
+SIDs across channels, true same-channel SID mismatch quarantine, deterministic
+frame/state hashes, and independent validator replay. This checkpoint is a
+software correction only until a fresh bounded Demo regression completes. The
+live gate remains disabled and no production or order-write path was added.
+
 ## Round 8J-B discovery reliability
 
 Demo discovery now performs bounded market pagination before deduplicated,

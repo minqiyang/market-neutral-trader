@@ -267,6 +267,100 @@ def test_control_frame_identity_mismatch_is_quarantined(
     assert result.reason is RebuildReason.IDENTITY_MISMATCH
 
 
+def test_distinct_public_channel_sids_do_not_cross_invalidate_orderbook() -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    orderbook_ack = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 1,
+            "sid": 41,
+            "msg": {"channel": "orderbook_delta", "use_yes_price": False},
+        },
+        local_row_index=1,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1001,
+    )
+    trade_ack = tracker.record(
+        {
+            "type": "subscribed",
+            "id": 1,
+            "sid": 42,
+            "msg": {"channel": "trade"},
+        },
+        local_row_index=2,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=1002,
+    )
+
+    assert rebuilder.apply(orderbook_ack).disposition is RebuildDisposition.IGNORED_NON_ORDERBOOK
+    assert rebuilder.apply(trade_ack).disposition is RebuildDisposition.IGNORED_NON_ORDERBOOK
+    snapshot = _snapshot(
+        tracker,
+        yes=[["0.42", "3"]],
+        no=[],
+        local_row_index=3,
+        seq=1,
+    )
+    delta = _delta(
+        tracker,
+        side="yes",
+        price="0.42",
+        delta="1",
+        sid=41,
+        local_row_index=4,
+        seq=2,
+    )
+
+    snapshot_result = rebuilder.apply(snapshot)
+    delta_result = rebuilder.apply(delta)
+
+    assert snapshot_result.disposition is RebuildDisposition.FRAME_EMITTED
+    assert snapshot_result.frame is not None
+    assert snapshot_result.frame.subscription_sid == 41
+    assert delta_result.disposition is RebuildDisposition.FRAME_EMITTED
+
+
+def test_public_channels_may_reuse_same_numeric_sid() -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    for local_row_index, channel in enumerate(("orderbook_delta", "trade"), start=1):
+        result = rebuilder.apply(
+            tracker.record(
+                {
+                    "type": "subscribed",
+                    "id": 1,
+                    "sid": 41,
+                    "msg": {"channel": channel},
+                },
+                local_row_index=local_row_index,
+                received_at_utc=RECEIVED_AT,
+                received_monotonic_ns=1000 + local_row_index,
+            )
+        )
+        assert result.disposition is RebuildDisposition.IGNORED_NON_ORDERBOOK
+
+
+def test_unknown_orderbook_sid_is_quarantined() -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    rebuilder.apply(_ack(tracker, use_yes_price=False))
+    mismatched = _snapshot(
+        tracker,
+        yes=[["0.42", "3"]],
+        no=[],
+        local_row_index=2,
+        seq=1,
+        sid=99,
+    )
+
+    result = rebuilder.apply(mismatched)
+
+    assert result.disposition is RebuildDisposition.QUARANTINED
+    assert result.reason is RebuildReason.IDENTITY_MISMATCH
+    assert result.frame is None
+
+
 def test_error_control_frame_identity_mismatch_is_quarantined() -> None:
     tracker = _tracker()
     rebuilder = KalshiWsBookRebuilder()
@@ -1224,6 +1318,7 @@ def _snapshot(
     use_yes_price: object = ...,
     local_row_index: int = 1,
     seq: int = 1,
+    sid: int = 41,
 ):
     msg: dict[str, object] = {
         "market_ticker": market_ticker,
@@ -1235,7 +1330,7 @@ def _snapshot(
     if use_yes_price is not ...:
         msg["use_yes_price"] = use_yes_price
     return tracker.record(
-        {"type": "orderbook_snapshot", "sid": 41, "seq": seq, "msg": msg},
+        {"type": "orderbook_snapshot", "sid": sid, "seq": seq, "msg": msg},
         local_row_index=local_row_index,
         received_at_utc=RECEIVED_AT,
         received_monotonic_ns=1000 + local_row_index,

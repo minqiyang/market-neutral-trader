@@ -343,8 +343,27 @@ def test_actual_runtime_accepts_split_public_channel_acknowledgments(tmp_path: P
     fake_time = _FakeTime()
     websocket = _FakeWebSocket(
         [
-            {"type": "subscribed", "id": 1, "msg": {"channel": "orderbook_delta"}},
-            {"type": "subscribed", "id": 1, "msg": {"channel": "trade"}},
+            {
+                "type": "subscribed",
+                "id": 1,
+                "sid": 11,
+                "msg": {"channel": "orderbook_delta"},
+            },
+            {
+                "type": "subscribed",
+                "id": 1,
+                "sid": 22,
+                "msg": {"channel": "trade"},
+            },
+            {
+                "type": "trade",
+                "sid": 22,
+                "seq": 1,
+                "msg": {
+                    "market_ticker": MARKET,
+                    "trade_id": "trade-before-snapshot",
+                },
+            },
             {
                 "type": "orderbook_snapshot",
                 "sid": 11,
@@ -358,8 +377,8 @@ def test_actual_runtime_accepts_split_public_channel_acknowledgments(tmp_path: P
             {
                 "type": "trade",
                 "sid": 22,
-                "seq": 1,
-                "msg": {"market_ticker": MARKET, "trade_id": "split-sid-trade"},
+                "seq": 2,
+                "msg": {"market_ticker": MARKET, "trade_id": "trade-after-snapshot"},
             },
             {
                 "type": "orderbook_delta",
@@ -395,8 +414,23 @@ def test_actual_runtime_accepts_split_public_channel_acknowledgments(tmp_path: P
     )
 
     assert summary["subscription_acknowledged"] is True
+    assert summary["rebuild_frame_count"] == 2
+    assert any(
+        rebuild["snapshot_first_admitted"] is True
+        for rebuild in summary["rebuild_summaries"]
+        if rebuild["orderbook_row_count"]
+    )
     assert summary["admitted_selected_delta_count"] == 1
-    assert summary["public_trade_count"] == 1
+    assert summary["public_trade_count"] == 2
+    orderbook_rebuild = next(
+        rebuild
+        for rebuild in summary["rebuild_summaries"]
+        if rebuild["orderbook_row_count"]
+    )
+    assert orderbook_rebuild["invalidation_reasons"] == {}
+    assert orderbook_rebuild["native_state_valid"] is True
+    assert orderbook_rebuild["latest_frame_hash"]
+    assert orderbook_rebuild["terminal_state_hash"]
     assert validate_d2_runtime_artifacts(tmp_path / "run")["status"] == "pass"
 
 

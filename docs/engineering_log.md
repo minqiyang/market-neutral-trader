@@ -1510,3 +1510,25 @@ event metadata for long-horizon discovery, rejects unsafe early-close and
 sports/match markets by default, records the conservative deadline in the
 manifest, and separates data-integrity status from market-lifecycle evidence
 validity. The public live gate remains disabled.
+
+## D2B channel-scoped identity correction
+
+The first post-D2E Real5M regression completed its bounded runtime and safety
+checks but admitted no native book frame. Redacted evidence showed separate
+Kalshi public-channel acknowledgments: orderbook SID `1` and trade SID `2`.
+`KalshiWsBookRebuilder` stored one SID per segment, so the valid trade
+acknowledgment invalidated the orderbook segment as `IDENTITY_MISMATCH`.
+
+The correction replaces that global binding with an internal channel-scoped
+registry keyed inside the existing connection/segment generation. Each channel
+tracks request/command identity, SID, and observed market tickers. D2B state
+reads only the `orderbook_delta` binding; D2C continues to derive public trades
+from D2A and preserve their native SID and payload hash. The independent
+validator still constructs a fresh rebuilder from durable D2A records and
+compares every persisted D2B frame, reason, frame hash, and terminal hash.
+
+Synthetic regression coverage now includes distinct and equal numeric SIDs
+across channels, trade evidence before and after snapshot, reused channel-local
+sequence values, valid snapshot/delta rebuild, exact same-channel mismatch
+quarantine, and validator agreement. This change does not alter evidence
+schemas, enable live trading, or introduce production/order/account paths.

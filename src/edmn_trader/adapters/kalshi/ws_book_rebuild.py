@@ -178,11 +178,44 @@ class RebuildResult:
 
 
 @dataclass(slots=True)
+class _ChannelSubscriptionIdentity:
+    request_id: str | int | None = None
+    command_id: str | int | None = None
+    sid: str | int | None = None
+    market_tickers: set[str] = field(default_factory=set)
+
+
+@dataclass(slots=True)
+class _ChannelSubscriptionRegistry:
+    identities: dict[str, _ChannelSubscriptionIdentity] = field(default_factory=dict)
+
+    def observe(self, event: KalshiWsRawEvent) -> RebuildReason | None:
+        identity = self.identities.setdefault(event.channel, _ChannelSubscriptionIdentity())
+        for field_name, observed in (
+            ("request_id", event.subscription_id),
+            ("command_id", event.subscription_command_id),
+            ("sid", event.subscription_sid),
+        ):
+            current = getattr(identity, field_name)
+            if current is not None and observed is not None and current != observed:
+                return RebuildReason.IDENTITY_MISMATCH
+            if current is None and observed is not None:
+                setattr(identity, field_name, observed)
+        if event.native_market_ticker is not None:
+            identity.market_tickers.add(event.native_market_ticker)
+        return None
+
+    def identity_for(self, channel: str) -> _ChannelSubscriptionIdentity:
+        return self.identities.setdefault(channel, _ChannelSubscriptionIdentity())
+
+
+@dataclass(slots=True)
 class _SegmentMetadata:
     pricing_mode: PricingMode | None = None
     pricing_mode_source: PricingModeSource | None = None
-    subscription_id: str | int | None = None
-    subscription_sid: str | int | None = None
+    subscriptions: _ChannelSubscriptionRegistry = field(
+        default_factory=_ChannelSubscriptionRegistry
+    )
     market_tickers: set[str] = field(default_factory=set)
     market_ids: dict[str, str] = field(default_factory=dict)
     invalidation_reason: RebuildReason | None = None
@@ -375,24 +408,9 @@ class KalshiWsBookRebuilder:
         )
         if metadata.invalidation_reason is not None:
             return metadata.invalidation_reason
-        for field_name in ("subscription_id",):
-            observed = getattr(event, field_name)
-            current = getattr(metadata, field_name)
-            if observed is not None and current is not None and observed != current:
-                metadata.invalidation_reason = RebuildReason.IDENTITY_MISMATCH
-                return metadata.invalidation_reason
-            if current is None and observed is not None:
-                setattr(metadata, field_name, observed)
-        observed_sid = event.subscription_sid
-        if (
-            observed_sid is not None
-            and metadata.subscription_sid is not None
-            and observed_sid != metadata.subscription_sid
-        ):
-            metadata.invalidation_reason = RebuildReason.IDENTITY_MISMATCH
+        if (identity_reason := metadata.subscriptions.observe(event)) is not None:
+            metadata.invalidation_reason = identity_reason
             return metadata.invalidation_reason
-        if metadata.subscription_sid is None and observed_sid is not None:
-            metadata.subscription_sid = observed_sid
         observed_market = event.native_market_ticker
         if observed_market is not None and observed_market not in event.requested_market_tickers:
             metadata.invalidation_reason = RebuildReason.IDENTITY_MISMATCH
@@ -437,13 +455,14 @@ class KalshiWsBookRebuilder:
         mode = metadata.pricing_mode or PricingMode.LEGACY_SIDE_PRICE
         source = metadata.pricing_mode_source or PricingModeSource.RECORDER_DEFAULT_ASSUMPTION
         if state is None:
+            orderbook_identity = metadata.subscriptions.identity_for("orderbook_delta")
             state = NativeBookState(
                 market_ticker=key.market_ticker,
                 market_id=event.native_market_id,
                 connection_id=key.connection_id,
                 segment_id=key.segment_id,
-                subscription_id=metadata.subscription_id,
-                subscription_sid=metadata.subscription_sid,
+                subscription_id=orderbook_identity.request_id,
+                subscription_sid=orderbook_identity.sid,
                 pricing_mode=mode,
                 pricing_mode_source=source,
                 pricing_mode_assumption=(
@@ -461,6 +480,7 @@ class KalshiWsBookRebuilder:
         event: KalshiWsRawEvent,
     ) -> RebuildReason | None:
         metadata = self._segment_metadata[(event.connection_id, event.segment_id)]
+        orderbook_identity = metadata.subscriptions.identity_for("orderbook_delta")
         if metadata.pricing_mode is not None and state.pricing_mode is not metadata.pricing_mode:
             return RebuildReason.CONTRADICTORY_PRICING_MODE
         if metadata.pricing_mode_source is PricingModeSource.D2A_SUBSCRIPTION_METADATA:
@@ -468,17 +488,17 @@ class KalshiWsBookRebuilder:
             state.pricing_mode_assumption = None
         for current, observed in (
             (state.market_id, event.native_market_id),
-            (state.subscription_id, metadata.subscription_id),
-            (state.subscription_sid, metadata.subscription_sid),
+            (state.subscription_id, orderbook_identity.request_id),
+            (state.subscription_sid, orderbook_identity.sid),
         ):
             if current is not None and observed is not None and current != observed:
                 return RebuildReason.IDENTITY_MISMATCH
         if state.market_id is None:
             state.market_id = event.native_market_id
         if state.subscription_id is None:
-            state.subscription_id = metadata.subscription_id
+            state.subscription_id = orderbook_identity.request_id
         if state.subscription_sid is None:
-            state.subscription_sid = metadata.subscription_sid
+            state.subscription_sid = orderbook_identity.sid
         return None
 
     def _apply_snapshot(
