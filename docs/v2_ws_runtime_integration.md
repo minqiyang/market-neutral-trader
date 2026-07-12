@@ -55,6 +55,17 @@ not rewritten for every frame.
 
 ## Evidence Boundaries
 
+- The official Kalshi AsyncAPI contract defines `yes_dollars_fp` and
+  `no_dollars_fp` as optional and absent when that side has no offers. D2B
+  accepts exactly one omitted side only when the opposite side is a valid list,
+  normalizes it to an explicit empty native side, and records
+  `OMITTED_CONFIRMED_EMPTY` in the v2 frame. Both sides omitted, null,
+  wrong-type, and malformed levels remain invalid.
+- D2A retains the original field presence and payload hash. D2B terminal-state
+  hashing uses normalized native levels, so omitted-empty and explicit-empty
+  representations of the same book share a semantic state hash; frame evidence
+  still records source presence. Validation independently reapplies these rules
+  from durable D2A records instead of trusting runtime normalization.
 - D2A admission controls D2B mutation. Excluded rows remain durable evidence
   but cannot change native book state or refresh selected-market snapshot and
   orderbook-freshness evidence.

@@ -18,6 +18,7 @@ from edmn_trader.adapters.kalshi.ws_book_rebuild import (
     RebuildReason,
     SegmentValidity,
     SnapshotResetReason,
+    SnapshotSidePresence,
 )
 from edmn_trader.adapters.kalshi.ws_events import (
     AdmissionStatus,
@@ -479,6 +480,133 @@ def test_resnapshot_atomically_replaces_prior_state() -> None:
     assert second_result.frame.native_no_bids == ()
     assert second_result.frame.reset_reason is SnapshotResetReason.RESNAPSHOT_SAME_SEGMENT
     assert second_result.frame.frame_count == 2
+
+
+@pytest.mark.parametrize(
+    ("yes", "no", "yes_presence", "no_presence", "book_state"),
+    [
+        (
+            [["0.42", "3"]],
+            ...,
+            SnapshotSidePresence.PRESENT_NONEMPTY,
+            SnapshotSidePresence.OMITTED_CONFIRMED_EMPTY,
+            CanonicalBookState.YES_BIDS_ONLY,
+        ),
+        (
+            ...,
+            [["0.56", "5"]],
+            SnapshotSidePresence.OMITTED_CONFIRMED_EMPTY,
+            SnapshotSidePresence.PRESENT_NONEMPTY,
+            CanonicalBookState.YES_ASKS_ONLY,
+        ),
+        (
+            [],
+            [],
+            SnapshotSidePresence.PRESENT_EMPTY,
+            SnapshotSidePresence.PRESENT_EMPTY,
+            CanonicalBookState.EMPTY,
+        ),
+    ],
+)
+def test_official_optional_snapshot_sides_are_normalized(
+    yes: object,
+    no: object,
+    yes_presence: SnapshotSidePresence,
+    no_presence: SnapshotSidePresence,
+    book_state: CanonicalBookState,
+) -> None:
+    result = KalshiWsBookRebuilder().apply(_snapshot(_tracker(), yes=yes, no=no))
+
+    assert result.frame is not None
+    assert result.frame.snapshot_yes_presence is yes_presence
+    assert result.frame.snapshot_no_presence is no_presence
+    assert result.frame.book_state is book_state
+    assert result.frame.schema_version == "edmn.kalshi.ws.book.frame.v2"
+    assert len(result.frame.frame_hash) == 64
+    assert len(result.frame.terminal_state_hash) == 64
+
+
+@pytest.mark.parametrize(
+    ("yes", "no", "expected_reason"),
+    [
+        (..., ..., RebuildReason.SNAPSHOT_BOTH_SIDES_OMITTED),
+        (..., None, RebuildReason.SNAPSHOT_NULL_SIDE),
+        (None, [], RebuildReason.SNAPSHOT_NULL_SIDE),
+        (..., "not-levels", RebuildReason.SNAPSHOT_WRONG_SIDE_TYPE),
+        ({}, [], RebuildReason.SNAPSHOT_WRONG_SIDE_TYPE),
+    ],
+)
+def test_invalid_snapshot_side_presence_fails_closed(
+    yes: object,
+    no: object,
+    expected_reason: RebuildReason,
+) -> None:
+    result = KalshiWsBookRebuilder().apply(_snapshot(_tracker(), yes=yes, no=no))
+
+    assert result.disposition is RebuildDisposition.QUARANTINED
+    assert result.reason is expected_reason
+    assert result.frame is None
+
+
+def test_omitted_and_explicit_empty_sides_share_native_state_hash() -> None:
+    omitted_tracker = _tracker()
+    explicit_tracker = _tracker()
+    omitted = _snapshot(omitted_tracker, yes=[["0.42", "3"]], no=...)
+    explicit = _snapshot(explicit_tracker, yes=[["0.42", "3"]], no=[])
+    omitted_result = KalshiWsBookRebuilder().apply(omitted)
+    explicit_result = KalshiWsBookRebuilder().apply(explicit)
+
+    assert omitted_result.frame is not None
+    assert explicit_result.frame is not None
+    assert omitted_result.frame.terminal_state_hash == explicit_result.frame.terminal_state_hash
+    assert omitted.payload_sha256 != explicit.payload_sha256
+    assert omitted_result.frame.snapshot_no_presence is SnapshotSidePresence.OMITTED_CONFIRMED_EMPTY
+    assert explicit_result.frame.snapshot_no_presence is SnapshotSidePresence.PRESENT_EMPTY
+
+
+def test_delta_can_add_first_level_to_omitted_side_and_remove_it() -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    rebuilder.apply(_snapshot(tracker, yes=[["0.42", "3"]], no=...))
+
+    added = rebuilder.apply(_delta(tracker, side="no", price="0.56", delta="2"))
+    removed = rebuilder.apply(
+        _delta(
+            tracker,
+            side="no",
+            price="0.56",
+            delta="-2",
+            local_row_index=3,
+            seq=3,
+        )
+    )
+
+    assert added.frame is not None
+    assert _levels(added.frame.native_no_bids) == [(Decimal("0.56"), Decimal("2"))]
+    assert removed.frame is not None
+    assert removed.frame.native_no_bids == ()
+    assert removed.frame.snapshot_no_presence is SnapshotSidePresence.OMITTED_CONFIRMED_EMPTY
+
+
+def test_resnapshot_can_switch_from_omitted_to_explicit_empty_side() -> None:
+    tracker = _tracker()
+    rebuilder = KalshiWsBookRebuilder()
+    rebuilder.apply(_snapshot(tracker, yes=[["0.42", "3"]], no=...))
+
+    result = rebuilder.apply(
+        _snapshot(
+            tracker,
+            yes=[["0.42", "3"]],
+            no=[],
+            local_row_index=2,
+            seq=2,
+        )
+    )
+
+    assert result.frame is not None
+    assert result.frame.snapshot_no_presence is SnapshotSidePresence.PRESENT_EMPTY
+    assert result.frame.native_no_bids == ()
+    assert result.frame.segment_validity is SegmentValidity.VALID
 
 
 def test_malformed_snapshot_is_atomic_and_invalidates_segment() -> None:
@@ -1311,8 +1439,8 @@ def _ack(
 def _snapshot(
     tracker: KalshiWsIntegrityTracker,
     *,
-    yes: list[list[object]],
-    no: list[list[object]],
+    yes: object = ...,
+    no: object = ...,
     market_ticker: str = MARKET,
     market_id: str | None = "market-id-1",
     use_yes_price: object = ...,
@@ -1322,9 +1450,11 @@ def _snapshot(
 ):
     msg: dict[str, object] = {
         "market_ticker": market_ticker,
-        "yes_dollars_fp": yes,
-        "no_dollars_fp": no,
     }
+    if yes is not ...:
+        msg["yes_dollars_fp"] = yes
+    if no is not ...:
+        msg["no_dollars_fp"] = no
     if market_id is not None:
         msg["market_id"] = market_id
     if use_yes_price is not ...:

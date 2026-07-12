@@ -1532,3 +1532,34 @@ across channels, trade evidence before and after snapshot, reused channel-local
 sequence values, valid snapshot/delta rebuild, exact same-channel mismatch
 quarantine, and validator agreement. This change does not alter evidence
 schemas, enable live trading, or introduce production/order/account paths.
+
+## D2B omitted empty-side contract correction
+
+The next bounded Real5M run proved the channel identity fix but exposed a
+separate parser mismatch: Kalshi emitted a valid YES side and omitted the empty
+NO side. The official Kalshi AsyncAPI schema resolves the ambiguity. Its
+`orderbookSnapshotPayload` requires only market identity inside `msg`; both
+`yes_dollars_fp` and `no_dollars_fp` are optional, with each key absent when
+that side has no offers. The official source is
+`https://docs.kalshi.com/asyncapi.yaml`; the rendered orderbook reference is
+`https://docs.kalshi.com/websockets/orderbook-updates`.
+The resulting classifications are
+`OFFICIAL_SCHEMA_ALLOWS_OMITTED_EMPTY_SIDE` and
+`MULTIPLE_EVIDENCE_SOURCES_AGREE` because the retained Demo snapshot matches
+the schema's documented omission behavior.
+
+D2B now distinguishes present nonempty, present empty, contract-confirmed
+omission, unverified absence, null, wrong type, and malformed levels. Exactly
+one omitted side is normalized to an empty native side when the opposite side
+is valid. Both omitted, null, wrong-type, and malformed snapshots remain
+quarantined. D2A continues to preserve original field presence and payload
+hashes.
+
+Frame/state schemas advance to v2. Snapshot presence is included in frame
+evidence, while terminal-state hashing excludes representation metadata and
+uses normalized native levels. Consequently, explicit-empty and omitted-empty
+snapshots with otherwise identical identity and sequence produce the same
+terminal state hash but retain different raw payload hashes. Runtime and the
+independent validator use the same parser through separate rebuild instances;
+durable validation still compares every generated frame and terminal hash.
+No production, account, order-write, or live-gate behavior changed.

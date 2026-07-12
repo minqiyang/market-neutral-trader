@@ -1,5 +1,23 @@
 # Current Handoff
 
+## D2B omitted empty-side contract correction
+
+Kalshi's official AsyncAPI schema marks `yes_dollars_fp` and `no_dollars_fp`
+as optional and states that each key is absent when that side has no offers.
+Contract classification: `OFFICIAL_SCHEMA_ALLOWS_OMITTED_EMPTY_SIDE` and
+`MULTIPLE_EVIDENCE_SOURCES_AGREE` (official schema plus retained Demo evidence).
+D2B therefore normalizes one omitted side to an explicit empty native side when
+the opposite side is a valid list. It still rejects both sides omitted, null,
+wrong-type, and malformed levels. The raw D2A envelope and payload hash preserve
+whether the field was omitted.
+
+Book frame/state schemas advance to v2. Frames record explicit snapshot-side
+presence, while terminal native-state hashing uses normalized levels so omitted
+empty and explicit empty representations have the same semantic state hash.
+The independent validator repeats parsing from durable D2A evidence and compares
+the resulting frame and terminal hashes. This remains software-only until a new
+bounded Demo regression is completed; live trading stays disabled.
+
 ## D2B channel-scoped subscription identity correction
 
 The failed Real5M D2E regression exposed a mismatch between the documented

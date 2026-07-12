@@ -6,6 +6,13 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Aligned D2B snapshots with Kalshi's official AsyncAPI omitted-side contract.
+  A single omitted `yes_dollars_fp` or `no_dollars_fp` field now becomes an
+  explicit empty native side when the opposite side is valid; both omitted,
+  null, wrong-type, and malformed sides remain fail-closed. Frame/state schemas
+  advance to v2, frame evidence records source presence, normalized terminal
+  hashes are representation-independent, and the validator independently
+  rebuilds the same result. No production or order-write behavior was added.
 - Corrected D2B subscription identity to be channel-scoped within each
   connection/segment generation. Distinct `orderbook_delta` and public `trade`
   SIDs no longer cross-invalidate native book state, while true same-channel

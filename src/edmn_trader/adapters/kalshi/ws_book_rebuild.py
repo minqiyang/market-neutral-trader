@@ -20,8 +20,8 @@ from edmn_trader.adapters.kalshi.ws_events import (
 )
 from edmn_trader.data.payload_safety import validate_no_secret_payload
 
-D2B_FRAME_SCHEMA_VERSION = "edmn.kalshi.ws.book.frame.v1"
-D2B_STATE_SCHEMA_VERSION = "edmn.kalshi.ws.book.state.v1"
+D2B_FRAME_SCHEMA_VERSION = "edmn.kalshi.ws.book.frame.v2"
+D2B_STATE_SCHEMA_VERSION = "edmn.kalshi.ws.book.state.v2"
 ZERO = Decimal("0")
 ONE = Decimal("1")
 
@@ -58,6 +58,16 @@ class SnapshotResetReason(StrEnum):
     RECOVERY_AFTER_INVALIDATION = "RECOVERY_AFTER_INVALIDATION"
 
 
+class SnapshotSidePresence(StrEnum):
+    PRESENT_NONEMPTY = "PRESENT_NONEMPTY"
+    PRESENT_EMPTY = "PRESENT_EMPTY"
+    OMITTED_CONFIRMED_EMPTY = "OMITTED_CONFIRMED_EMPTY"
+    ABSENT_UNVERIFIED = "ABSENT_UNVERIFIED"
+    NULL_INVALID = "NULL_INVALID"
+    WRONG_TYPE_INVALID = "WRONG_TYPE_INVALID"
+    MALFORMED_LEVEL_INVALID = "MALFORMED_LEVEL_INVALID"
+
+
 class RebuildDisposition(StrEnum):
     FRAME_EMITTED = "FRAME_EMITTED"
     IGNORED_NON_ORDERBOOK = "IGNORED_NON_ORDERBOOK"
@@ -76,6 +86,9 @@ class RebuildReason(StrEnum):
     UNKNOWN_PRICING_MODE = "UNKNOWN_PRICING_MODE"
     CONTRADICTORY_PRICING_MODE = "CONTRADICTORY_PRICING_MODE"
     MALFORMED_SNAPSHOT = "MALFORMED_SNAPSHOT"
+    SNAPSHOT_BOTH_SIDES_OMITTED = "SNAPSHOT_BOTH_SIDES_OMITTED"
+    SNAPSHOT_NULL_SIDE = "SNAPSHOT_NULL_SIDE"
+    SNAPSHOT_WRONG_SIDE_TYPE = "SNAPSHOT_WRONG_SIDE_TYPE"
     DUPLICATE_SNAPSHOT_PRICE = "DUPLICATE_SNAPSHOT_PRICE"
     IMPOSSIBLE_PRICE = "IMPOSSIBLE_PRICE"
     DELTA_BEFORE_SNAPSHOT = "DELTA_BEFORE_SNAPSHOT"
@@ -116,6 +129,8 @@ class NativeBookState:
     market_id: str | None = None
     subscription_id: str | int | None = None
     subscription_sid: str | int | None = None
+    snapshot_yes_presence: SnapshotSidePresence = SnapshotSidePresence.ABSENT_UNVERIFIED
+    snapshot_no_presence: SnapshotSidePresence = SnapshotSidePresence.ABSENT_UNVERIFIED
     snapshot_received: bool = False
     native_yes_bids: dict[Decimal, Decimal] = field(default_factory=dict)
     native_no_bids: dict[Decimal, Decimal] = field(default_factory=dict)
@@ -146,6 +161,8 @@ class KalshiWsBookFrame:
     pricing_mode: PricingMode
     pricing_mode_source: PricingModeSource
     pricing_mode_assumption: str | None
+    snapshot_yes_presence: SnapshotSidePresence
+    snapshot_no_presence: SnapshotSidePresence
     snapshot_received: bool
     native_yes_bids: tuple[NativeLevel, ...]
     native_no_bids: tuple[NativeLevel, ...]
@@ -507,8 +524,7 @@ class KalshiWsBookRebuilder:
         event: KalshiWsRawEvent,
     ) -> RebuildResult:
         try:
-            yes = _parse_snapshot_levels(event.original_payload, "yes_dollars_fp")
-            no = _parse_snapshot_levels(event.original_payload, "no_dollars_fp")
+            yes, yes_presence, no, no_presence = _parse_snapshot(event.original_payload)
         except _RebuildFailure as exc:
             _invalidate(state, event, exc.reason)
             return RebuildResult(
@@ -526,6 +542,8 @@ class KalshiWsBookRebuilder:
         )
         state.native_yes_bids = yes
         state.native_no_bids = no
+        state.snapshot_yes_presence = yes_presence
+        state.snapshot_no_presence = no_presence
         state.snapshot_received = True
         state.segment_validity = SegmentValidity.VALID
         state.invalidation_reason = None
@@ -663,13 +681,42 @@ def _payload_value(
     raise _RebuildFailure(reason)
 
 
-def _parse_snapshot_levels(
+def _parse_snapshot(
     payload: Mapping[str, Any],
-    field_name: str,
-) -> dict[Decimal, Decimal]:
-    raw_levels = _payload_value(payload, field_name)
+) -> tuple[
+    dict[Decimal, Decimal],
+    SnapshotSidePresence,
+    dict[Decimal, Decimal],
+    SnapshotSidePresence,
+]:
+    yes_present, yes_raw = _snapshot_side_value(payload, "yes_dollars_fp")
+    no_present, no_raw = _snapshot_side_value(payload, "no_dollars_fp")
+    if not yes_present and not no_present:
+        raise _RebuildFailure(RebuildReason.SNAPSHOT_BOTH_SIDES_OMITTED)
+    yes, yes_presence = _parse_snapshot_levels(yes_present, yes_raw)
+    no, no_presence = _parse_snapshot_levels(no_present, no_raw)
+    return yes, yes_presence, no, no_presence
+
+
+def _snapshot_side_value(payload: Mapping[str, Any], field_name: str) -> tuple[bool, object]:
+    if field_name in payload:
+        return True, payload[field_name]
+    nested = payload.get("msg")
+    if isinstance(nested, Mapping) and field_name in nested:
+        return True, nested[field_name]
+    return False, None
+
+
+def _parse_snapshot_levels(
+    present: bool,
+    raw_levels: object,
+) -> tuple[dict[Decimal, Decimal], SnapshotSidePresence]:
+    if not present:
+        return {}, SnapshotSidePresence.OMITTED_CONFIRMED_EMPTY
+    if raw_levels is None:
+        raise _RebuildFailure(RebuildReason.SNAPSHOT_NULL_SIDE)
     if not isinstance(raw_levels, list):
-        raise _RebuildFailure(RebuildReason.MALFORMED_SNAPSHOT)
+        raise _RebuildFailure(RebuildReason.SNAPSHOT_WRONG_SIDE_TYPE)
     levels: dict[Decimal, Decimal] = {}
     for raw_level in raw_levels:
         if not isinstance(raw_level, list | tuple) or len(raw_level) != 2:
@@ -683,7 +730,12 @@ def _parse_snapshot_levels(
             raise _RebuildFailure(RebuildReason.DUPLICATE_SNAPSHOT_PRICE)
         if quantity != ZERO:
             levels[price] = quantity
-    return levels
+    presence = (
+        SnapshotSidePresence.PRESENT_NONEMPTY
+        if raw_levels
+        else SnapshotSidePresence.PRESENT_EMPTY
+    )
+    return levels, presence
 
 
 def _exact_decimal(value: object, reason: RebuildReason) -> Decimal:
@@ -770,6 +822,8 @@ def _build_frame(
         pricing_mode=state.pricing_mode,
         pricing_mode_source=state.pricing_mode_source,
         pricing_mode_assumption=state.pricing_mode_assumption,
+        snapshot_yes_presence=state.snapshot_yes_presence,
+        snapshot_no_presence=state.snapshot_no_presence,
         snapshot_received=state.snapshot_received,
         native_yes_bids=native_yes,
         native_no_bids=native_no,
@@ -845,6 +899,8 @@ def _frame_hash_record(frame: KalshiWsBookFrame) -> dict[str, object]:
         "pricing_mode": frame.pricing_mode,
         "pricing_mode_source": frame.pricing_mode_source,
         "pricing_mode_assumption": frame.pricing_mode_assumption,
+        "snapshot_yes_presence": frame.snapshot_yes_presence,
+        "snapshot_no_presence": frame.snapshot_no_presence,
         "snapshot_received": frame.snapshot_received,
         "native_yes_bids": _native_level_records(frame.native_yes_bids),
         "native_no_bids": _native_level_records(frame.native_no_bids),

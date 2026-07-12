@@ -754,6 +754,50 @@ def test_snapshot_only_runtime_preserves_rebuild_pass_but_fails_early_duration(
     assert summary["independent_evidence_classifications"]["duration_evidence"] == "FAIL"
 
 
+def test_runtime_and_validator_accept_officially_omitted_empty_side(tmp_path: Path) -> None:
+    session = _session(tmp_path, configured_duration_seconds=300)
+    tracker = _tracker()
+    snapshot = tracker.record(
+        {
+            "type": "orderbook_snapshot",
+            "sid": 41,
+            "seq": 1,
+            "msg": {
+                "market_ticker": MARKET,
+                "yes_dollars_fp": [["0.42", "3"]],
+            },
+        },
+        local_row_index=1,
+        received_at_utc=START + timedelta(seconds=1),
+        received_monotonic_ns=1,
+    )
+    session.record_lifecycle(
+        {"ticker": MARKET, "status": "active"},
+        observed_at_utc=START,
+        evaluated_at_utc=START,
+    )
+    session.record_event(snapshot)
+    summary = session.close(
+        ended_at_utc=START + timedelta(seconds=300),
+        terminal_reason="bounded_duration_complete",
+        stop_requested=False,
+        connection_established=True,
+        subscription_acknowledged=True,
+        blocker_code=None,
+    )
+
+    rebuild = summary["rebuild_summaries"][0]
+    assert summary["rebuild_frame_count"] == 1
+    assert rebuild["snapshot_first_admitted"] is True
+    assert rebuild["native_state_valid"] is True
+    assert rebuild["latest_frame_hash"]
+    assert rebuild["terminal_state_hash"]
+    validation = validate_d2_runtime_artifacts(tmp_path)
+    assert validation["status"] == "pass"
+    assert validation["rebuild_integrity"] == "PASS"
+    assert validation["sequence_integrity"] == "UNKNOWN"
+
+
 def test_explicit_sequence_gap_is_excluded_then_resynced_by_new_snapshot(
     tmp_path: Path,
 ) -> None:
