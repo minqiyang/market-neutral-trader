@@ -21,9 +21,56 @@ from edmn_trader.adapters.kalshi.ws_events import (
     SequenceState,
     SubscriptionBindingObservation,
     SubscriptionBindingState,
+    SubscriptionRequestRejection,
     parse_kalshi_ws_raw_record,
     payload_sha256,
 )
+
+
+@pytest.mark.parametrize("command_id", [True, 0, -1, 2_147_483_648, 1.5, "1"])
+def test_bind_subscription_rejects_invalid_command_id_without_mutation(
+    command_id: object,
+) -> None:
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="binding-inputs",
+        requested_market_tickers=("DEMO-MARKET",),
+    )
+    tracker.start_connection()
+
+    with pytest.raises(ValueError, match=SubscriptionRequestRejection.INVALID_COMMAND_ID):
+        tracker.bind_subscription(command_id=command_id)  # type: ignore[arg-type]
+
+    request = tracker.bind_subscription(command_id=1)[0]
+    assert request.run_request_index == 1
+    assert request.subscription_generation == 1
+
+
+def test_bind_subscription_rejects_unknown_channel_and_reused_run_id() -> None:
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="binding-inputs",
+        requested_market_tickers=("DEMO-MARKET",),
+    )
+    tracker.start_connection()
+    with pytest.raises(ValueError, match=SubscriptionRequestRejection.INVALID_CHANNEL):
+        tracker.bind_subscription(command_id=1, channels=("fills",))
+    tracker.bind_subscription(command_id=1)
+    with pytest.raises(ValueError, match=SubscriptionRequestRejection.COMMAND_ID_REUSED):
+        tracker.bind_subscription(command_id=1)
+
+
+def test_reconnect_advances_run_request_and_channel_generation() -> None:
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="binding-reconnect",
+        requested_market_tickers=("DEMO-MARKET",),
+    )
+    tracker.start_connection()
+    first = tracker.bind_subscription(command_id=1)[0]
+    tracker.start_connection()
+    second = tracker.bind_subscription(command_id=2)[0]
+
+    assert second.connection_epoch == first.connection_epoch + 1
+    assert second.run_request_index == first.run_request_index + 1
+    assert second.subscription_generation == first.subscription_generation + 1
 
 RECEIVED_AT = datetime(2026, 7, 10, 1, 2, 3, tzinfo=UTC)
 
@@ -359,19 +406,19 @@ def test_duplicate_ack_is_idempotent_but_conflicting_sid_conflicts_binding() -> 
     tracker = _pending_tracker()
     first = _ack_channel(
         tracker,
-        command_id=1,
+        command_id=2,
         channel="trade",
         sid=22,
     )
     duplicate = _ack_channel(
         tracker,
-        command_id=1,
+        command_id=2,
         channel="trade",
         sid=22,
     )
     conflict = _ack_channel(
         tracker,
-        command_id=1,
+        command_id=2,
         channel="trade",
         sid=99,
     )
@@ -742,8 +789,8 @@ def test_sid_change_is_excluded_until_explicit_orderbook_resubscription() -> Non
         local_row_index=2,
         sid=42,
     )
-    tracker.bind_subscription(command_id=2)
-    _ack_channel(tracker, command_id=2, channel="orderbook_delta", sid=42)
+    tracker.bind_subscription(command_id=3)
+    _ack_channel(tracker, command_id=3, channel="orderbook_delta", sid=42)
     fresh_snapshot = _record(
         tracker,
         "orderbook_snapshot",
@@ -769,8 +816,8 @@ def test_reconnect_creates_new_connection_and_snapshot_required_segment() -> Non
     first = _record(tracker, "orderbook_snapshot", seq=100, local_row_index=1)
 
     tracker.start_connection()
-    tracker.bind_subscription(command_id=1)
-    _ack_channel(tracker, command_id=1, channel="orderbook_delta", sid=41)
+    tracker.bind_subscription(command_id=3)
+    _ack_channel(tracker, command_id=3, channel="orderbook_delta", sid=41)
     after_reconnect = _record(tracker, "orderbook_delta", seq=101, local_row_index=2)
     fresh_snapshot = _record(tracker, "orderbook_snapshot", seq=500, local_row_index=3)
 
@@ -789,24 +836,24 @@ def test_resubscription_creates_new_segment_on_same_connection() -> None:
     tracker = _tracker()
     first = _record(tracker, "orderbook_snapshot", seq=100, local_row_index=1)
 
-    tracker.bind_subscription(command_id=2)
+    tracker.bind_subscription(command_id=3)
     after_resubscribe = _record(tracker, "orderbook_delta", seq=101, local_row_index=2)
 
     assert after_resubscribe.connection_id == first.connection_id
     assert after_resubscribe.segment_id != first.segment_id
     assert after_resubscribe.segment_boundary_reason is SegmentBoundaryReason.RESUBSCRIPTION
-    assert after_resubscribe.subscription_command_id == 2
+    assert after_resubscribe.subscription_command_id == 3
     assert after_resubscribe.admission_status is AdmissionStatus.EXCLUDED
 
 
 def test_orderbook_resubscription_rejects_old_sid_and_requires_new_snapshot() -> None:
     tracker = _tracker()
     first = _record(tracker, "orderbook_snapshot", seq=1, local_row_index=1, sid=41)
-    tracker.bind_subscription(command_id=2, channels=("orderbook_delta",))
+    tracker.bind_subscription(command_id=3, channels=("orderbook_delta",))
     acknowledgement = tracker.record(
         {
             "type": "subscribed",
-            "id": 2,
+            "id": 3,
             "sid": 44,
             "msg": {"channel": "orderbook_delta"},
         },

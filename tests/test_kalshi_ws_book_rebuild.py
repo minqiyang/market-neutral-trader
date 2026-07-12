@@ -164,7 +164,7 @@ def test_subscription_params_bind_explicit_future_pricing_mode() -> None:
 
 @pytest.mark.parametrize(
     ("channel", "message_type"),
-    [("trade", "trade"), ("market_lifecycle_v2", "market_lifecycle_v2")],
+    [("trade", "trade")],
 )
 def test_non_orderbook_binding_and_messages_never_mutate_d2b(
     channel: str,
@@ -172,11 +172,11 @@ def test_non_orderbook_binding_and_messages_never_mutate_d2b(
 ) -> None:
     tracker = _tracker()
     rebuilder = KalshiWsBookRebuilder()
-    tracker.bind_subscription(command_id=2, channels=(channel,))
+    tracker.bind_subscription(command_id=3, channels=(channel,))
     control = tracker.record(
         {
             "type": "subscribed",
-            "id": 2,
+            "id": 3,
             "sid": 99,
             "msg": {"channel": channel},
         },

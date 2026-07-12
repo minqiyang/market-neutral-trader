@@ -6,6 +6,13 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Added D2E-F3 run-scoped WebSocket request evidence and strict subscription
+  identity. New runtime writes allocate unique positive command IDs per channel
+  across reconnects, advance channel generations across connection epochs,
+  persist pending/send outcomes before trusting ACKs, and independently replay
+  request/ACK/SID bindings. Invalid IDs and channels fail before mutation;
+  legacy v1 binding evidence remains readable. No production or order path was
+  added.
 - Added D2E-F2 native-envelope coherence and binding-state fail-close behavior.
   Conflicting top-level/nested `type`, `channel`, `id`, or `sid` values and
   Boolean identifiers are typed exclusions; exact duplicate ACKs are

@@ -1629,3 +1629,14 @@ terminal state hash but retain different raw payload hashes. Runtime and the
 independent validator use the same parser through separate rebuild instances;
 durable validation still compares every generated frame and terminal hash.
 No production, account, order-write, or live-gate behavior changed.
+## D2E-F3 request and generation integrity
+
+The F2 review found that validator binding history reset at reconnect and the
+real recorder reused native command ID `1`. F3 records each outbound subscribe
+as immutable run-scoped evidence with a contiguous request index, unique positive
+native command ID, connection epoch, channel generation, semantic payload hash,
+and send outcome. The recorder uses one channel per command and persists the
+pending record before send. Validation reconstructs the full run history rather
+than trusting inbound event annotations or runtime summaries. Synthetic tests
+cover invalid allocator input, reconnect progression, split channel commands,
+ACK conflicts, D2B/D2C isolation, recovery, and 100k streaming validation.

@@ -160,7 +160,7 @@ def test_trade_with_wrong_channel_sid_is_quarantined() -> None:
     tracker.record(
         {
             "type": "subscribed",
-            "id": 1,
+            "id": 2,
             "sid": 7,
             "msg": {"channel": "trade"},
         },
@@ -209,7 +209,7 @@ def test_trade_before_ack_is_excluded_and_only_later_trade_is_trusted() -> None:
     tracker.record(
         {
             "type": "subscribed",
-            "id": 1,
+            "id": 2,
             "sid": 22,
             "msg": {"channel": "trade"},
         },
@@ -291,11 +291,13 @@ def test_zero_trade_fixture_is_valid_quiet_market_evidence() -> None:
 
 
 def test_fixture_subscription_includes_orderbook_and_public_trade_channels() -> None:
-    assert json.loads(_subscription_payload((MARKET,))) == {
-        "id": 1,
+    assert json.loads(
+        _subscription_payload((MARKET,), channel="trade", command_id=2)
+    ) == {
+        "id": 2,
         "cmd": "subscribe",
         "params": {
-            "channels": ["orderbook_delta", "trade"],
+            "channels": ["trade"],
             "market_tickers": [MARKET],
             "use_yes_price": False,
         },
@@ -566,14 +568,14 @@ def _tracker(
         command_id=1,
         channels=("orderbook_delta", "trade"),
     )
-    for index, (channel, sid) in enumerate(
-        (("orderbook_delta", 41), ("trade", 7)),
+    for index, (channel, sid, command_id) in enumerate(
+        (("orderbook_delta", 41, 1), ("trade", 7, 2)),
         start=1,
     ):
         tracker.record(
             {
                 "type": "subscribed",
-                "id": 1,
+                "id": command_id,
                 "sid": sid,
                 "msg": {"channel": channel},
             },

@@ -187,7 +187,7 @@ def test_actual_runtime_assembly_uses_d2_writer_and_mocked_transports(
             },
             {
                 "type": "subscribed",
-                "id": 1,
+                "id": 2,
                 "sid": 22,
                 "msg": {"channel": "trade"},
             },
@@ -280,13 +280,13 @@ def test_actual_runtime_requires_acknowledgement_after_resubscription(
             [
                 {
                     "type": "subscribed",
-                    "id": 1,
+                        "id": 1,
                     "sid": 41,
                     "msg": {"channel": "orderbook_delta"},
                 },
                 {
                     "type": "subscribed",
-                    "id": 1,
+                    "id": 2,
                     "sid": 42,
                     "msg": {"channel": "trade"},
                 },
@@ -363,7 +363,7 @@ def test_actual_runtime_accepts_split_public_channel_acknowledgments(tmp_path: P
             },
             {
                 "type": "subscribed",
-                "id": 1,
+                "id": 2,
                 "sid": 22,
                 "msg": {"channel": "trade"},
             },
@@ -482,7 +482,7 @@ def test_public_ws_entrypoints_emit_d2_artifacts_with_selection_provenance(
             },
             {
                 "type": "subscribed",
-                "id": 1,
+                "id": 2,
                 "sid": 42,
                 "msg": {"channel": "trade"},
             },
@@ -930,7 +930,7 @@ def test_unknown_current_segment_cannot_inherit_historical_sequence_or_rebuild_p
     ]
     tracker.start_connection()
     tracker.bind_subscription(
-        command_id=1,
+        command_id=3,
         channels=("orderbook_delta", "trade"),
     )
     current_unknown = tracker.record(
@@ -1294,6 +1294,7 @@ def test_pre_ack_snapshot_fails_closed_in_runtime_open_monitor_and_validator(
     tracker.bind_subscription(
         command_id=1,
         channels=("orderbook_delta", "trade"),
+        created_at_utc=START,
     )
     event = tracker.record(
         {
@@ -1341,7 +1342,7 @@ def test_conflicting_trade_ack_fails_subscription_without_invalidating_d2b(
     conflict = tracker.record(
         {
             "type": "subscribed",
-            "id": 1,
+            "id": 2,
             "sid": 99,
             "msg": {"channel": "trade"},
         },
@@ -1389,7 +1390,10 @@ def test_validator_replay_accepts_new_subscription_generation() -> None:
         requested_market_tickers=(MARKET,),
     )
     tracker.start_connection()
-    tracker.bind_subscription(command_id=1)
+    request1 = replace(
+        tracker.bind_subscription(command_id=1, created_at_utc=START)[0],
+        send_outcome="SENT",
+    )
     first = tracker.record(
         {
             "type": "subscribed",
@@ -1401,7 +1405,10 @@ def test_validator_replay_accepts_new_subscription_generation() -> None:
         received_at_utc=START,
         received_monotonic_ns=1,
     )
-    tracker.bind_subscription(command_id=2)
+    request2 = replace(
+        tracker.bind_subscription(command_id=2, created_at_utc=START)[0],
+        send_outcome="SENT",
+    )
     second = tracker.record(
         {
             "type": "subscribed",
@@ -1413,12 +1420,14 @@ def test_validator_replay_accepts_new_subscription_generation() -> None:
         received_at_utc=START,
         received_monotonic_ns=2,
     )
-    bindings: dict[tuple[str, str], dict[str, object]] = {}
+    bindings: dict[str, dict[str, object]] = {}
+    requests = {(request1.connection_id, request1.channel): request1}
 
-    ws_runtime._replay_channel_binding(first, bindings)
-    ws_runtime._replay_channel_binding(second, bindings)
+    ws_runtime._replay_channel_binding(first, bindings, requests)
+    requests[(request2.connection_id, request2.channel)] = request2
+    ws_runtime._replay_channel_binding(second, bindings, requests)
 
-    binding = bindings[(tracker.connection_id, "orderbook_delta")]
+    binding = bindings["orderbook_delta"]
     assert binding["generation"] == 2
     assert binding["sid"] == 44
     assert binding["state"] is SubscriptionBindingState.ACKNOWLEDGED
@@ -1430,7 +1439,10 @@ def test_validator_replay_rejects_self_declared_generation_jump() -> None:
         requested_market_tickers=(MARKET,),
     )
     tracker.start_connection()
-    tracker.bind_subscription(command_id=1)
+    request1 = replace(
+        tracker.bind_subscription(command_id=1, created_at_utc=START)[0],
+        send_outcome="SENT",
+    )
     first = tracker.record(
         {
             "type": "subscribed",
@@ -1442,7 +1454,10 @@ def test_validator_replay_rejects_self_declared_generation_jump() -> None:
         received_at_utc=START,
         received_monotonic_ns=1,
     )
-    tracker.bind_subscription(command_id=2)
+    request2 = replace(
+        tracker.bind_subscription(command_id=2, created_at_utc=START)[0],
+        send_outcome="SENT",
+    )
     second = tracker.record(
         {
             "type": "subscribed",
@@ -1459,11 +1474,13 @@ def test_validator_replay_rejects_self_declared_generation_jump() -> None:
         subscription_generation=3,
         subscription_binding_id=second.subscription_binding_id.replace("0002", "0003"),
     )
-    bindings: dict[tuple[str, str], dict[str, object]] = {}
-    ws_runtime._replay_channel_binding(first, bindings)
+    bindings: dict[str, dict[str, object]] = {}
+    requests = {(request1.connection_id, request1.channel): request1}
+    ws_runtime._replay_channel_binding(first, bindings, requests)
+    requests[(request2.connection_id, request2.channel)] = request2
 
-    with pytest.raises(ValueError, match="acknowledgment state contradicts"):
-        ws_runtime._replay_channel_binding(tampered, bindings)
+    with pytest.raises(ValueError, match="unknown or stale acknowledgment"):
+        ws_runtime._replay_channel_binding(tampered, bindings, requests)
 
 
 def test_running_monitor_blocks_tampered_safety_scalars(tmp_path: Path) -> None:
@@ -1826,9 +1843,10 @@ def test_validator_rejects_reused_connection_identity(tmp_path: Path) -> None:
         requested_market_tickers=(MARKET,),
     )
     tracker.start_connection()
-    tracker.bind_subscription(
+    requests = tracker.bind_subscription(
         command_id=1,
         channels=("orderbook_delta", "trade"),
+        created_at_utc=START,
     )
     for event_type, observed_at, segment_id in (
         (ConnectionEvidenceType.CONNECTION_OPEN, START, "segment-1"),
@@ -1851,15 +1869,16 @@ def test_validator_rejects_reused_connection_identity(tmp_path: Path) -> None:
             )
         )
         if event_type is ConnectionEvidenceType.CONNECTION_OPEN:
-            for index, (channel, sid) in enumerate(
-                (("orderbook_delta", 41), ("trade", 22)),
+            _persist_requests(session, requests)
+            for index, (channel, sid, command_id) in enumerate(
+                (("orderbook_delta", 41, 1), ("trade", 22, 2)),
                 start=1,
             ):
                 session.record_event(
                     tracker.record(
                         {
                             "type": "subscribed",
-                            "id": 1,
+                            "id": command_id,
                             "sid": sid,
                             "msg": {"channel": channel},
                         },
@@ -1889,9 +1908,10 @@ def test_validator_rejects_connection_outside_terminal_interval(tmp_path: Path) 
         requested_market_tickers=(MARKET,),
     )
     tracker.start_connection()
-    tracker.bind_subscription(
+    requests = tracker.bind_subscription(
         command_id=1,
         channels=("orderbook_delta", "trade"),
+        created_at_utc=START,
     )
     session.record_connection_event(
         ConnectionEvidenceEvent(
@@ -1902,15 +1922,16 @@ def test_validator_rejects_connection_outside_terminal_interval(tmp_path: Path) 
             reason="pre_runtime_connection",
         )
     )
-    for index, (channel, sid) in enumerate(
-        (("orderbook_delta", 41), ("trade", 22)),
+    _persist_requests(session, requests)
+    for index, (channel, sid, command_id) in enumerate(
+        (("orderbook_delta", 41, 1), ("trade", 22, 2)),
         start=1,
     ):
         session.record_event(
             tracker.record(
                 {
                     "type": "subscribed",
-                    "id": 1,
+                    "id": command_id,
                     "sid": sid,
                     "msg": {"channel": channel},
                 },
@@ -2231,6 +2252,7 @@ def test_runtime_open_status_and_rebuild_hash_memory_are_bounded(
     tracker.bind_subscription(
         command_id=1,
         channels=("orderbook_delta", "trade"),
+        created_at_utc=START,
     )
     tracker.record(
         {
@@ -2319,9 +2341,10 @@ def test_runtime_validation_accumulator_is_bounded_at_100k_events() -> None:
     )
     tracker.start_connection()
     opening_segment = tracker.segment_id
-    tracker.bind_subscription(
+    requests = tracker.bind_subscription(
         command_id=1,
         channels=("orderbook_delta", "trade"),
+        created_at_utc=START,
     )
     subscription_segment = tracker.segment_id
 
@@ -2345,7 +2368,7 @@ def test_runtime_validation_accumulator_is_bounded_at_100k_events() -> None:
                 "selected_market_selection": {"selection_gate_result": "pass"},
                 "lifecycle_mode_and_source": "selected_market_rest_fallback",
                 "pricing_mode_and_source": "explicit_subscription_use_yes_price_false",
-                "subscription_command_id": 1,
+                "subscription_request_policy": "one_channel_per_command_run_unique_positive_id",
                 "subscription_channels": ["orderbook_delta", "trade"],
                 "use_yes_price": False,
             },
@@ -2361,14 +2384,25 @@ def test_runtime_validation_accumulator_is_bounded_at_100k_events() -> None:
                 reason="synthetic_100k_validation",
             ).to_record(),
         }
-        for index, (channel, sid) in enumerate(
-            (("orderbook_delta", 41), ("trade", 22)),
+        for request in requests:
+            yield {
+                "record_type": "subscription_request_evidence",
+                "campaign_id": campaign_id,
+                "subscription_request": request.to_record(),
+            }
+            yield {
+                "record_type": "subscription_request_evidence",
+                "campaign_id": campaign_id,
+                "subscription_request": replace(request, send_outcome="SENT").to_record(),
+            }
+        for index, (channel, sid, command_id) in enumerate(
+            (("orderbook_delta", 41, 1), ("trade", 22, 2)),
             start=1,
         ):
             raw_ack = tracker.record(
                 {
                     "type": "subscribed",
-                    "id": 1,
+                    "id": command_id,
                     "sid": sid,
                     "msg": {"channel": channel},
                 },
@@ -3009,9 +3043,10 @@ def test_runtime_recovers_rotation_finalized_before_manifest_sync(
         requested_market_tickers=(MARKET,),
     )
     tracker.start_connection()
-    tracker.bind_subscription(
+    requests = tracker.bind_subscription(
         command_id=1,
         channels=("orderbook_delta", "trade"),
+        created_at_utc=START,
     )
     session.record_connection_event(
         ConnectionEvidenceEvent(
@@ -3022,15 +3057,16 @@ def test_runtime_recovers_rotation_finalized_before_manifest_sync(
             reason="rotation_connection_open",
         )
     )
-    for index, (channel, sid) in enumerate(
-        (("orderbook_delta", 41), ("trade", 22)),
+    _persist_requests(session, requests)
+    for index, (channel, sid, command_id) in enumerate(
+        (("orderbook_delta", 41, 1), ("trade", 22, 2)),
         start=1,
     ):
         session.record_event(
             tracker.record(
                 {
                     "type": "subscribed",
-                    "id": 1,
+                    "id": command_id,
                     "sid": sid,
                     "msg": {"channel": channel},
                 },
@@ -3063,7 +3099,7 @@ def test_runtime_recovers_rotation_finalized_before_manifest_sync(
     summary = json.loads((tmp_path / "campaign_summary.json").read_text())
 
     assert recovery["validation_status"] == "pass"
-    assert len(summary["segment_summaries"]) == 6
+    assert len(summary["segment_summaries"]) == 10
     assert summary["segment_summaries"][0]["terminal_reason"] == "rotation"
     assert any(
         segment["recovery_status"] == "FINALIZED_BEFORE_MANIFEST_SYNC"
@@ -3675,19 +3711,23 @@ def _session(
             reason="test_connection_open",
         )
     )
-    tracker.bind_subscription(
+    requests = tracker.bind_subscription(
         command_id=1,
         channels=("orderbook_delta", "trade"),
+        created_at_utc=START,
     )
-    for index, (channel, sid) in enumerate(
-        (("orderbook_delta", 41), ("trade", 22)),
+    for request in requests:
+        session.record_subscription_request(request)
+        session.record_subscription_request(replace(request, send_outcome="SENT"))
+    for index, (channel, sid, command_id) in enumerate(
+        (("orderbook_delta", 41, 1), ("trade", 22, 2)),
         start=1,
     ):
         session.record_event(
             tracker.record(
                 {
                     "type": "subscribed",
-                    "id": 1,
+                    "id": command_id,
                     "sid": sid,
                     "msg": {"channel": channel},
                 },
@@ -3741,6 +3781,12 @@ def _session_without_connection(
     )
 
 
+def _persist_requests(session: RuntimeEvidenceSession, requests) -> None:
+    for request in requests:
+        session.record_subscription_request(request)
+        session.record_subscription_request(replace(request, send_outcome="SENT"))
+
+
 def _tracker(
     *,
     markets: tuple[str, ...] = (MARKET,),
@@ -3757,14 +3803,14 @@ def _tracker(
         command_id=1,
         channels=("orderbook_delta", "trade"),
     )
-    for index, (channel, sid) in enumerate(
-        (("orderbook_delta", 41), ("trade", 22)),
+    for index, (channel, sid, command_id) in enumerate(
+        (("orderbook_delta", 41, 1), ("trade", 22, 2)),
         start=1,
     ):
         tracker.record(
             {
                 "type": "subscribed",
-                "id": 1,
+                "id": command_id,
                 "sid": sid,
                 "msg": {"channel": channel},
             },
@@ -4157,13 +4203,13 @@ def test_public_ws_entrypoint_wires_unified_yes_price_mode(
         [
             {
                 "type": "subscribed",
-                "id": 1,
+                    "id": 1,
                 "sid": 41,
                 "msg": {"channel": "orderbook_delta", "use_yes_price": True},
             },
             {
                 "type": "subscribed",
-                "id": 1,
+                "id": 2,
                 "sid": 42,
                 "msg": {"channel": "trade"},
             },

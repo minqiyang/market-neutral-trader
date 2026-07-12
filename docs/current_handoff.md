@@ -1,5 +1,21 @@
 # Current Handoff
 
+## D2E-F3 request and generation integrity
+
+D2E-F3 replaces connection-local command ID reuse with a run-level monotonic
+allocator. The recorder sends one reviewed public channel per subscribe command,
+persists immutable request identity and pending/send outcome evidence before an
+ACK can be trusted, and never resets command IDs on reconnect. Channel generation
+continues across connection epochs while server SIDs remain connection- and
+channel-scoped.
+
+The independent validator now replays outbound request evidence before inbound
+ACK/data evidence, rejects command reuse and generation jumps, and requires an
+exact connection/channel/generation/request/SID match. The tracker rejects
+Boolean, nonpositive, oversized, noninteger IDs and unknown channels without
+state mutation. Legacy v1 evidence remains readable; new runtime evidence uses
+subscription identity v2. Live trading remains disabled.
+
 ## D2E-F2 native-envelope and binding coherence
 
 D2E-F2 closes the three findings that blocked PR #129. One pure native-envelope

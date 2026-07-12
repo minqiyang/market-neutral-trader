@@ -52,7 +52,7 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
             },
             {
                 "type": "subscribed",
-                "id": 1,
+                "id": 2,
                 "sid": 22,
                 "msg": {"channel": "trade"},
             },
@@ -107,11 +107,20 @@ def test_ws_recorder_writes_snapshot_and_delta_raw_private_events(tmp_path: Path
             "id": 1,
             "cmd": "subscribe",
             "params": {
-                    "channels": ["orderbook_delta", "trade"],
+                    "channels": ["orderbook_delta"],
                     "market_tickers": ["DEMO-MARKET"],
                     "use_yes_price": False,
             },
-        }
+        },
+        {
+            "id": 2,
+            "cmd": "subscribe",
+            "params": {
+                    "channels": ["trade"],
+                    "market_tickers": ["DEMO-MARKET"],
+                    "use_yes_price": False,
+            },
+        },
     ]
     assert "KALSHI-ACCESS" not in raw_text
 
@@ -318,7 +327,7 @@ def test_subscription_ack_event_is_not_persisted_before_completing_raw_frame(
                         "id": 1,
                         "msg": {"channel": "orderbook_delta"},
                     },
-                    {"type": "subscribed", "id": 1, "msg": {"channel": "trade"}},
+                    {"type": "subscribed", "id": 2, "msg": {"channel": "trade"}},
                 ]
             ),
             now=lambda: datetime(2026, 7, 3, 20, 0, tzinfo=UTC),
