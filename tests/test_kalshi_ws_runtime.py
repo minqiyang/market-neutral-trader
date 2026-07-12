@@ -1530,7 +1530,7 @@ def test_validator_replays_exact_and_stale_rejections_independently() -> None:
     exact = tracker.record(
         {
             "type": "error",
-            "msg": {"id": 1, "channel": "orderbook_delta", "message": "denied"},
+            "msg": {"id": 1, "message": "denied"},
         },
         local_row_index=1,
         received_at_utc=START,
@@ -1595,9 +1595,9 @@ def test_validator_accepts_next_generation_rejection_after_reconnect() -> None:
     )
     rejection = tracker.record(
         {
-            "type": "rejected",
+            "type": "error",
             "id": 2,
-            "msg": {"channel": "orderbook_delta"},
+            "msg": {"code": "invalid_subscription"},
         },
         local_row_index=2,
         received_at_utc=START + timedelta(seconds=1),

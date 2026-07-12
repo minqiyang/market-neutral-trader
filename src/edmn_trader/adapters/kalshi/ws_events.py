@@ -799,6 +799,17 @@ class KalshiWsIntegrityTracker:
         has_requested_market = native_market_ticker in self.requested_market_tickers
         native_sid = envelope.sid
         native_command_id = envelope.request_id
+        if (
+            binding is None
+            and native_type in {"error", "rejected"}
+            and native_command_id is not None
+        ):
+            matches = tuple(
+                candidate
+                for candidate in self._bindings.values()
+                if candidate.command_id == native_command_id
+            )
+            binding = matches[0] if len(matches) == 1 else None
         binding_observation: SubscriptionBindingObservation | None = None
         event_binding_state: SubscriptionBindingState | None = None
         if (

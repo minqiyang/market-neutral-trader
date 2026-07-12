@@ -17,6 +17,9 @@ numbers while the repository is still in early research scaffolding.
   may terminate rejected without conflicting with the prior connection, while
   ACK/rejection contradictions within one complete request identity conflict and
   duplicate rejections remain idempotent.
+- Correlated documented channel-less WebSocket error responses through the
+  run-unique native command ID. Unknown or old-connection errors remain raw,
+  fail monitor trust, and cannot mutate a current binding.
 - Added D2E-F2 native-envelope coherence and binding-state fail-close behavior.
   Conflicting top-level/nested `type`, `channel`, `id`, or `sid` values and
   Boolean identifiers are typed exclusions; exact duplicate ACKs are

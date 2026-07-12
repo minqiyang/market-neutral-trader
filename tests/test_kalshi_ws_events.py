@@ -98,6 +98,40 @@ def test_stale_error_does_not_mutate_current_acknowledged_binding() -> None:
     assert snapshot.admission_status is AdmissionStatus.ADMITTED
 
 
+def test_old_connection_error_without_channel_cannot_mutate_current_binding() -> None:
+    tracker = KalshiWsIntegrityTracker(
+        campaign_id="stale-connection-error",
+        requested_market_tickers=("DEMO-MARKET",),
+    )
+    tracker.start_connection()
+    tracker.bind_subscription(command_id=1)
+    tracker.start_connection()
+    tracker.bind_subscription(command_id=2)
+    _ack_channel(
+        tracker,
+        command_id=2,
+        channel="orderbook_delta",
+        sid=41,
+    )
+    stale = tracker.record(
+        {"type": "error", "id": 1, "msg": {"code": "old_request"}},
+        local_row_index=2,
+        received_at_utc=RECEIVED_AT,
+        received_monotonic_ns=2,
+    )
+    snapshot = _record(
+        tracker,
+        "orderbook_snapshot",
+        seq=1,
+        local_row_index=3,
+        sid=41,
+    )
+
+    assert stale.subscription_binding_state is SubscriptionBindingState.UNKNOWN
+    assert snapshot.subscription_binding_state is SubscriptionBindingState.ACKNOWLEDGED
+    assert snapshot.admission_status is AdmissionStatus.ADMITTED
+
+
 def test_rejection_and_ack_conflict_within_the_same_request_identity() -> None:
     tracker = KalshiWsIntegrityTracker(
         campaign_id="binding-conflicts",

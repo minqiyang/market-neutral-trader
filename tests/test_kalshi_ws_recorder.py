@@ -291,7 +291,6 @@ def test_ws_recorder_records_nested_subscription_rejection(tmp_path: Path) -> No
                     "type": "error",
                     "id": 1,
                     "msg": {
-                        "channel": "orderbook_delta",
                         "code": "invalid_subscription",
                     },
                 }

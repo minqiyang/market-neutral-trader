@@ -709,6 +709,10 @@ class RuntimeEvidenceSession:
             SubscriptionBindingObservation.CONFLICTING_ACK
         ) or event.subscription_binding_observation is (
             SubscriptionBindingObservation.CONFLICTING_REJECTION
+        ) or (
+            event.native_type in {"error", "rejected"}
+            and event.subscription_binding_state
+            in {SubscriptionBindingState.UNKNOWN, SubscriptionBindingState.REQUEST_MISMATCH}
         )
         self._binding_failure_observed |= binding_failure
         self._binding_failure_count += int(binding_failure)
@@ -2307,7 +2311,16 @@ def _replay_channel_binding(
     if envelope.rejection != event.native_envelope_rejection:
         raise ValueError("D2A native envelope rejection was not independently reproduced")
     request = requests.get((event.connection_id, envelope.channel))
-    binding = bindings.get(envelope.channel)
+    if request is None and envelope.native_type in {"error", "rejected"}:
+        matches = tuple(
+            candidate
+            for (connection_id, _channel), candidate in requests.items()
+            if connection_id == event.connection_id
+            and candidate.native_command_id == envelope.request_id
+        )
+        request = matches[0] if len(matches) == 1 else None
+    binding_channel = request.channel if request is not None else envelope.channel
+    binding = bindings.get(binding_channel)
     if envelope.native_type in {"subscribed", "ack", "ok"}:
         if envelope.rejection is not None:
             return
@@ -2394,7 +2407,7 @@ def _replay_channel_binding(
         )
         if request_matches:
             if binding is None:
-                bindings[envelope.channel] = {
+                bindings[binding_channel] = {
                     "sid": None,
                     "state": SubscriptionBindingState.REJECTED,
                     "generation": request.subscription_generation,
@@ -2425,7 +2438,7 @@ def _replay_channel_binding(
                 request.subscription_generation == binding["generation"] + 1
                 and request.native_command_id != binding["request_id"]
             ):
-                bindings[envelope.channel] = {
+                bindings[binding_channel] = {
                     "sid": None,
                     "state": SubscriptionBindingState.REJECTED,
                     "generation": request.subscription_generation,
@@ -2439,8 +2452,12 @@ def _replay_channel_binding(
             else:
                 raise ValueError("D2A rejection contradicts active binding identity")
         else:
-            expected = SubscriptionBindingState.REQUEST_MISMATCH
-            expected_observation = SubscriptionBindingObservation.REJECTED
+            if request is None and binding is None:
+                expected = SubscriptionBindingState.UNKNOWN
+                expected_observation = None
+            else:
+                expected = SubscriptionBindingState.REQUEST_MISMATCH
+                expected_observation = SubscriptionBindingObservation.REJECTED
         if event.subscription_binding_state is not expected:
             raise ValueError("D2A rejection state contradicts independent replay")
         if event.subscription_binding_observation is not expected_observation:
@@ -2811,6 +2828,18 @@ def _derive_runtime_validation(
             raise ValueError("D2A local row indices must be contiguous across the runtime")
         _replay_channel_binding(event, validation_bindings, validation_requests)
         request_key = (event.connection_id, event.channel)
+        if (
+            request_key not in validation_requests
+            and event.native_type in {"error", "rejected"}
+        ):
+            matching_keys = tuple(
+                key
+                for key, candidate in validation_requests.items()
+                if key[0] == event.connection_id
+                and candidate.native_command_id == event.subscription_id
+            )
+            if len(matching_keys) == 1:
+                request_key = matching_keys[0]
         if request_key in validation_requests:
             requests_with_inbound_evidence.add(request_key)
         _validate_event_subscription_state(
@@ -2833,6 +2862,10 @@ def _derive_runtime_validation(
             SubscriptionBindingObservation.CONFLICTING_ACK
         ) or event.subscription_binding_observation is (
             SubscriptionBindingObservation.CONFLICTING_REJECTION
+        ) or (
+            event.native_type in {"error", "rejected"}
+            and event.subscription_binding_state
+            in {SubscriptionBindingState.UNKNOWN, SubscriptionBindingState.REQUEST_MISMATCH}
         ):
             counts["binding_failure_count"] += 1
         last_event_at = event.received_at_utc
