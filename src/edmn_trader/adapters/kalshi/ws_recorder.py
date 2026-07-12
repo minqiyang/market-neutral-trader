@@ -376,7 +376,12 @@ def subscription_ack_channels(
     if isinstance(channel, str):
         channels.add(channel)
     channel_list = source.get("channels")
-    if isinstance(channel_list, list) and payload.get("sid") is None:
+    nested_sid = source.get("sid") if isinstance(source, Mapping) else None
+    if (
+        isinstance(channel_list, list)
+        and payload.get("sid") is None
+        and nested_sid is None
+    ):
         channels.update(str(item) for item in channel_list if isinstance(item, str))
     return channels & REQUIRED_PUBLIC_CHANNELS
 

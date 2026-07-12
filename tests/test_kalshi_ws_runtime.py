@@ -279,7 +279,13 @@ def test_actual_runtime_requires_acknowledgement_after_resubscription(
                     "type": "subscribed",
                     "id": 1,
                     "sid": 41,
-                    "msg": {"channels": ["orderbook_delta", "trade"]},
+                    "msg": {"channel": "orderbook_delta"},
+                },
+                {
+                    "type": "subscribed",
+                    "id": 1,
+                    "sid": 42,
+                    "msg": {"channel": "trade"},
                 },
                 {
                     "type": "orderbook_snapshot",
@@ -469,7 +475,13 @@ def test_public_ws_entrypoints_emit_d2_artifacts_with_selection_provenance(
                 "type": "subscribed",
                 "id": 1,
                 "sid": 41,
-                "msg": {"channels": ["orderbook_delta", "trade"]},
+                "msg": {"channel": "orderbook_delta"},
+            },
+            {
+                "type": "subscribed",
+                "id": 1,
+                "sid": 42,
+                "msg": {"channel": "trade"},
             },
             {
                 "type": "orderbook_snapshot",
@@ -589,10 +601,7 @@ def test_runtime_session_wires_d2_pipeline_and_closes_verified_artifacts(
                 "type": "subscribed",
                 "id": 1,
                 "sid": 41,
-                    "msg": {
-                        "channels": ["orderbook_delta", "trade"],
-                        "use_yes_price": False,
-                    },
+                "msg": {"channel": "orderbook_delta", "use_yes_price": False},
             },
             local_row_index=1,
             received_at_utc=START + timedelta(seconds=1),
@@ -3453,6 +3462,16 @@ def _tracker(
         command_id=1,
         channels=("orderbook_delta", "trade"),
     )
+    tracker.record(
+        {
+            "type": "subscribed",
+            "id": 1,
+            "msg": {"channels": ["orderbook_delta", "trade"]},
+        },
+        local_row_index=1,
+        received_at_utc=START,
+        received_monotonic_ns=1,
+    )
     return _OffsetTracker(tracker) if offset else tracker
 
 
@@ -3840,10 +3859,13 @@ def test_public_ws_entrypoint_wires_unified_yes_price_mode(
                 "type": "subscribed",
                 "id": 1,
                 "sid": 41,
-                "msg": {
-                    "channels": ["orderbook_delta", "trade"],
-                    "use_yes_price": True,
-                },
+                "msg": {"channel": "orderbook_delta", "use_yes_price": True},
+            },
+            {
+                "type": "subscribed",
+                "id": 1,
+                "sid": 42,
+                "msg": {"channel": "trade"},
             },
             {
                 "type": "orderbook_snapshot",

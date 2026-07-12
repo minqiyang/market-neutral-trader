@@ -676,8 +676,6 @@ class RuntimeEvidenceSession:
     def record_event(self, event: KalshiWsRawEvent) -> None:
         if event.campaign_id != self.campaign_id:
             raise ValueError("D2A event campaign does not match runtime campaign")
-        if event.native_type in {"orderbook_snapshot", "orderbook_delta", "trade"}:
-            _validate_channel_binding(event)
         validate_no_private_account_payload(
             event.original_payload,
             path="d2a_event.original_payload",
@@ -2196,10 +2194,7 @@ def _validate_channel_binding(event: KalshiWsRawEvent) -> None:
         or event.subscription_binding_id is None
         or event.subscription_command_id != 1
         or event.subscription_binding_state
-        not in {
-            SubscriptionBindingState.REQUESTED,
-            SubscriptionBindingState.ACKNOWLEDGED,
-        }
+        is not SubscriptionBindingState.ACKNOWLEDGED
     ):
         raise ValueError("D2A public channel row lacks a valid channel binding")
     expected_suffix = (

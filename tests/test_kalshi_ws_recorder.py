@@ -25,13 +25,17 @@ from edmn_trader.adapters.kalshi.ws_recorder import (
 )
 
 
-def test_plural_channel_ack_with_one_sid_is_ambiguous_and_not_accepted() -> None:
+@pytest.mark.parametrize("sid_location", ["top", "nested"])
+def test_plural_channel_ack_with_one_sid_is_ambiguous_and_not_accepted(
+    sid_location: str,
+) -> None:
     payload = {
         "type": "subscribed",
         "id": 1,
-        "sid": 7,
         "msg": {"channels": ["orderbook_delta", "trade"]},
     }
+    target = payload if sid_location == "top" else payload["msg"]
+    target["sid"] = 7
 
     assert subscription_ack_channels(payload, "subscribed") == set()
 

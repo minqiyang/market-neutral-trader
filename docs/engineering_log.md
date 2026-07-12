@@ -63,6 +63,13 @@ No-SID plural acknowledgments may acknowledge the request, but a plural ACK
 carrying one SID cannot bind multiple channels. Late or unknown command IDs are
 typed `REQUEST_MISMATCH` and cannot rebind the active generation.
 
+The clean PR-head review found two more containment gaps. A SID nested inside a
+plural-channel ACK now receives the same ambiguous treatment as a top-level
+SID, and post-fix validation requires public data rows to carry an acknowledged
+binding rather than a merely requested one. Trade data is also checked against
+the trade binding SID; stale/foreign trade rows are D2A-excluded and quarantined
+from D2C without touching D2B.
+
 D2A-D2D originally merged as independently verified software contracts, while
 the operational `kalshi-ws-smoke` entrypoint still wrote the historical
 campaign schema. D2E fixes that assembly gap rather than weakening the Real5M

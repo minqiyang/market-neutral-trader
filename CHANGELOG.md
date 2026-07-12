@@ -14,7 +14,9 @@ numbers while the repository is still in early research scaffolding.
   explicit resubscription. An identity-model marker distinguishes new formal
   rows from readable historical rows; native command IDs are matched to the
   active generation, and ambiguous plural-channel ACKs with one SID do not
-  satisfy acknowledgment. This is a fixture-only correction with no threshold,
+  satisfy acknowledgment, including nested SIDs. New public data rows require
+  acknowledged bindings, and wrong-SID trades are quarantined from D2C without
+  affecting D2B. This is a fixture-only correction with no threshold,
   credential, network, production, or order-write change.
 - Reworked Demo candidate discovery to fetch market pages before event
   hydration, deduplicate and batch core event requests, cache event records,

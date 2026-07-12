@@ -13,6 +13,7 @@ from typing import Any
 
 from edmn_trader.adapters.kalshi.client import normalize_kalshi_market_metadata
 from edmn_trader.adapters.kalshi.ws_events import (
+    AdmissionStatus,
     KalshiWsRawEvent,
     KalshiWsSchemaCompatibilityError,
     LegacyKalshiWsRawEvent,
@@ -348,6 +349,12 @@ def build_public_trade_stream(
             continue
         if event.native_type != "trade":
             ignored += 1
+            continue
+        if (
+            event.admission_status is AdmissionStatus.EXCLUDED
+            or event.exclusion_reason is not None
+        ):
+            quarantined += 1
             continue
         if not event.native_market_ticker or event.channel != "trade":
             quarantined += 1

@@ -529,7 +529,7 @@ class KalshiWsIntegrityTracker:
         exclusion_reason = _sequence_exclusion_reason(sequence_state)
         integrity_failure = exclusion_reason is not None
         if (
-            is_orderbook
+            native_type in {"orderbook_snapshot", "orderbook_delta", "trade"}
             and binding is not None
             and binding.sid is not None
             and native_sid is not None
@@ -600,6 +600,7 @@ class KalshiWsIntegrityTracker:
         if (
             integrity_failure
             and exclusion_reason is not ExclusionReason.SUBSCRIPTION_IDENTITY_MISMATCH
+            and is_orderbook
         ):
             self._start_segment(SegmentBoundaryReason.INTEGRITY_FAILURE)
         return event

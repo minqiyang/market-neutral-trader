@@ -19,6 +19,9 @@ coherent binding IDs/generations for new runtime rows, matches acknowledgments
 to their native request ID, and rejects a plural-channel acknowledgment that
 ambiguously carries one SID. Historical unmarked rows remain compatibility
 evidence only.
+The clean PR-head review additionally closes nested-SID ambiguity and requires
+new public data rows to carry acknowledged bindings. A trade row with a stale
+or foreign trade SID is quarantined from D2C and still cannot affect D2B.
 
 This fix is fixture-only until a separately authorized post-fix Real5M. It does
 not weaken thresholds, use credentials or market network, or add any order
