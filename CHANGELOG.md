@@ -89,7 +89,8 @@ numbers while the repository is still in early research scaffolding.
   order-write behavior was added.
 - Reworked Demo candidate discovery to fetch market pages before event
   hydration, deduplicate core event references, exhaust the documented open-
-  event cursor, cache referenced event records,
+  event cursor, exclude unsupported multivariate discovery, cache referenced
+  event records, cap exact-event fallback requests,
   bound retryable 429/5xx/transport failures, distinguish incomplete coverage,
   and avoid treating a non-authoritative `event_type` field as required core
   metadata. No production, credential, or order-write behavior was added.

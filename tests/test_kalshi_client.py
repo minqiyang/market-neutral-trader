@@ -42,7 +42,7 @@ def test_list_markets_uses_read_only_get_markets_endpoint() -> None:
     client = KalshiDemoMarketDataClient(
         http_client=httpx.Client(transport=httpx.MockTransport(handler))
     )
-    response = client.list_markets(limit=25, status="open")
+    response = client.list_markets(limit=25, status="open", mve_filter="exclude")
 
     assert response == payload
     assert len(requests) == 1
@@ -50,7 +50,17 @@ def test_list_markets_uses_read_only_get_markets_endpoint() -> None:
     assert requests[0].url.path == "/trade-api/v2/markets"
     assert requests[0].url.params["limit"] == "25"
     assert requests[0].url.params["status"] == "open"
+    assert requests[0].url.params["mve_filter"] == "exclude"
     assert "authorization" not in requests[0].headers
+
+
+def test_list_markets_rejects_unknown_multivariate_filter() -> None:
+    client = KalshiDemoMarketDataClient(
+        http_client=httpx.Client(transport=_json_transport({}))
+    )
+
+    with pytest.raises(ValueError, match="mve_filter"):
+        client.list_markets(mve_filter="unknown")
 
 
 def test_get_market_uses_read_only_market_endpoint() -> None:

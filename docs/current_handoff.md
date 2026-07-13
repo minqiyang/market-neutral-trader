@@ -6,11 +6,13 @@ The market-selection audit found one deterministic field-provenance defect:
 event enrichment used an undocumented `GET /events?tickers=...` query. The
 current official endpoint exposes `limit`, `cursor`, and `status` instead.
 Discovery now exhausts bounded `status=open` event pages after exhausting and
-deduplicating open markets, caches only referenced events, and uses the exact
-event endpoint only for missing members. Both market and event list responses
-must carry explicit cursor strings, so a missing cursor cannot be mistaken for
-complete coverage. Event page-cap and global request failures block the scan;
-exact-event 404/schema failures remain candidate-local.
+deduplicating open non-multivariate markets, caches only referenced events, and
+uses the exact event endpoint only for missing members. Multivariate markets
+are explicitly excluded because the documented core event list excludes them.
+Both market and event list responses must carry explicit cursor strings, so a
+missing cursor cannot be mistaken for complete coverage. Event page-cap,
+100-request exact-event fallback cap, and global request failures block the
+scan; exact-event 404/schema failures remain candidate-local.
 
 This correction is Demo read-only and does not change lifecycle policy v4,
 credential handling, retry limits, WebSocket behavior, live-gate state, or

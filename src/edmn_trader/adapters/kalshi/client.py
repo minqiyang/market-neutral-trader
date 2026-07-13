@@ -88,12 +88,15 @@ class KalshiDemoMarketDataClient:
         limit: int = 100,
         cursor: str | None = None,
         status: str | None = None,
+        mve_filter: str | None = None,
     ) -> dict[str, Any]:
         """Return public Kalshi Demo market metadata."""
 
         if limit <= 0:
             msg = "limit must be positive"
             raise ValueError(msg)
+        if mve_filter not in {None, "only", "exclude"}:
+            raise ValueError("mve_filter must be only or exclude")
 
         payload = self._get_json(
             "/markets",
@@ -101,6 +104,7 @@ class KalshiDemoMarketDataClient:
                 "limit": limit,
                 "cursor": cursor,
                 "status": status,
+                "mve_filter": mve_filter,
             },
         )
         _validate_markets_payload(payload)

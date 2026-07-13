@@ -55,6 +55,7 @@ MARKET_DISCOVERY_PAGE_LIMIT = 1_000
 MAX_MARKET_DISCOVERY_PAGES = 100
 EVENT_DISCOVERY_PAGE_LIMIT = 200
 MAX_EVENT_DISCOVERY_PAGES = 100
+MAX_EVENT_FALLBACK_REQUESTS = 100
 DISCOVERY_PROTOCOL_VERSION = "edmn.kalshi.discovery_protocol.v1"
 DISCOVERY_MAX_ATTEMPTS = 3
 DISCOVERY_NEAR_MISS_LIMIT = 100
@@ -1374,6 +1375,7 @@ def discover_kalshi_demo_ws_market(
     client: KalshiDemoMarketDataClient | None = None,
     max_pages: int = MAX_MARKET_DISCOVERY_PAGES,
     max_event_pages: int = MAX_EVENT_DISCOVERY_PAGES,
+    max_event_fallback_requests: int = MAX_EVENT_FALLBACK_REQUESTS,
     selection_profile: SelectionProfile | str | None = None,
     eligible_market_limit: int | None = None,
     max_orderbook_probes: int | None = None,
@@ -1384,6 +1386,8 @@ def discover_kalshi_demo_ws_market(
         raise ValueError("max_pages must be at least 1")
     if max_event_pages < 1:
         raise ValueError("max_event_pages must be at least 1")
+    if max_event_fallback_requests < 1:
+        raise ValueError("max_event_fallback_requests must be at least 1")
     if eligible_market_limit is not None and eligible_market_limit < 1:
         raise ValueError("eligible_market_limit must be at least 1")
     if max_orderbook_probes is not None and max_orderbook_probes < 1:
@@ -1404,6 +1408,9 @@ def discover_kalshi_demo_ws_market(
         "event_page_limit": EVENT_DISCOVERY_PAGE_LIMIT,
         "max_event_pages": max_event_pages,
         "event_status_filter": "open",
+        "market_mve_filter": "exclude",
+        "max_event_fallback_requests": max_event_fallback_requests,
+        "event_fallback_request_limit_reached": False,
         "single_event_fallback_requests": 0,
         "orderbook_requests": 0,
         "retry_count": 0,
@@ -1441,6 +1448,7 @@ def discover_kalshi_demo_ws_market(
                     limit=MARKET_DISCOVERY_PAGE_LIMIT,
                     cursor=cursor,
                     status="open",
+                    mve_filter="exclude",
                 ),
                 diagnostics,
             )
@@ -1571,7 +1579,24 @@ def discover_kalshi_demo_ws_market(
                 for ticker in requested_event_tickers
                 if ticker not in event_cache
             ]
+            diagnostics["missing_event_ticker_count"] = len(missing)
             for ticker in missing:
+                if (
+                    diagnostics["single_event_fallback_requests"]
+                    >= max_event_fallback_requests
+                ):
+                    diagnostics["event_fallback_request_limit_reached"] = True
+                    return _market_discovery_blocker(
+                        "DEMO_EVENT_DISCOVERY_FALLBACK_LIMIT",
+                        pages_fetched=pages_fetched,
+                        markets_seen=len(normalized_markets),
+                        rejection_counts={},
+                        cursor_remaining=False,
+                        diagnostics={
+                            **diagnostics,
+                            "pages_attempted": pages_attempted,
+                        },
+                    )
                 diagnostics["single_event_fallback_requests"] += 1
                 event, error = _discovery_request(
                     lambda ticker=ticker: active_client.get_event(ticker), diagnostics

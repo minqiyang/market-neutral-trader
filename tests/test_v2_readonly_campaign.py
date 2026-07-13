@@ -841,9 +841,11 @@ def test_market_discovery_exhausts_documented_open_event_pagination() -> None:
         _market_metadata(ticker="DEMO-B-MARKET", event_ticker="DEMO-B"),
     ]
     event_cursors: list[str | None] = []
+    market_mve_filters: list[str | None] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/markets"):
+            market_mve_filters.append(request.url.params.get("mve_filter"))
             return httpx.Response(200, json={"markets": markets, "cursor": ""})
         if request.url.path.endswith("/events"):
             cursor = request.url.params.get("cursor")
@@ -874,6 +876,7 @@ def test_market_discovery_exhausts_documented_open_event_pagination() -> None:
 
     assert result["blocker_code"] is None
     assert event_cursors == [None, "event-page-2"]
+    assert market_mve_filters == ["exclude"]
     assert result["diagnostics"]["event_page_requests"] == 2
     assert result["diagnostics"]["event_pages_completed"] == 2
     assert result["diagnostics"]["event_final_cursor_empty"] is True
@@ -911,6 +914,39 @@ def test_market_discovery_fails_closed_at_event_page_limit() -> None:
     assert result["diagnostics"]["event_pages_completed"] == 2
     assert result["diagnostics"]["event_final_cursor_empty"] is False
     assert result["diagnostics"]["event_pagination_complete"] is False
+
+
+def test_market_discovery_fails_closed_at_exact_event_fallback_limit() -> None:
+    markets = [
+        _market_metadata(ticker="DEMO-A-MARKET", event_ticker="DEMO-A"),
+        _market_metadata(ticker="DEMO-B-MARKET", event_ticker="DEMO-B"),
+    ]
+    exact_event_requests = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal exact_event_requests
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(200, json={"markets": markets, "cursor": ""})
+        if request.url.path.endswith("/events"):
+            return httpx.Response(200, json={"events": [], "cursor": ""})
+        if "/events/" in request.url.path:
+            exact_event_requests += 1
+            return httpx.Response(404, json={"code": "not_found"})
+        raise AssertionError(f"unexpected request: {request.url.path}")
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        max_event_fallback_requests=1,
+    )
+
+    assert result["blocker_code"] == "DEMO_EVENT_DISCOVERY_FALLBACK_LIMIT"
+    assert exact_event_requests == 1
+    assert result["diagnostics"]["single_event_fallback_requests"] == 1
+    assert result["diagnostics"]["event_fallback_request_limit_reached"] is True
+    assert result["diagnostics"]["coverage_complete"] is False
 
 
 def test_market_discovery_retries_429_with_a_bounded_attempt_count(

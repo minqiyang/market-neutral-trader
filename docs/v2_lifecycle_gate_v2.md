@@ -55,16 +55,18 @@ buffer. Smoke remains intentionally separate. None of these profiles implies
 seven-day evidence before the corresponding bounded run completes.
 
 Discovery fetches at most 100 market pages before event hydration, deduplicates
-markets and event tickers, then exhausts the documented `status=open` event
-cursor with at most 100 pages of 200 events. Only events referenced by the
-market set are cached. `coverage_complete=true` requires both final cursors to
-be empty. Reaching either page cap with a cursor remaining returns a typed
-incomplete-coverage blocker and cannot authorize a candidate. Missing event
-members may use a candidate-local exact-event fallback; an exact-event 404 or
-schema failure rejects only that candidate, while a global list failure or an
-exhausted rate limit fails the scan. Rate limits and transient server/transport
-failures receive at most three attempts. Complete results include pagination
-provenance, a versioned profile hash, primary and multi-label rejection totals,
+markets and event tickers, and excludes multivariate markets because the
+documented core event list excludes multivariate events. It then exhausts the
+documented `status=open` event cursor with at most 100 pages of 200 events. Only
+events referenced by the market set are cached. `coverage_complete=true`
+requires both final cursors to be empty. Reaching either page cap with a cursor
+remaining returns a typed incomplete-coverage blocker and cannot authorize a
+candidate. Missing event members may use at most 100 candidate-local exact-
+event requests; an exact-event 404 or schema failure rejects only that
+candidate, while the fallback cap, a global list failure, or an exhausted rate
+limit fails the scan. Rate limits and transient server/transport failures
+receive at most three attempts. Complete results include pagination provenance,
+a versioned profile hash, primary and multi-label rejection totals,
 distinct/duplicate counts, and up to 100 hashed near-miss summaries without raw
 market payloads.
 
