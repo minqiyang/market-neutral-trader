@@ -6,6 +6,13 @@ numbers while the repository is still in early research scaffolding.
 
 ## Unreleased
 
+- Bounded runtime market selection independently from complete discovery
+  auditing. Smoke and campaign launches now stop after the requested eligible
+  market count, cap logical orderbook probes at 100, and fail closed with an explicit
+  probe-limit blocker when no eligible market is found within that bound.
+  Cursor exhaustion and all-market lifecycle diagnostics remain complete, while
+  orderbook-scan and eligible-count completeness are reported separately. No
+  credential, production, or order-write behavior changed.
 - Added D2E-F3 run-scoped WebSocket request evidence and strict subscription
   identity. New runtime writes allocate unique positive command IDs per channel
   across reconnects, advance channel generations across connection epochs,

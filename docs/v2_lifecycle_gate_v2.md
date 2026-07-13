@@ -66,6 +66,20 @@ eligible market exists. Complete results include a versioned profile hash,
 primary and multi-label rejection totals, distinct/duplicate counts, and up to
 100 hashed near-miss summaries without raw market payloads.
 
+Runtime selection and complete eligibility auditing are separate bounds.
+Authenticated smoke/campaign launch paths still exhaust the market cursor and
+evaluate every market's lifecycle metadata, but stop orderbook probing once the
+requested eligible market count is reached. They issue at most 100 logical
+orderbook probes, each under the existing three-attempt request policy. If the
+cap is reached before an eligible market is found, selection fails closed as
+`DEMO_MARKET_DISCOVERY_ORDERBOOK_PROBE_LIMIT`; it never reports
+`DEMO_NO_ELIGIBLE_MARKET` from a partial orderbook scan. Diagnostics distinguish
+`coverage_complete` for cursor/lifecycle coverage from
+`orderbook_candidate_scan_complete` and `eligible_count_complete`; a successful
+early selection reports the observed eligible count as a lower bound. Direct
+discovery audits retain exhaustive orderbook evaluation when no runtime limit
+is supplied.
+
 Validation reports separate `DATA_INTEGRITY_PASS` from
 `CAMPAIGN_EVIDENCE_INVALID_MARKET_LIFECYCLE`; clean JSONL/hash/artifact
 integrity cannot turn a closed or resolved market into valid long-horizon
