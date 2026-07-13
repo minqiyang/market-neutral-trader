@@ -886,6 +886,14 @@ def test_market_discovery_exhausts_documented_open_event_pagination() -> None:
         result["diagnostics"]["discovery_protocol_version"]
         == "edmn.kalshi.discovery_protocol.v1"
     )
+    assert (
+        result["selection"]["market_discovery_protocol_version"]
+        == "edmn.kalshi.discovery_protocol.v1"
+    )
+    assert result["selection"]["market_discovery_event_pages_completed"] == 2
+    assert result["selection"]["market_discovery_event_pagination_complete"] is True
+    assert result["selection"]["market_discovery_event_fallback_requests"] == 0
+    assert result["selection"]["market_discovery_market_mve_filter"] == "exclude"
 
 
 def test_market_discovery_fails_closed_at_event_page_limit() -> None:
@@ -1486,6 +1494,14 @@ def test_kalshi_ws_runtime_bounds_market_selection_requests(
             "coverage_complete": True,
             "eligible_count": 0,
             "diagnostics": {
+                "discovery_protocol_version": "edmn.kalshi.discovery_protocol.v1",
+                "event_page_requests": 2,
+                "event_pages_completed": 2,
+                "event_pagination_complete": True,
+                "single_event_fallback_requests": 1,
+                "max_event_fallback_requests": 100,
+                "event_fallback_request_limit_reached": False,
+                "market_mve_filter": "exclude",
                 "orderbook_requests": 100,
                 "orderbook_candidate_count": 1000,
                 "orderbook_candidate_scan_complete": False,
@@ -1523,6 +1539,17 @@ def test_kalshi_ws_runtime_bounds_market_selection_requests(
     assert selection["market_discovery_eligible_count_is_lower_bound"] is True
     assert selection["market_discovery_eligible_market_limit"] == 1
     assert selection["market_discovery_max_orderbook_probes"] == 100
+    assert (
+        selection["market_discovery_protocol_version"]
+        == "edmn.kalshi.discovery_protocol.v1"
+    )
+    assert selection["market_discovery_event_page_requests"] == 2
+    assert selection["market_discovery_event_pages_completed"] == 2
+    assert selection["market_discovery_event_pagination_complete"] is True
+    assert selection["market_discovery_event_fallback_requests"] == 1
+    assert selection["market_discovery_max_event_fallback_requests"] == 100
+    assert selection["market_discovery_event_fallback_limit_reached"] is False
+    assert selection["market_discovery_market_mve_filter"] == "exclude"
     assert selection["market_discovery_orderbook_probe_limit_reached"] is True
 
 
