@@ -89,7 +89,7 @@ def test_get_event_uses_read_only_event_endpoint() -> None:
     assert "authorization" not in requests[0].headers
 
 
-def test_list_events_batches_tickers_on_read_only_endpoint() -> None:
+def test_list_events_uses_documented_read_only_pagination_filters() -> None:
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -108,14 +108,32 @@ def test_list_events_batches_tickers_on_read_only_endpoint() -> None:
     client = KalshiDemoMarketDataClient(
         http_client=httpx.Client(transport=httpx.MockTransport(handler))
     )
-    response = client.list_events(tickers=("DEMO-A", "DEMO-B"))
+    response = client.list_events(limit=100, cursor="next-page", status="open")
 
     assert len(response["events"]) == 2
     assert len(requests) == 1
     assert requests[0].method == "GET"
     assert requests[0].url.path == "/trade-api/v2/events"
-    assert requests[0].url.params["tickers"] == "DEMO-A,DEMO-B"
+    assert requests[0].url.params["limit"] == "100"
+    assert requests[0].url.params["cursor"] == "next-page"
+    assert requests[0].url.params["status"] == "open"
+    assert "tickers" not in requests[0].url.params
     assert "authorization" not in requests[0].headers
+
+
+@pytest.mark.parametrize("resource", ("markets", "events"))
+def test_paginated_list_response_requires_an_explicit_cursor(resource: str) -> None:
+    client = KalshiDemoMarketDataClient(
+        http_client=httpx.Client(
+            transport=_json_transport({resource: []})
+        )
+    )
+
+    with pytest.raises(KalshiResponseError, match="cursor"):
+        if resource == "markets":
+            client.list_markets()
+        else:
+            client.list_events()
 
 
 def test_get_market_orderbook_uses_read_only_orderbook_endpoint() -> None:

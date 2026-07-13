@@ -1,5 +1,16 @@
 # Engineering Log
 
+## Checkpoint G documented event pagination
+
+The official `GET /events` contract does not expose the ticker-batch filter
+previously used by discovery. Event enrichment now follows the documented
+`status=open`, `limit`, and cursor contract to exhaustion, with explicit page
+caps and pagination diagnostics. Only referenced event records are cached;
+missing members use an exact-event fallback. Missing list cursors and global
+event failures fail closed, while exact-event 404/schema failures remain local
+to that candidate. The selection profile and Demo-only safety boundary are
+unchanged.
+
 ## D2E-F2 coherence and pre-ACK parity
 
 The F2 correction moves duplicated routing-field resolution into one pure gate.
