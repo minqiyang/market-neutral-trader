@@ -56,6 +56,7 @@ MAX_MARKET_DISCOVERY_PAGES = 100
 EVENT_DISCOVERY_BATCH_SIZE = 50
 DISCOVERY_MAX_ATTEMPTS = 3
 DISCOVERY_NEAR_MISS_LIMIT = 100
+RUNTIME_MARKET_SELECTION_MAX_ORDERBOOK_PROBES = 100
 OCCURRENCE_CLOCK_SKEW_TOLERANCE_SECONDS = 60
 SELECTION_PROFILE_VERSION = "edmn.kalshi.selection_profile.v4"
 OPEN_MARKET_STATUSES = {"open", "trading"}
@@ -168,7 +169,9 @@ def _blocked_ws_selection_record(
     discovery: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     discovery = discovery or {}
-    return {
+    raw_diagnostics = discovery.get("diagnostics")
+    diagnostics = raw_diagnostics if isinstance(raw_diagnostics, Mapping) else {}
+    record = {
         "selection_profile": profile.value,
         "selection_safety_buffer_seconds": selection_safety_buffer_seconds(profile),
         "selection_gate_result": "reject",
@@ -180,6 +183,46 @@ def _blocked_ws_selection_record(
         "market_discovery_cursor_remaining": discovery.get("cursor_remaining"),
         "market_discovery_coverage_complete": discovery.get("coverage_complete"),
     }
+    optional_fields = {
+        "market_discovery_orderbook_requests": ("orderbook_requests", diagnostics),
+        "market_discovery_orderbook_candidate_count": (
+            "orderbook_candidate_count",
+            diagnostics,
+        ),
+        "market_discovery_orderbook_candidate_scan_complete": (
+            "orderbook_candidate_scan_complete",
+            diagnostics,
+        ),
+        "market_discovery_eligible_count": ("eligible_count", discovery),
+        "market_discovery_eligible_count_complete": (
+            "eligible_count_complete",
+            diagnostics,
+        ),
+        "market_discovery_eligible_count_is_lower_bound": (
+            "eligible_count_is_lower_bound",
+            diagnostics,
+        ),
+        "market_discovery_eligible_market_limit": (
+            "eligible_market_limit",
+            diagnostics,
+        ),
+        "market_discovery_max_orderbook_probes": (
+            "max_orderbook_probes",
+            diagnostics,
+        ),
+        "market_discovery_orderbook_probe_limit_reached": (
+            "orderbook_probe_limit_reached",
+            diagnostics,
+        ),
+    }
+    record.update(
+        {
+            output_key: source[source_key]
+            for output_key, (source_key, source) in optional_fields.items()
+            if source_key in source
+        }
+    )
+    return record
 
 
 def evaluate_market_selection(
@@ -749,6 +792,8 @@ def run_kalshi_ws_smoke(
         safety_buffer_seconds=selection_safety_buffer_seconds(profile),
         selected_at_utc=generated_at,
         selection_profile=profile,
+        eligible_market_limit=max_markets,
+        max_orderbook_probes=RUNTIME_MARKET_SELECTION_MAX_ORDERBOOK_PROBES,
     )
     market_metadata = discovery.get("market_metadata")
     market_selection = discovery.get("selection")
@@ -1058,6 +1103,8 @@ def run_kalshi_ws_campaign(
         safety_buffer_seconds=selection_safety_buffer_seconds(profile),
         selected_at_utc=generated_at,
         selection_profile=profile,
+        eligible_market_limit=max_markets,
+        max_orderbook_probes=RUNTIME_MARKET_SELECTION_MAX_ORDERBOOK_PROBES,
     )
     market_metadata = discovery.get("market_metadata")
     market_selection = discovery.get("selection")
@@ -1325,11 +1372,17 @@ def discover_kalshi_demo_ws_market(
     client: KalshiDemoMarketDataClient | None = None,
     max_pages: int = MAX_MARKET_DISCOVERY_PAGES,
     selection_profile: SelectionProfile | str | None = None,
+    eligible_market_limit: int | None = None,
+    max_orderbook_probes: int | None = None,
 ) -> dict[str, object]:
     """Find one lifecycle-eligible Demo market with bounded complete discovery."""
 
     if max_pages < 1:
         raise ValueError("max_pages must be at least 1")
+    if eligible_market_limit is not None and eligible_market_limit < 1:
+        raise ValueError("eligible_market_limit must be at least 1")
+    if max_orderbook_probes is not None and max_orderbook_probes < 1:
+        raise ValueError("max_orderbook_probes must be at least 1")
     active_client = client or KalshiDemoMarketDataClient()
     owns_client = client is None
     cursor: str | None = None
@@ -1543,10 +1596,24 @@ def discover_kalshi_demo_ws_market(
                     _event_metadata_fetched(metadata) and not _is_sports_market(metadata)
                     for metadata, _reasons in audit_rows
                 ),
+                "eligible_market_limit": eligible_market_limit,
+                "max_orderbook_probes": max_orderbook_probes,
+                "orderbook_candidate_count": len(lifecycle_candidates),
             }
         )
         eligible_candidates: list[tuple[dict[str, object], dict[str, object]]] = []
-        for candidate_metadata, _selection, reasons in lifecycle_candidates:
+        orderbook_candidate_scan_complete = True
+        orderbook_probe_limit_reached = False
+        for candidate_index, (candidate_metadata, _selection, reasons) in enumerate(
+            lifecycle_candidates
+        ):
+            if (
+                max_orderbook_probes is not None
+                and diagnostics["orderbook_requests"] >= max_orderbook_probes
+            ):
+                orderbook_candidate_scan_complete = False
+                orderbook_probe_limit_reached = True
+                break
             ticker = candidate_metadata.get("ticker") or candidate_metadata.get("market_ticker")
             if not isinstance(ticker, str) or not ticker:
                 reasons.append("MISSING_MARKET_METADATA")
@@ -1618,6 +1685,14 @@ def discover_kalshi_demo_ws_market(
                 reasons.extend(reason for reason in final_reasons if reason not in reasons)
                 continue
             eligible_candidates.append((selected_metadata, selected))
+            if (
+                eligible_market_limit is not None
+                and len(eligible_candidates) >= eligible_market_limit
+            ):
+                orderbook_candidate_scan_complete = (
+                    candidate_index + 1 == len(lifecycle_candidates)
+                )
+                break
 
         audit = _discovery_audit_summary(
             audit_rows,
@@ -1629,6 +1704,10 @@ def discover_kalshi_demo_ws_market(
             {
                 "coverage_complete": True,
                 "eligible_count": len(eligible_candidates),
+                "eligible_count_complete": orderbook_candidate_scan_complete,
+                "eligible_count_is_lower_bound": not orderbook_candidate_scan_complete,
+                "orderbook_candidate_scan_complete": orderbook_candidate_scan_complete,
+                "orderbook_probe_limit_reached": orderbook_probe_limit_reached,
                 "all_markets_multilabel_evaluated": len(audit_rows)
                 == len(normalized_markets),
                 "rejection_overlap_counts": audit["rejection_overlap_counts"],
@@ -1641,6 +1720,32 @@ def discover_kalshi_demo_ws_market(
         )
         if eligible_candidates:
             selected_metadata, selected = eligible_candidates[0]
+            selected = {
+                **selected,
+                "market_discovery_pages": pages_fetched,
+                "market_discovery_count": len(normalized_markets),
+                "market_discovery_cursor_remaining": False,
+                "market_discovery_coverage_complete": True,
+                "market_discovery_orderbook_requests": diagnostics[
+                    "orderbook_requests"
+                ],
+                "market_discovery_orderbook_candidate_count": diagnostics[
+                    "orderbook_candidate_count"
+                ],
+                "market_discovery_orderbook_candidate_scan_complete": diagnostics[
+                    "orderbook_candidate_scan_complete"
+                ],
+                "market_discovery_eligible_count": len(eligible_candidates),
+                "market_discovery_eligible_count_complete": diagnostics[
+                    "eligible_count_complete"
+                ],
+                "market_discovery_eligible_count_is_lower_bound": diagnostics[
+                    "eligible_count_is_lower_bound"
+                ],
+                "market_discovery_eligible_market_limit": eligible_market_limit,
+                "market_discovery_max_orderbook_probes": max_orderbook_probes,
+                "market_discovery_orderbook_probe_limit_reached": False,
+            }
             return {
                 "market_metadata": selected_metadata,
                 "selection": selected,
@@ -1666,9 +1771,14 @@ def discover_kalshi_demo_ws_market(
                 "diagnostics": diagnostics,
             }
 
-        blocker_code = (
-            "DEMO_NO_OPEN_MARKETS" if not normalized_markets else "DEMO_NO_ELIGIBLE_MARKET"
-        )
+        if orderbook_probe_limit_reached:
+            blocker_code = "DEMO_MARKET_DISCOVERY_ORDERBOOK_PROBE_LIMIT"
+        else:
+            blocker_code = (
+                "DEMO_NO_OPEN_MARKETS"
+                if not normalized_markets
+                else "DEMO_NO_ELIGIBLE_MARKET"
+            )
         return _market_discovery_blocker(
             blocker_code,
             pages_fetched=pages_fetched,

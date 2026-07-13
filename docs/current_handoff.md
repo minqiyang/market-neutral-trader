@@ -1,5 +1,28 @@
 # Current Handoff
 
+## Real5M runtime-selection bound
+
+The first post-D2E Real5M attempt exposed a deterministic pre-runtime defect:
+`max_markets=1` was validated but never passed into market discovery, which
+continued probing every lifecycle candidate's orderbook before selecting the
+first eligible market. In the current Demo universe, the nominal 300-second run
+remained in discovery for more than 44 minutes and never started the WebSocket
+runtime.
+
+Runtime smoke and campaign paths now pass the requested eligible-market limit
+and a hard 100-orderbook-request cap. Discovery still exhausts the market cursor
+and evaluates every lifecycle record, but stops probing after enough eligible
+markets are found. A cap hit with no candidate fails closed under
+`DEMO_MARKET_DISCOVERY_ORDERBOOK_PROBE_LIMIT`. Diagnostics separately report
+cursor/lifecycle coverage, orderbook-candidate scan completeness, and whether
+the eligible count is complete or only a lower bound. Direct discovery audits
+remain exhaustive when no runtime limit is supplied.
+
+The fix is Demo read-only and does not change credentials, request retries,
+selection safety, the public live gate, production endpoints, or order paths.
+The next gate is independent review, merge, exact VPS deployment, and
+network-free revalidation before the second and final authorized Real5M.
+
 ## D2E-F3 request and generation integrity
 
 D2E-F3 replaces connection-local command ID reuse with a run-level monotonic
@@ -1734,20 +1757,21 @@ renamed, or noisy, use the equivalent checklist instead of debugging the skill.
 
 ## Next recommended action
 
-Complete D2E-F3 review, merge, merged-main verification, and the Phase 0B
-software-only VPS refresh before any network run. The active autonomous audit
-authorization then permits one bounded post-fix Real5M with no automatic retry;
-a second run is conditional on a repaired and re-reviewed deterministic defect.
+Complete independent review, merge, merged-main verification, exact VPS
+deployment, and network-free validation of the Real5M runtime-selection bound.
+Only then may the active autonomous audit authorization use its second and final
+Real5M. Automatic retry remains forbidden.
 
 ## Exact next prompt suggestion
 
 Continue the autonomous audit controller only after confirming the reviewed
-D2E-F3 public commit and Phase 0B software-only VPS acceptance evidence. Keep
-Demo, read-only, raw-private, disabled-live-gate, and zero-submit boundaries.
+runtime-selection bound and exact VPS deployment. Keep Demo, read-only,
+raw-private, disabled-live-gate, zero-submit, one-market, and 100-orderbook-probe
+boundaries.
 
 ## Last updated timestamp
 
-2026-07-12 13:45:00 -07:00
+2026-07-12 17:37:11 -07:00
 
 ## Round 8G lifecycle gate v2 checkpoint
 

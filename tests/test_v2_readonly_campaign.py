@@ -25,6 +25,7 @@ from edmn_trader.scripts.v2_readonly_campaign import (
     plan_campaign,
     plan_kalshi_ws_campaign,
     run_kalshi_rest_smoke,
+    run_kalshi_ws_campaign,
     run_kalshi_ws_smoke,
     run_smoke,
     selection_profile_for_duration,
@@ -538,6 +539,111 @@ def test_market_discovery_paginates_and_selects_active_market() -> None:
     assert [request.url.params.get("cursor") for request in market_requests] == [None, "page-2"]
     assert all(request.method == "GET" for request in requests)
     assert all(request.url.host == "external-api.demo.kalshi.co" for request in requests)
+
+
+def test_market_discovery_stops_after_requested_eligible_market_count() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(
+                200,
+                json={
+                    "markets": [
+                        _market_metadata(ticker="FIRST"),
+                        _market_metadata(ticker="SECOND"),
+                        _market_metadata(ticker="THIRD"),
+                    ],
+                    "cursor": "",
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "orderbook_fp": {
+                    "yes_dollars": [["0.4000", "2.00"]],
+                    "no_dollars": [],
+                }
+            },
+        )
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=300,
+        safety_buffer_seconds=SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        eligible_market_limit=1,
+        max_orderbook_probes=5,
+    )
+
+    orderbook_requests = [
+        request for request in requests if request.url.path.endswith("/orderbook")
+    ]
+    assert result["blocker_code"] is None
+    assert result["market_metadata"]["ticker"] == "FIRST"
+    assert result["eligible_count"] == 1
+    assert result["coverage_complete"] is True
+    assert result["diagnostics"]["orderbook_requests"] == 1
+    assert result["diagnostics"]["orderbook_candidate_count"] == 3
+    assert result["diagnostics"]["orderbook_candidate_scan_complete"] is False
+    assert result["diagnostics"]["eligible_count_complete"] is False
+    assert result["diagnostics"]["eligible_count_is_lower_bound"] is True
+    assert result["selection"]["market_discovery_orderbook_requests"] == 1
+    assert result["selection"]["market_discovery_orderbook_candidate_count"] == 3
+    assert (
+        result["selection"]["market_discovery_orderbook_candidate_scan_complete"]
+        is False
+    )
+    assert result["selection"]["market_discovery_eligible_count"] == 1
+    assert result["selection"]["market_discovery_eligible_count_complete"] is False
+    assert result["selection"]["market_discovery_eligible_count_is_lower_bound"] is True
+    assert result["selection"]["market_discovery_eligible_market_limit"] == 1
+    assert result["selection"]["market_discovery_max_orderbook_probes"] == 5
+    assert len(orderbook_requests) == 1
+
+
+def test_market_discovery_fails_closed_at_orderbook_probe_limit() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(
+                200,
+                json={
+                    "markets": [
+                        _market_metadata(ticker="FIRST"),
+                        _market_metadata(ticker="SECOND"),
+                        _market_metadata(ticker="THIRD"),
+                    ],
+                    "cursor": "",
+                },
+            )
+        return httpx.Response(
+            200,
+            json={"orderbook_fp": {"yes_dollars": [], "no_dollars": []}},
+        )
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=300,
+        safety_buffer_seconds=SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        eligible_market_limit=1,
+        max_orderbook_probes=2,
+    )
+
+    orderbook_requests = [
+        request for request in requests if request.url.path.endswith("/orderbook")
+    ]
+    assert result["blocker_code"] == "DEMO_MARKET_DISCOVERY_ORDERBOOK_PROBE_LIMIT"
+    assert result["coverage_complete"] is True
+    assert result["eligible_count"] == 0
+    assert result["diagnostics"]["orderbook_requests"] == 2
+    assert result["diagnostics"]["orderbook_candidate_scan_complete"] is False
+    assert result["diagnostics"]["orderbook_probe_limit_reached"] is True
+    assert len(orderbook_requests) == 2
 
 
 def test_market_discovery_does_not_call_page_cap_complete_with_cursor_remaining() -> None:
@@ -1274,6 +1380,74 @@ def test_kalshi_ws_smoke_truthfully_blocks_without_credentials(
         }
         path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
     assert validate_campaign(input_dir=tmp_path)["status"] == "fail"
+
+
+@pytest.mark.parametrize(
+    "runner",
+    (run_kalshi_ws_smoke, run_kalshi_ws_campaign),
+    ids=("smoke", "campaign"),
+)
+def test_kalshi_ws_runtime_bounds_market_selection_requests(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    runner: Callable[..., dict[str, object]],
+) -> None:
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "edmn_trader.scripts.v2_readonly_campaign.load_kalshi_ws_auth_config_from_env",
+        lambda: object(),
+    )
+
+    def fake_discovery(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {
+            "blocker_code": "DEMO_MARKET_DISCOVERY_ORDERBOOK_PROBE_LIMIT",
+            "pages_fetched": 1,
+            "markets_seen": 1,
+            "rejection_counts": {},
+            "cursor_remaining": False,
+            "coverage_complete": True,
+            "eligible_count": 0,
+            "diagnostics": {
+                "orderbook_requests": 100,
+                "orderbook_candidate_count": 1000,
+                "orderbook_candidate_scan_complete": False,
+                "eligible_count_complete": False,
+                "eligible_count_is_lower_bound": True,
+                "eligible_market_limit": 1,
+                "max_orderbook_probes": 100,
+                "orderbook_probe_limit_reached": True,
+            },
+        }
+
+    monkeypatch.setattr(
+        "edmn_trader.scripts.v2_readonly_campaign.discover_kalshi_demo_ws_market",
+        fake_discovery,
+    )
+
+    result = runner(
+        output_dir=tmp_path,
+        campaign_id="bounded-selection",
+        duration_seconds=300,
+        max_markets=1,
+        now=NOW,
+    )
+
+    assert result["blocker_code"] == "DEMO_MARKET_DISCOVERY_ORDERBOOK_PROBE_LIMIT"
+    assert captured["eligible_market_limit"] == 1
+    assert captured["max_orderbook_probes"] == 100
+    summary = json.loads((tmp_path / "campaign_summary.json").read_text())
+    selection = summary["selected_market_selection"]
+    assert selection["market_discovery_orderbook_requests"] == 100
+    assert selection["market_discovery_orderbook_candidate_count"] == 1000
+    assert selection["market_discovery_orderbook_candidate_scan_complete"] is False
+    assert selection["market_discovery_eligible_count"] == 0
+    assert selection["market_discovery_eligible_count_complete"] is False
+    assert selection["market_discovery_eligible_count_is_lower_bound"] is True
+    assert selection["market_discovery_eligible_market_limit"] == 1
+    assert selection["market_discovery_max_orderbook_probes"] == 100
+    assert selection["market_discovery_orderbook_probe_limit_reached"] is True
 
 
 def test_validator_classifies_websocket_smoke_only_when_ws_events_exist(

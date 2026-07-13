@@ -1702,3 +1702,23 @@ tolerance-bound, future-safe, future-short, equality, missing, malformed,
 early-close, profile separation, manifest evidence, and existing safety paths.
 The public live gate remains disabled and no production or order-write behavior
 was introduced.
+
+## Real5M runtime-selection boundedness correction
+
+The first audit-owned post-D2E Real5M launched from reviewed main with a
+300-second duration and `max_markets=1`, but remained in pre-runtime discovery
+for 2,676 wall seconds without creating a campaign artifact. The smoke caller
+validated `max_markets` and then discarded it. Complete discovery built every
+lifecycle candidate and probed every candidate orderbook before choosing the
+first eligible result. That made the runtime start bound scale with the full
+Demo universe rather than the requested market count.
+
+The correction preserves cursor exhaustion and all-market lifecycle auditing,
+then applies two explicit runtime-selection limits: stop after the requested
+eligible count and fail closed after 100 orderbook requests. A successful early
+selection records that the eligible count is a lower bound; a probe-cap failure
+uses a distinct blocker instead of claiming no eligible market. Direct
+discovery audits remain exhaustive by default. Synthetic tests cover early
+selection, cap exhaustion, and smoke-call parameter propagation. No endpoint,
+credential, retry, live-gate, production, account, or order-write behavior
+changed.
