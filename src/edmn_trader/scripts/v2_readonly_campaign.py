@@ -57,6 +57,18 @@ EVENT_DISCOVERY_PAGE_LIMIT = 200
 MAX_EVENT_DISCOVERY_PAGES = 100
 MAX_EVENT_FALLBACK_REQUESTS = 100
 DISCOVERY_PROTOCOL_VERSION = "edmn.kalshi.discovery_protocol.v1"
+DISCOVERY_SELECTION_DIAGNOSTIC_FIELDS = {
+    "market_discovery_protocol_version": "discovery_protocol_version",
+    "market_discovery_event_page_requests": "event_page_requests",
+    "market_discovery_event_pages_completed": "event_pages_completed",
+    "market_discovery_event_pagination_complete": "event_pagination_complete",
+    "market_discovery_event_fallback_requests": "single_event_fallback_requests",
+    "market_discovery_max_event_fallback_requests": "max_event_fallback_requests",
+    "market_discovery_event_fallback_limit_reached": (
+        "event_fallback_request_limit_reached"
+    ),
+    "market_discovery_market_mve_filter": "market_mve_filter",
+}
 DISCOVERY_MAX_ATTEMPTS = 3
 DISCOVERY_NEAR_MISS_LIMIT = 100
 RUNTIME_MARKET_SELECTION_MAX_ORDERBOOK_PROBES = 100
@@ -187,38 +199,6 @@ def _blocked_ws_selection_record(
         "market_discovery_coverage_complete": discovery.get("coverage_complete"),
     }
     optional_fields = {
-        "market_discovery_protocol_version": (
-            "discovery_protocol_version",
-            diagnostics,
-        ),
-        "market_discovery_event_page_requests": (
-            "event_page_requests",
-            diagnostics,
-        ),
-        "market_discovery_event_pages_completed": (
-            "event_pages_completed",
-            diagnostics,
-        ),
-        "market_discovery_event_pagination_complete": (
-            "event_pagination_complete",
-            diagnostics,
-        ),
-        "market_discovery_event_fallback_requests": (
-            "single_event_fallback_requests",
-            diagnostics,
-        ),
-        "market_discovery_max_event_fallback_requests": (
-            "max_event_fallback_requests",
-            diagnostics,
-        ),
-        "market_discovery_event_fallback_limit_reached": (
-            "event_fallback_request_limit_reached",
-            diagnostics,
-        ),
-        "market_discovery_market_mve_filter": (
-            "market_mve_filter",
-            diagnostics,
-        ),
         "market_discovery_orderbook_requests": ("orderbook_requests", diagnostics),
         "market_discovery_orderbook_candidate_count": (
             "orderbook_candidate_count",
@@ -257,7 +237,18 @@ def _blocked_ws_selection_record(
             if source_key in source
         }
     )
+    record.update(_discovery_selection_diagnostics(diagnostics))
     return record
+
+
+def _discovery_selection_diagnostics(
+    diagnostics: Mapping[str, object],
+) -> dict[str, object]:
+    return {
+        output_key: diagnostics[source_key]
+        for output_key, source_key in DISCOVERY_SELECTION_DIAGNOSTIC_FIELDS.items()
+        if source_key in diagnostics
+    }
 
 
 def evaluate_market_selection(
@@ -1863,30 +1854,7 @@ def discover_kalshi_demo_ws_market(
                 "market_discovery_eligible_market_limit": eligible_market_limit,
                 "market_discovery_max_orderbook_probes": max_orderbook_probes,
                 "market_discovery_orderbook_probe_limit_reached": False,
-                "market_discovery_protocol_version": diagnostics[
-                    "discovery_protocol_version"
-                ],
-                "market_discovery_event_page_requests": diagnostics[
-                    "event_page_requests"
-                ],
-                "market_discovery_event_pages_completed": diagnostics[
-                    "event_pages_completed"
-                ],
-                "market_discovery_event_pagination_complete": diagnostics[
-                    "event_pagination_complete"
-                ],
-                "market_discovery_event_fallback_requests": diagnostics[
-                    "single_event_fallback_requests"
-                ],
-                "market_discovery_max_event_fallback_requests": diagnostics[
-                    "max_event_fallback_requests"
-                ],
-                "market_discovery_event_fallback_limit_reached": diagnostics[
-                    "event_fallback_request_limit_reached"
-                ],
-                "market_discovery_market_mve_filter": diagnostics[
-                    "market_mve_filter"
-                ],
+                **_discovery_selection_diagnostics(diagnostics),
             }
             return {
                 "market_metadata": selected_metadata,
