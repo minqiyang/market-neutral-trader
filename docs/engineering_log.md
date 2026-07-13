@@ -7,7 +7,7 @@ previously used by discovery. Event enrichment now follows the documented
 `status=open`, `limit`, and cursor contract to exhaustion, with explicit page
 caps and pagination diagnostics. Multivariate markets are excluded to match the
 documented core event-list universe. Only referenced event records are cached;
-missing members use an exact-event fallback capped at 100 requests. Missing
+missing members use an exact-event fallback capped at 1,000 requests. Missing
 list cursors, fallback exhaustion, and global event failures fail closed, while
 exact-event 404/schema failures remain local to that candidate. The selection
 profile and Demo-only safety boundary are unchanged.

@@ -55,8 +55,8 @@ MARKET_DISCOVERY_PAGE_LIMIT = 1_000
 MAX_MARKET_DISCOVERY_PAGES = 100
 EVENT_DISCOVERY_PAGE_LIMIT = 200
 MAX_EVENT_DISCOVERY_PAGES = 100
-MAX_EVENT_FALLBACK_REQUESTS = 100
-DISCOVERY_PROTOCOL_VERSION = "edmn.kalshi.discovery_protocol.v1"
+MAX_EVENT_FALLBACK_REQUESTS = 1_000
+DISCOVERY_PROTOCOL_VERSION = "edmn.kalshi.discovery_protocol.v2"
 DISCOVERY_SELECTION_DIAGNOSTIC_FIELDS = {
     "market_discovery_protocol_version": "discovery_protocol_version",
     "market_discovery_event_page_requests": "event_page_requests",

@@ -61,7 +61,7 @@ documented `status=open` event cursor with at most 100 pages of 200 events. Only
 events referenced by the market set are cached. `coverage_complete=true`
 requires both final cursors to be empty. Reaching either page cap with a cursor
 remaining returns a typed incomplete-coverage blocker and cannot authorize a
-candidate. Missing event members may use at most 100 candidate-local exact-
+candidate. Missing event members may use at most 1,000 candidate-local exact-
 event requests; an exact-event 404 or schema failure rejects only that
 candidate, while the fallback cap, a global list failure, or an exhausted rate
 limit fails the scan. Rate limits and transient server/transport failures

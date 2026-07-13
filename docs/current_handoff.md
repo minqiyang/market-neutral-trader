@@ -11,7 +11,7 @@ uses the exact event endpoint only for missing members. Multivariate markets
 are explicitly excluded because the documented core event list excludes them.
 Both market and event list responses must carry explicit cursor strings, so a
 missing cursor cannot be mistaken for complete coverage. Event page-cap,
-100-request exact-event fallback cap, and global request failures block the
+1,000-request exact-event fallback cap, and global request failures block the
 scan; exact-event 404/schema failures remain candidate-local.
 
 This correction is Demo read-only and does not change lifecycle policy v4,

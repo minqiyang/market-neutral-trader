@@ -884,11 +884,11 @@ def test_market_discovery_exhausts_documented_open_event_pagination() -> None:
     assert result["diagnostics"]["single_event_fallback_requests"] == 0
     assert (
         result["diagnostics"]["discovery_protocol_version"]
-        == "edmn.kalshi.discovery_protocol.v1"
+        == "edmn.kalshi.discovery_protocol.v2"
     )
     assert (
         result["selection"]["market_discovery_protocol_version"]
-        == "edmn.kalshi.discovery_protocol.v1"
+        == "edmn.kalshi.discovery_protocol.v2"
     )
     assert result["selection"]["market_discovery_event_pages_completed"] == 2
     assert result["selection"]["market_discovery_event_pagination_complete"] is True
@@ -955,6 +955,55 @@ def test_market_discovery_fails_closed_at_exact_event_fallback_limit() -> None:
     assert result["diagnostics"]["single_event_fallback_requests"] == 1
     assert result["diagnostics"]["event_fallback_request_limit_reached"] is True
     assert result["diagnostics"]["coverage_complete"] is False
+
+
+def test_default_event_fallback_bound_covers_a_realistic_metadata_gap() -> None:
+    markets = [
+        _market_metadata(
+            ticker=f"DEMO-{index}-MARKET",
+            event_ticker=f"DEMO-{index}",
+        )
+        for index in range(165)
+    ]
+    exact_event_requests = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal exact_event_requests
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(200, json={"markets": markets, "cursor": ""})
+        if request.url.path.endswith("/events"):
+            return httpx.Response(200, json={"events": [], "cursor": ""})
+        if "/events/" in request.url.path:
+            exact_event_requests += 1
+            return httpx.Response(
+                200,
+                json={
+                    "event": {
+                        "event_ticker": request.url.path.rsplit("/", 1)[-1],
+                        "category": "Finance",
+                        "title": "Long-horizon finance event",
+                    }
+                },
+            )
+        return httpx.Response(
+            200,
+            json={"orderbook_fp": {"yes_dollars": [["0.4000", "2.00"]], "no_dollars": []}},
+        )
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        eligible_market_limit=1,
+        max_orderbook_probes=1,
+    )
+
+    assert result["blocker_code"] is None
+    assert exact_event_requests == 165
+    assert result["diagnostics"]["single_event_fallback_requests"] == 165
+    assert result["diagnostics"]["max_event_fallback_requests"] == 1_000
+    assert result["diagnostics"]["event_fallback_request_limit_reached"] is False
 
 
 def test_market_discovery_retries_429_with_a_bounded_attempt_count(
@@ -1494,7 +1543,7 @@ def test_kalshi_ws_runtime_bounds_market_selection_requests(
             "coverage_complete": True,
             "eligible_count": 0,
             "diagnostics": {
-                "discovery_protocol_version": "edmn.kalshi.discovery_protocol.v1",
+                "discovery_protocol_version": "edmn.kalshi.discovery_protocol.v2",
                 "event_page_requests": 2,
                 "event_pages_completed": 2,
                 "event_pagination_complete": True,
@@ -1541,7 +1590,7 @@ def test_kalshi_ws_runtime_bounds_market_selection_requests(
     assert selection["market_discovery_max_orderbook_probes"] == 100
     assert (
         selection["market_discovery_protocol_version"]
-        == "edmn.kalshi.discovery_protocol.v1"
+        == "edmn.kalshi.discovery_protocol.v2"
     )
     assert selection["market_discovery_event_page_requests"] == 2
     assert selection["market_discovery_event_pages_completed"] == 2
