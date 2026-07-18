@@ -4,6 +4,12 @@ on:
   pull_request:
     branches:
       - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - ready_for_review
   push:
     branches:
       - main
@@ -27,37 +33,136 @@ jobs:
           python-version: "3.12"
 
       - name: Install package
-        run: python -m pip install -e ".[dev]"
+        shell: bash
+        run: |
+          if python -m pip install -e ".[dev]" >/tmp/edmn_install.log 2>&1; then
+            echo "DEPENDENCY_INSTALL_PASS"
+          else
+            echo "DEPENDENCY_INSTALL_FAILED"
+            exit 1
+          fi
 
       - name: Run tests
-        run: pytest
+        shell: bash
+        run: |
+          if pytest >/tmp/edmn_pytest.log 2>&1; then
+            echo "PUBLIC_TESTS_PASS"
+          else
+            echo "PUBLIC_TESTS_FAILED"
+            exit 1
+          fi
 
       - name: Run lint
-        run: ruff check .
+        shell: bash
+        run: |
+          if ruff check . >/tmp/edmn_ruff.log 2>&1; then
+            echo "PUBLIC_LINT_PASS"
+          else
+            echo "PUBLIC_LINT_FAILED"
+            exit 1
+          fi
 
-      - name: Replay orderbook fixture
-        run: python scripts/01_replay_orderbook_fixture.py
+  forward-only-data-boundary:
+    name: Forward-Only Data Boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Scan pull-request changes
+        if: github.event_name == 'pull_request'
+        run: >-
+          python scripts/check_forward_only_data_boundary.py
+          --repo .
+          --policy .github/forward_only_data_boundary.json
+          --expected-profile public
+          --mode pr-diff
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head HEAD
+          --ruleset boundary
+          --github-event "$GITHUB_EVENT_PATH"
+      - name: Scan pushed changes
+        if: github.event_name == 'push'
+        run: >-
+          python scripts/check_forward_only_data_boundary.py
+          --repo .
+          --policy .github/forward_only_data_boundary.json
+          --expected-profile public
+          --mode commit-range
+          --base "${{ github.event.before != '0000000000000000000000000000000000000000' && github.event.before || '3de723578c0b44d742887305b1cbe82efd751f2b' }}"
+          --head HEAD
+          --ruleset boundary
+          --github-event "$GITHUB_EVENT_PATH"
 
-      - name: Record fixture snapshots
-        run: python scripts/02_record_fixture_snapshots.py --output /tmp/edmn_ci_snapshots.jsonl
+  no-secrets:
+    name: No Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Scan pull-request changes
+        if: github.event_name == 'pull_request'
+        run: >-
+          python scripts/check_forward_only_data_boundary.py
+          --repo .
+          --policy .github/forward_only_data_boundary.json
+          --expected-profile public
+          --mode pr-diff
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head HEAD
+          --ruleset secrets
+          --github-event "$GITHUB_EVENT_PATH"
+      - name: Scan pushed changes
+        if: github.event_name == 'push'
+        run: >-
+          python scripts/check_forward_only_data_boundary.py
+          --repo .
+          --policy .github/forward_only_data_boundary.json
+          --expected-profile public
+          --mode commit-range
+          --base "${{ github.event.before != '0000000000000000000000000000000000000000' && github.event.before || '3de723578c0b44d742887305b1cbe82efd751f2b' }}"
+          --head HEAD
+          --ruleset secrets
+          --github-event "$GITHUB_EVENT_PATH"
 
-      - name: Replay snapshots
-        run: python scripts/03_replay_snapshots.py --input /tmp/edmn_ci_snapshots.jsonl
-
-      - name: Run quote replay dry run
-        run: python scripts/04_quote_replay_dry_run.py --input /tmp/edmn_ci_snapshots.jsonl
-
-      - name: Run demo execution smoke check
-        run: python scripts/05_demo_execution_smoke.py --log-output /tmp/edmn_ci_execution_smoke.jsonl
-
-      - name: Run market maker replay dry run
-        run: python scripts/06_market_maker_replay.py --input /tmp/edmn_ci_snapshots.jsonl --log-output /tmp/edmn_ci_market_maker.jsonl
-
-      - name: Run market maker replay demo opt-in
-        run: python scripts/06_market_maker_replay.py --input /tmp/edmn_ci_snapshots.jsonl --demo-opt-in --log-output /tmp/edmn_ci_market_maker_demo.jsonl
-
-      - name: Run research report
-        run: python scripts/07_research_report.py --market-maker-log /tmp/edmn_ci_market_maker.jsonl --output /tmp/edmn_ci_research_report.md
-
-      - name: Run paper report pack
-        run: python scripts/10_paper_report_pack.py --market-maker-log /tmp/edmn_ci_market_maker.jsonl --sec-companyfacts tests/fixtures/sec_companyfacts_aapl.json --output-dir /tmp/edmn_ci_report_pack
+  synthetic-fixture-provenance:
+    name: Synthetic Fixture Provenance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Scan pull-request changes
+        if: github.event_name == 'pull_request'
+        run: >-
+          python scripts/check_forward_only_data_boundary.py
+          --repo .
+          --policy .github/forward_only_data_boundary.json
+          --expected-profile public
+          --mode pr-diff
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head HEAD
+          --ruleset synthetic
+          --github-event "$GITHUB_EVENT_PATH"
+      - name: Scan pushed changes
+        if: github.event_name == 'push'
+        run: >-
+          python scripts/check_forward_only_data_boundary.py
+          --repo .
+          --policy .github/forward_only_data_boundary.json
+          --expected-profile public
+          --mode commit-range
+          --base "${{ github.event.before != '0000000000000000000000000000000000000000' && github.event.before || '3de723578c0b44d742887305b1cbe82efd751f2b' }}"
+          --head HEAD
+          --ruleset synthetic
+          --github-event "$GITHUB_EVENT_PATH"

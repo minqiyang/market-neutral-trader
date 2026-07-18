@@ -9,6 +9,8 @@ execution-safety work. It does not authorize live trading.
 
 - No production trading by default.
 - No credentials, tokens, private keys, API keys, or wallet keys in the repo.
+- No new or modified real venue-derived data in any Git or GitHub surface;
+  detailed evidence remains owner-local under the forward-only boundary.
 - No production or private-live order placement in the public repository.
 - No manipulative trading behavior, including spoofing, wash trading,
   self-trading, quote stuffing, or misleading liquidity.

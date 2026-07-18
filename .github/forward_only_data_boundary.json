@@ -1,0 +1,95 @@
+{
+  "policy_id": "edmn.market_data_boundary.v1",
+  "policy_revision": 3,
+  "github_allowed": [
+    "source_code",
+    "declared_synthetic_fixtures",
+    "generic_governance",
+    "software_version_provenance",
+    "boolean_safety_results"
+  ],
+  "github_forbidden": [
+    "raw_venue_data",
+    "real_identifiers_counts_timestamps_or_hashes",
+    "real_manifests_books_replay_or_reconstructive_artifacts",
+    "credentials_account_order_wallet_position_or_fill_data"
+  ],
+  "forward_only_git": {
+    "profile": "public",
+    "baseline_sha": "3de723578c0b44d742887305b1cbe82efd751f2b",
+    "frozen_path_globs": [
+      "tests/fixtures/**",
+      "CHANGELOG.md",
+      "docs/current_handoff.md",
+      "docs/engineering_log.md"
+    ],
+    "sensitive_path_globs": [
+      "tests/fixtures/**",
+      "CHANGELOG.md",
+      "docs/current_handoff.md",
+      "docs/engineering_log.md",
+      "**/private_data/**",
+      "**/real_data/**",
+      "**/detailed_reports/**",
+      "**/campaign_manifests/**",
+      "**/validation_reports/**",
+      "**/monitor_snapshots/**",
+      "**/run_metadata/**",
+      "**/supervisor_evidence/**",
+      "**/normalized_books/**",
+      "**/replay/**",
+      "**/*.jsonl",
+      "**/*.parquet",
+      "**/*.tar.zst"
+    ],
+    "forbidden_path_globs": [
+      "tests/fixtures/**",
+      "**/private_data/**",
+      "**/real_data/**",
+      "**/detailed_reports/**",
+      "**/campaign_manifests/**",
+      "**/validation_reports/**",
+      "**/monitor_snapshots/**",
+      "**/run_metadata/**",
+      "**/supervisor_evidence/**",
+      "**/normalized_books/**",
+      "**/replay/**",
+      "**/*.jsonl",
+      "**/*.parquet",
+      "**/*.tar.zst"
+    ],
+    "synthetic_fixture_globs": [
+      "tests/synthetic_fixtures/**"
+    ],
+    "governance_path_globs": [
+      ".github/forward_only_data_boundary.json"
+    ],
+    "git_safe_receipt_globs": [
+      "git_safe_receipts/**"
+    ],
+    "software_provenance_path_globs": [
+      "*.lock",
+      "requirements*.txt",
+      "*.sum"
+    ],
+    "allowed_path_globs": [
+      "*.md",
+      "*.rst",
+      "*.txt",
+      "*.py",
+      "*.pyi",
+      "*.sh",
+      "*.toml",
+      "*.cfg",
+      "*.ini",
+      "*.yaml",
+      "*.yml",
+      "*.json",
+      "*.svg",
+      "*.lock",
+      ".gitignore",
+      ".github/CODEOWNERS",
+      "LICENSE"
+    ]
+  }
+}

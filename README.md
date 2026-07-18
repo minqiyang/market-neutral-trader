@@ -61,7 +61,8 @@ system remains a separately reviewed private layer behind the evidence gate.
 
 ![EDMN Trader public and private safety boundary](docs/assets/safety-boundary.svg)
 
-See [Risk Policy](docs/RISK_POLICY.md) and
+See [Risk Policy](docs/RISK_POLICY.md),
+[Real-Data Boundary](docs/real_data_boundary.md), and
 [Private Live Gate](docs/private_live_execution_gate.md).
 
 ## Project Records

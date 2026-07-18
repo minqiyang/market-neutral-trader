@@ -93,6 +93,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `docs/RISK_POLICY.md`: non-negotiable safety and execution constraints.
 - `docs/private_live_execution_gate.md`: Stage 52 disabled private live gate
   design and unmet private-live prerequisites.
+- `docs/real_data_boundary.md`: public forward-only Git allowlist, legacy
+  freeze, Git-safe receipt, and contributor/automation rules.
 - `docs/RESUME_NARRATIVE.md`: portfolio framing and concise project story.
 - `docs/handoff_archive/README.md`: process for archiving old handoffs.
 
@@ -316,6 +318,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   reconciliation state.
 - `scripts/51_long_term_validation.py`: builds offline rolling 7/30/90-day
   validation reports from local paper/demo research JSONL artifacts.
+- `scripts/check_forward_only_data_boundary.py`: scans staged, commit-range,
+  and PR diffs plus commit/PR text under the post-cutover Git allowlist without
+  echoing matched content.
 - `scripts/v2_readonly_campaign.py`: root wrapper for V2 read-only campaign
   plan/smoke/validate commands. Do not use it to launch real campaigns without
   the explicit owner-run boundary.
@@ -342,6 +347,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 
 ## Tests and fixtures
 
+- `tests/test_forward_only_data_boundary.py`: synthetic coverage for legacy
+  freeze, data categories, receipt shape, output redaction, provenance, GitHub
+  text surfaces, and all supported diff modes.
 - `tests/test_core_models.py`: execution-mode and core safety checks.
 - `tests/test_kalshi_client.py`: mocked HTTP tests for the guarded read-only
   Kalshi Demo REST client.
