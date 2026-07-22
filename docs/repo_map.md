@@ -244,9 +244,14 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/scripts/daily_validation_report.py`: importable Stage 48
   daily validation report CLI entry point.
 - `src/edmn_trader/scripts/v2_readonly_campaign.py`: V2 read-only campaign
-  planning, paginated Demo market discovery, smoke, validation, manifest,
-  lifecycle gate, and evidence classification helper. Read before any recorder
-  campaign gate work.
+  planning, paginated and optionally activity-aware Demo market discovery,
+  pinned no-substitution market/event revalidation, shared request budgeting,
+  smoke, validation, manifest, lifecycle gate, and evidence classification
+  helper. Read before any recorder campaign gate work.
+- `src/edmn_trader/scripts/phase0f_activity_measurement.py`: strict composed
+  Phase 0F Demo read-only controller for activity-aware discovery, at most two
+  pinned probes, one measurement, closed-artifact assessment, private evidence,
+  sanitized status, and replay-semantics gating.
 - `src/edmn_trader/scripts/kalshi_demo_connector.py`: importable Stage 49
   guarded Kalshi Demo connector preview CLI entry point.
 - `src/edmn_trader/scripts/kalshi_demo_reconciliation.py`: importable Stage 50
@@ -324,6 +329,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `scripts/v2_readonly_campaign.py`: root wrapper for V2 read-only campaign
   plan/smoke/validate commands. Do not use it to launch real campaigns without
   the explicit owner-run boundary.
+- `scripts/phase0f_activity_measurement.py`: root wrapper for the strict bounded
+  Phase 0F controller. It requires explicit Demo read-only opt-in and a new
+  owner-private output root outside Git.
 - `scripts/07_research_report.py`: writes a local/offline Markdown attribution
   report from Stage 6 JSONL logs and optional explicit fill fixtures.
 - `scripts/10_paper_report_pack.py`: writes a local/offline Markdown report
@@ -441,8 +449,12 @@ context, then read only the files needed for the requested stage. Use `rg` and
   unmet prerequisites, fail-closed status, and no endpoint/credential/order
   payload exposure.
 - `tests/test_v2_readonly_campaign.py`: V2 read-only campaign smoke,
-  lifecycle selection gate, finalized-market evidence invalidation, monitor
+  lifecycle/activity selection, exact pinned market/event revalidation,
+  request-budget controls, finalized-market evidence invalidation, monitor
   lifecycle display, and disabled live gate coverage.
+- `tests/test_phase0f_activity_measurement.py`: strict controller composition,
+  bounded candidate/probe/measurement flow, private-root and sanitized-status
+  guards, post-run evidence assessment, and snapshot/delta classification.
 - `tests/test_demo_execution_smoke.py`: Stage 5 smoke script coverage.
 - `tests/test_market_maker_replay.py`: Stage 6 dry-run/demo, lifecycle,
   run-control, adapter-error, and script-summary coverage.

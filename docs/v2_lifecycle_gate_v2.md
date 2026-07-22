@@ -84,6 +84,56 @@ early selection reports the observed eligible count as a lower bound. Direct
 discovery audits retain exhaustive orderbook evaluation when no runtime limit
 is supplied.
 
+## Activity-aware bounded measurement selection
+
+The optional activity-aware profile uses the official market field
+`volume_24h_fp`, documented as 24-hour market volume in contracts. A candidate
+must carry a finite positive fixed-point string from that field. A non-empty
+book, quoted size, open interest, deprecated liquidity, or metadata update time
+is not treated as recent trading activity.
+
+Activity-aware candidates are ordered deterministically by descending 24-hour
+volume, then the existing conservative lifecycle order, current-quote presence,
+and ticker as a final stable tie-break. Discovery can return a bounded ordered
+candidate set so the bounded controller can pin each pre-authorized probe
+without silently substituting a market.
+
+A shared request-budget object can cover discovery and every pinned
+revalidation. Request limits, consumed values, and attempt controls require
+exact integers (Booleans and fractional values reject), and control evidence is
+persisted with private discovery/revalidation records. The bounded Phase 0F
+profile sets one request attempt, so rate-limit, server, timeout, and connection
+failures stop rather than retry. Immediately before a pinned probe or
+measurement, the original exact market and event identity, positive activity
+signal, lifecycle horizon, and orderbook are revalidated. The selection horizon
+must cover the complete requested runtime; pinned calls default to at least the
+1,800-second canary profile and cannot fall back to smoke selection. Pinned
+runtime calls never perform substituting discovery and use zero WebSocket
+reconnects. These controls remain Demo-only and read-only.
+
+The dedicated `scripts/phase0f_activity_measurement.py` controller composes
+these primitives into one fail-closed operation. Its explicit
+`--demo-readonly-opt-in` authorizes only the fixed bounded sequence already
+approved by the owner; it cannot extend, retry, or add a runtime. It also
+requires a new absolute non-symlink owner-private output root outside Git and a
+credential-load preflight before discovery. It performs one
+activity-aware discovery cycle under a shared 1,000-request ceiling and
+retains at most two ranked candidates. Only a typed candidate-local
+revalidation rejection or a controlled, artifact-valid probe with explicitly
+zero admitted deltas may advance to candidate two; authorization, transport,
+budget, integrity, or other global failures stop immediately. The first
+qualifying probe alone advances to one 1,800-second measurement, and the
+controller never starts another measurement. The post-run assessor
+requires controlled bounded exit, required duration, connection and channel
+ACK, valid lifecycle, snapshot plus delta admission, no known sequence gap,
+valid snapshot-first native rebuild, independent artifact validation, closed
+segments, and disabled production/order state. Sequence `UNKNOWN` is safe only
+for measurement retention; replay semantics require explicit sequence and
+rebuild `PASS`, and full replay qualification additionally remains blocked
+until private backup/catalog gates pass. Terminal output is categorical and
+Boolean-only; detailed identities, counters, payloads, manifests, and paths stay
+under the private output root.
+
 Validation reports separate `DATA_INTEGRITY_PASS` from
 `CAMPAIGN_EVIDENCE_INVALID_MARKET_LIFECYCLE`; clean JSONL/hash/artifact
 integrity cannot turn a closed or resolved market into valid long-horizon

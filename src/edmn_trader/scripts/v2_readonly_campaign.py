@@ -10,6 +10,7 @@ import sys
 import time
 from collections import Counter
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -71,6 +72,8 @@ DISCOVERY_SELECTION_DIAGNOSTIC_FIELDS = {
 }
 DISCOVERY_MAX_ATTEMPTS = 3
 DISCOVERY_NEAR_MISS_LIMIT = 100
+RECENT_ACTIVITY_POLICY_VERSION = "edmn.kalshi.recent_activity.v1"
+RECENT_ACTIVITY_SOURCE_FIELD = "volume_24h_fp"
 RUNTIME_MARKET_SELECTION_MAX_ORDERBOOK_PROBES = 100
 OCCURRENCE_CLOCK_SKEW_TOLERANCE_SECONDS = 60
 SELECTION_PROFILE_VERSION = "edmn.kalshi.selection_profile.v4"
@@ -131,6 +134,46 @@ class SelectionProfile(StrEnum):
     SMOKE = "smoke"
     CANARY = "canary"
     SEVEN_DAY = "seven_day"
+
+
+@dataclass(slots=True)
+class DiscoveryRequestBudget:
+    """Shared hard cap for actual Demo discovery request attempts."""
+
+    limit: int
+    consumed: int = 0
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.limit, int)
+            or isinstance(self.limit, bool)
+            or self.limit < 1
+        ):
+            raise ValueError("discovery request limit must be a positive integer")
+        if (
+            not isinstance(self.consumed, int)
+            or isinstance(self.consumed, bool)
+            or self.consumed < 0
+            or self.consumed > self.limit
+        ):
+            raise ValueError("consumed discovery requests must fit within the limit")
+
+    def reserve(self) -> bool:
+        if self.consumed >= self.limit:
+            return False
+        self.consumed += 1
+        return True
+
+
+def _validate_max_request_attempts(value: int) -> None:
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or not 1 <= value <= DISCOVERY_MAX_ATTEMPTS
+    ):
+        raise ValueError(
+            f"max_request_attempts must be between 1 and {DISCOVERY_MAX_ATTEMPTS}"
+        )
 
 
 def selection_profile_for_duration(duration_seconds: int) -> SelectionProfile:
@@ -238,6 +281,17 @@ def _blocked_ws_selection_record(
         }
     )
     record.update(_discovery_selection_diagnostics(diagnostics))
+    if any(
+        field in diagnostics
+        for field in (
+            "max_request_attempts",
+            "request_attempt_count",
+            "retry_count",
+            "request_budget_limit",
+            "request_budget_consumed",
+        )
+    ):
+        record["discovery_request_control"] = _request_control_evidence(diagnostics)
     return record
 
 
@@ -781,6 +835,57 @@ def run_kalshi_rest_smoke(
     }
 
 
+def _validate_pinned_market_identity(
+    market_ticker: str | None,
+    event_ticker: str | None,
+) -> None:
+    if market_ticker is None and event_ticker is None:
+        return
+    if (
+        not isinstance(market_ticker, str)
+        or not market_ticker.strip()
+        or not isinstance(event_ticker, str)
+        or not event_ticker.strip()
+    ):
+        raise ValueError("pinned runtime requires its expected event identity")
+
+
+def _runtime_selection_profile(
+    duration_seconds: int,
+    *,
+    pinned_market: bool,
+) -> SelectionProfile:
+    profile = selection_profile_for_duration(duration_seconds)
+    if (
+        pinned_market
+        and profile is SelectionProfile.SMOKE
+        and duration_seconds >= CANARY_SECONDS
+    ):
+        return SelectionProfile.CANARY
+    return profile
+
+
+def _selection_duration_for_runtime(
+    *,
+    runtime_duration_seconds: int,
+    requested_duration_seconds: int | None,
+    pinned_market: bool,
+) -> int:
+    selected = (
+        requested_duration_seconds
+        if requested_duration_seconds is not None
+        else max(runtime_duration_seconds, CANARY_SECONDS)
+        if pinned_market
+        else runtime_duration_seconds
+    )
+    _validate_duration(selected, allow_seven_day=True)
+    if pinned_market and selected < CANARY_SECONDS:
+        raise ValueError("pinned selection requires canary-or-stronger horizon")
+    if selected < runtime_duration_seconds:
+        raise ValueError("selection duration must cover runtime duration")
+    return selected
+
+
 def run_kalshi_ws_smoke(
     *,
     output_dir: Path,
@@ -789,15 +894,31 @@ def run_kalshi_ws_smoke(
     max_markets: int,
     now: datetime | None = None,
     use_yes_price: bool = False,
+    pinned_market_ticker: str | None = None,
+    expected_event_ticker: str | None = None,
+    selection_duration_seconds: int | None = None,
+    require_recent_activity: bool = False,
+    request_budget: DiscoveryRequestBudget | None = None,
+    max_request_attempts: int = DISCOVERY_MAX_ATTEMPTS,
 ) -> dict[str, object]:
     """Run the bounded authenticated read-only Kalshi WS smoke, or block safely."""
 
     _validate_duration(duration_seconds, allow_seven_day=False)
     if max_markets < 1:
         raise ValueError("max_markets must be at least 1")
+    _validate_max_request_attempts(max_request_attempts)
+    _validate_pinned_market_identity(pinned_market_ticker, expected_event_ticker)
+    selection_duration = _selection_duration_for_runtime(
+        runtime_duration_seconds=duration_seconds,
+        requested_duration_seconds=selection_duration_seconds,
+        pinned_market=pinned_market_ticker is not None,
+    )
+    profile = _runtime_selection_profile(
+        selection_duration,
+        pinned_market=pinned_market_ticker is not None,
+    )
     generated_at = now or datetime.now(UTC)
     output_dir.mkdir(parents=True, exist_ok=True)
-    profile = selection_profile_for_duration(duration_seconds)
     provenance = collect_runtime_code_provenance(PUBLIC_REPO_ROOT)
     try:
         auth = load_kalshi_ws_auth_config_from_env()
@@ -813,13 +934,16 @@ def run_kalshi_ws_smoke(
             selected_market_selection=_blocked_ws_selection_record(profile),
         )
 
-    discovery = discover_kalshi_demo_ws_market(
-        duration_seconds=duration_seconds,
-        safety_buffer_seconds=selection_safety_buffer_seconds(profile),
+    discovery = _resolve_ws_market_selection(
+        pinned_market_ticker=pinned_market_ticker,
+        expected_event_ticker=expected_event_ticker,
+        duration_seconds=selection_duration,
         selected_at_utc=generated_at,
         selection_profile=profile,
         eligible_market_limit=max_markets,
-        max_orderbook_probes=RUNTIME_MARKET_SELECTION_MAX_ORDERBOOK_PROBES,
+        require_recent_activity=require_recent_activity,
+        request_budget=request_budget,
+        max_request_attempts=max_request_attempts,
     )
     market_metadata = discovery.get("market_metadata")
     market_selection = discovery.get("selection")
@@ -845,6 +969,7 @@ def run_kalshi_ws_smoke(
         auth=auth,
         provenance=provenance,
         use_yes_price=use_yes_price,
+        max_reconnects=0,
     )
 
 
@@ -1104,11 +1229,27 @@ def run_kalshi_ws_campaign(
     max_markets: int,
     now: datetime | None = None,
     use_yes_price: bool = False,
+    pinned_market_ticker: str | None = None,
+    expected_event_ticker: str | None = None,
+    selection_duration_seconds: int | None = None,
+    require_recent_activity: bool = False,
+    request_budget: DiscoveryRequestBudget | None = None,
+    max_request_attempts: int = DISCOVERY_MAX_ATTEMPTS,
 ) -> dict[str, object]:
     _validate_duration(duration_seconds, allow_seven_day=True)
+    _validate_max_request_attempts(max_request_attempts)
+    _validate_pinned_market_identity(pinned_market_ticker, expected_event_ticker)
+    selection_duration = _selection_duration_for_runtime(
+        runtime_duration_seconds=duration_seconds,
+        requested_duration_seconds=selection_duration_seconds,
+        pinned_market=pinned_market_ticker is not None,
+    )
+    profile = _runtime_selection_profile(
+        selection_duration,
+        pinned_market=pinned_market_ticker is not None,
+    )
     generated_at = now or datetime.now(UTC)
     output_dir.mkdir(parents=True, exist_ok=True)
-    profile = selection_profile_for_duration(duration_seconds)
     provenance = collect_runtime_code_provenance(PUBLIC_REPO_ROOT)
     try:
         auth = load_kalshi_ws_auth_config_from_env()
@@ -1124,13 +1265,16 @@ def run_kalshi_ws_campaign(
             selected_market_selection=_blocked_ws_selection_record(profile),
         )
 
-    discovery = discover_kalshi_demo_ws_market(
-        duration_seconds=duration_seconds,
-        safety_buffer_seconds=selection_safety_buffer_seconds(profile),
+    discovery = _resolve_ws_market_selection(
+        pinned_market_ticker=pinned_market_ticker,
+        expected_event_ticker=expected_event_ticker,
+        duration_seconds=selection_duration,
         selected_at_utc=generated_at,
         selection_profile=profile,
         eligible_market_limit=max_markets,
-        max_orderbook_probes=RUNTIME_MARKET_SELECTION_MAX_ORDERBOOK_PROBES,
+        require_recent_activity=require_recent_activity,
+        request_budget=request_budget,
+        max_request_attempts=max_request_attempts,
     )
     market_metadata = discovery.get("market_metadata")
     market_selection = discovery.get("selection")
@@ -1157,7 +1301,41 @@ def run_kalshi_ws_campaign(
         provenance=provenance,
         use_yes_price=use_yes_price,
         max_events=1_000_000,
-        max_reconnects=1_000,
+        max_reconnects=0 if pinned_market_ticker is not None else 1_000,
+    )
+
+
+def _resolve_ws_market_selection(
+    *,
+    pinned_market_ticker: str | None,
+    expected_event_ticker: str | None,
+    duration_seconds: int,
+    selected_at_utc: datetime,
+    selection_profile: SelectionProfile,
+    eligible_market_limit: int,
+    require_recent_activity: bool,
+    request_budget: DiscoveryRequestBudget | None,
+    max_request_attempts: int,
+) -> dict[str, object]:
+    common: dict[str, object] = {
+        "duration_seconds": duration_seconds,
+        "safety_buffer_seconds": selection_safety_buffer_seconds(selection_profile),
+        "selected_at_utc": selected_at_utc,
+        "selection_profile": selection_profile,
+        "require_recent_activity": require_recent_activity,
+        "request_budget": request_budget,
+        "max_request_attempts": max_request_attempts,
+    }
+    if pinned_market_ticker is not None:
+        return revalidate_kalshi_demo_ws_market(
+            market_ticker=pinned_market_ticker,
+            expected_event_ticker=expected_event_ticker,
+            **common,
+        )
+    return discover_kalshi_demo_ws_market(
+        eligible_market_limit=eligible_market_limit,
+        max_orderbook_probes=RUNTIME_MARKET_SELECTION_MAX_ORDERBOOK_PROBES,
+        **common,
     )
 
 
@@ -1390,6 +1568,193 @@ def _write_run_metadata(
     _write_json(root / "run_metadata.json", metadata)
 
 
+def revalidate_kalshi_demo_ws_market(
+    *,
+    market_ticker: str,
+    expected_event_ticker: str | None = None,
+    duration_seconds: int,
+    safety_buffer_seconds: int,
+    selected_at_utc: datetime,
+    client: KalshiDemoMarketDataClient | None = None,
+    selection_profile: SelectionProfile | str | None = None,
+    require_recent_activity: bool = False,
+    request_budget: DiscoveryRequestBudget | None = None,
+    max_request_attempts: int = DISCOVERY_MAX_ATTEMPTS,
+) -> dict[str, object]:
+    """Revalidate one pinned Demo candidate without searching for a substitute."""
+
+    ticker = market_ticker.strip()
+    if not ticker:
+        raise ValueError("market_ticker is required")
+    _validate_max_request_attempts(max_request_attempts)
+    profile = (
+        SelectionProfile(selection_profile)
+        if selection_profile is not None
+        else selection_profile_for_duration(duration_seconds)
+    )
+    diagnostics: dict[str, Any] = {
+        "coverage_complete": False,
+        "revalidation_complete": False,
+        "retry_count": 0,
+        "rate_limit_count": 0,
+        "server_error_count": 0,
+        "http_status_counts": {},
+        "timeout_count": 0,
+        "connection_error_count": 0,
+        "parse_schema_failure_count": 0,
+        "request_attempt_count": 0,
+        "max_request_attempts": max_request_attempts,
+        "request_budget_limit": request_budget.limit if request_budget else None,
+        "request_budget_consumed": request_budget.consumed if request_budget else None,
+        "selection_profile": profile.value,
+        "selection_profile_version": SELECTION_PROFILE_VERSION,
+        "recent_activity_required": require_recent_activity,
+        "recent_activity_policy_version": RECENT_ACTIVITY_POLICY_VERSION,
+        "recent_activity_source": RECENT_ACTIVITY_SOURCE_FIELD,
+    }
+    active_client = client or KalshiDemoMarketDataClient()
+    owns_client = client is None
+    try:
+        market, error = _discovery_request(
+            lambda: active_client.get_market(ticker),
+            diagnostics,
+            request_budget=request_budget,
+            max_attempts=max_request_attempts,
+        )
+        if error or not isinstance(market, Mapping):
+            return _pinned_revalidation_blocker(error, diagnostics)
+        candidate = normalize_kalshi_market_metadata(market)
+        returned_ticker = candidate.get("ticker") or candidate.get("market_ticker")
+        if returned_ticker != ticker:
+            return _pinned_revalidation_blocker(
+                "PINNED_MARKET_IDENTITY_MISMATCH", diagnostics
+            )
+        if (
+            expected_event_ticker is not None
+            and candidate.get("event_ticker") != expected_event_ticker
+        ):
+            return _pinned_revalidation_blocker(
+                "PINNED_EVENT_IDENTITY_MISMATCH", diagnostics
+            )
+
+        if profile is not SelectionProfile.SMOKE:
+            event_ticker = candidate.get("event_ticker")
+            if not isinstance(event_ticker, str) or not event_ticker:
+                return _pinned_revalidation_blocker(
+                    "EVENT_METADATA_INCOMPLETE", diagnostics
+                )
+            event, error = _discovery_request(
+                lambda: active_client.get_event(event_ticker),
+                diagnostics,
+                request_budget=request_budget,
+                max_attempts=max_request_attempts,
+            )
+            if error or not isinstance(event, Mapping):
+                return _pinned_revalidation_blocker(error, diagnostics)
+            if event.get("event_ticker") != event_ticker:
+                return _pinned_revalidation_blocker(
+                    "EVENT_METADATA_IDENTITY_MISMATCH", diagnostics
+                )
+            try:
+                candidate = _merge_event_metadata(candidate, event)
+            except KalshiResponseError:
+                return _pinned_revalidation_blocker(
+                    "EVENT_METADATA_INCOMPLETE", diagnostics
+                )
+
+        reasons: list[str] = []
+        if require_recent_activity and not _has_recent_activity_indicator(candidate):
+            reasons.append("NO_RECENT_ACTIVITY_INDICATOR")
+        reasons.extend(
+            _market_selection_rejection_reasons(
+                candidate,
+                selected_at_utc=selected_at_utc,
+                campaign_required_end=selected_at_utc
+                + timedelta(seconds=duration_seconds + safety_buffer_seconds),
+                profile=profile,
+                require_non_empty_orderbook=False,
+                require_event_metadata=profile is not SelectionProfile.SMOKE,
+                allow_sports_long_horizon=False,
+            )
+        )
+        if reasons:
+            return _pinned_revalidation_blocker(reasons[0], diagnostics)
+
+        orderbook, error = _discovery_request(
+            lambda: active_client.get_market_orderbook(ticker),
+            diagnostics,
+            request_budget=request_budget,
+            max_attempts=max_request_attempts,
+        )
+        if error or not isinstance(orderbook, Mapping):
+            return _pinned_revalidation_blocker(error, diagnostics)
+        book = orderbook["orderbook_fp"]
+        candidate = {
+            **candidate,
+            "orderbook_level_count": len(book["yes_dollars"])
+            + len(book["no_dollars"]),
+        }
+        selection = evaluate_market_selection(
+            candidate,
+            selected_at_utc=selected_at_utc,
+            duration_seconds=duration_seconds,
+            safety_buffer_seconds=safety_buffer_seconds,
+            selection_reason="kalshi_demo_pinned_market_revalidation",
+            require_event_metadata=profile is not SelectionProfile.SMOKE,
+            selection_profile=profile,
+        )
+        if selection["selection_gate_result"] != "pass":
+            return _pinned_revalidation_blocker(
+                str(selection["selection_gate_rejection_reason"]), diagnostics
+            )
+        diagnostics.update({"coverage_complete": True, "revalidation_complete": True})
+        return {
+            "market_metadata": candidate,
+            "selection": {
+                **selection,
+                "recent_activity_gate_result": (
+                    "pass" if require_recent_activity else "not_required"
+                ),
+                "recent_activity_policy_version": RECENT_ACTIVITY_POLICY_VERSION,
+                "recent_activity_source": RECENT_ACTIVITY_SOURCE_FIELD,
+                "pinned_market_revalidation": True,
+                "discovery_request_control": _request_control_evidence(diagnostics),
+            },
+            "blocker_code": None,
+            "diagnostics": diagnostics,
+        }
+    finally:
+        if owns_client:
+            active_client.close()
+
+
+def _pinned_revalidation_blocker(
+    error: str | None, diagnostics: Mapping[str, object]
+) -> dict[str, object]:
+    blocker = (
+        _discovery_global_blocker(error)
+        if error
+        in {
+            "DISCOVERY_REQUEST_BUDGET_EXHAUSTED",
+            "CONNECTION_ERROR",
+            "TRANSPORT_TIMEOUT",
+        }
+        or (
+            isinstance(error, str)
+            and error.startswith("HTTP_")
+            and error != "HTTP_404"
+        )
+        else "DEMO_PINNED_MARKET_REVALIDATION_REJECTED"
+    )
+    return {
+        "market_metadata": None,
+        "selection": None,
+        "blocker_code": blocker,
+        "revalidation_reason": error,
+        "diagnostics": dict(diagnostics),
+    }
+
+
 def discover_kalshi_demo_ws_market(
     *,
     duration_seconds: int,
@@ -1402,6 +1767,9 @@ def discover_kalshi_demo_ws_market(
     selection_profile: SelectionProfile | str | None = None,
     eligible_market_limit: int | None = None,
     max_orderbook_probes: int | None = None,
+    require_recent_activity: bool = False,
+    request_budget: DiscoveryRequestBudget | None = None,
+    max_request_attempts: int = DISCOVERY_MAX_ATTEMPTS,
 ) -> dict[str, object]:
     """Find one lifecycle-eligible Demo market with bounded complete discovery."""
 
@@ -1415,6 +1783,7 @@ def discover_kalshi_demo_ws_market(
         raise ValueError("eligible_market_limit must be at least 1")
     if max_orderbook_probes is not None and max_orderbook_probes < 1:
         raise ValueError("max_orderbook_probes must be at least 1")
+    _validate_max_request_attempts(max_request_attempts)
     active_client = client or KalshiDemoMarketDataClient()
     owns_client = client is None
     cursor: str | None = None
@@ -1444,6 +1813,10 @@ def discover_kalshi_demo_ws_market(
         "connection_error_count": 0,
         "parse_schema_failure_count": 0,
         "candidate_local_failure_count": 0,
+        "request_attempt_count": 0,
+        "max_request_attempts": max_request_attempts,
+        "request_budget_limit": request_budget.limit if request_budget else None,
+        "request_budget_consumed": request_budget.consumed if request_budget else None,
     }
     raw_normalized_markets: list[dict[str, object]] = []
     profile = (
@@ -1474,10 +1847,12 @@ def discover_kalshi_demo_ws_market(
                     mve_filter="exclude",
                 ),
                 diagnostics,
+                request_budget=request_budget,
+                max_attempts=max_request_attempts,
             )
             if error or not isinstance(payload, Mapping):
                 return _market_discovery_blocker(
-                    "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR",
+                    _discovery_global_blocker(error),
                     pages_fetched=pages_fetched,
                     markets_seen=len(raw_normalized_markets),
                     rejection_counts={},
@@ -1548,10 +1923,12 @@ def discover_kalshi_demo_ws_market(
                         status="open",
                     ),
                     diagnostics,
+                    request_budget=request_budget,
+                    max_attempts=max_request_attempts,
                 )
                 if error or not isinstance(payload, Mapping):
                     return _market_discovery_blocker(
-                        "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR",
+                        _discovery_global_blocker(error),
                         pages_fetched=pages_fetched,
                         markets_seen=len(normalized_markets),
                         rejection_counts={},
@@ -1622,14 +1999,17 @@ def discover_kalshi_demo_ws_market(
                     )
                 diagnostics["single_event_fallback_requests"] += 1
                 event, error = _discovery_request(
-                    lambda ticker=ticker: active_client.get_event(ticker), diagnostics
+                    lambda ticker=ticker: active_client.get_event(ticker),
+                    diagnostics,
+                    request_budget=request_budget,
+                    max_attempts=max_request_attempts,
                 )
                 if error in {"HTTP_404", "RESPONSE_SCHEMA_ERROR"}:
                     diagnostics["candidate_local_failure_count"] += 1
                     continue
                 if error or not isinstance(event, Mapping):
                     return _market_discovery_blocker(
-                        "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR",
+                        _discovery_global_blocker(error),
                         pages_fetched=pages_fetched,
                         markets_seen=len(normalized_markets),
                         rejection_counts={},
@@ -1657,6 +2037,10 @@ def discover_kalshi_demo_ws_market(
                         event_metadata_complete_count += 1
                     except KalshiResponseError:
                         reasons.append("EVENT_METADATA_INCOMPLETE")
+            if require_recent_activity and not _has_recent_activity_indicator(
+                candidate_metadata
+            ):
+                reasons.append("NO_RECENT_ACTIVITY_INDICATOR")
             policy_reasons = _market_selection_rejection_reasons(
                 candidate_metadata,
                 selected_at_utc=selected_at_utc,
@@ -1686,9 +2070,13 @@ def discover_kalshi_demo_ws_market(
 
         lifecycle_candidates.sort(
             key=lambda item: (
+                -(_recent_activity_score(item[0]) or Decimal("0"))
+                if require_recent_activity
+                else Decimal("0"),
                 _as_bool(item[0].get("can_close_early")),
                 -int(item[1].get("time_to_lifecycle_deadline_at_launch_seconds") or 0),
                 not _has_current_quote_indicator(item[0]),
+                str(item[0].get("ticker") or item[0].get("market_ticker") or ""),
             )
         )
         diagnostics.update(
@@ -1706,6 +2094,9 @@ def discover_kalshi_demo_ws_market(
                 "eligible_market_limit": eligible_market_limit,
                 "max_orderbook_probes": max_orderbook_probes,
                 "orderbook_candidate_count": len(lifecycle_candidates),
+                "recent_activity_required": require_recent_activity,
+                "recent_activity_policy_version": RECENT_ACTIVITY_POLICY_VERSION,
+                "recent_activity_source": RECENT_ACTIVITY_SOURCE_FIELD,
             }
         )
         eligible_candidates: list[tuple[dict[str, object], dict[str, object]]] = []
@@ -1727,7 +2118,10 @@ def discover_kalshi_demo_ws_market(
                 continue
             diagnostics["orderbook_requests"] += 1
             orderbook, error = _discovery_request(
-                lambda ticker=ticker: active_client.get_market_orderbook(ticker), diagnostics
+                lambda ticker=ticker: active_client.get_market_orderbook(ticker),
+                diagnostics,
+                request_budget=request_budget,
+                max_attempts=max_request_attempts,
             )
             if error in {"EMPTY_ORDERBOOK", "HTTP_404", "RESPONSE_SCHEMA_ERROR"}:
                 reasons.append(error)
@@ -1756,7 +2150,7 @@ def discover_kalshi_demo_ws_market(
                     }
                 )
                 return _market_discovery_blocker(
-                    "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR",
+                    _discovery_global_blocker(error),
                     pages_fetched=pages_fetched,
                     markets_seen=len(normalized_markets),
                     rejection_counts=audit["rejection_counts"],
@@ -1828,9 +2222,26 @@ def discover_kalshi_demo_ws_market(
             }
         )
         if eligible_candidates:
-            selected_metadata, selected = eligible_candidates[0]
+            candidate_records = [
+                {
+                    "market_metadata": metadata,
+                    "selection": {
+                        **candidate_selection,
+                        "recent_activity_gate_result": (
+                            "pass" if require_recent_activity else "not_required"
+                        ),
+                        "recent_activity_policy_version": RECENT_ACTIVITY_POLICY_VERSION,
+                        "recent_activity_source": RECENT_ACTIVITY_SOURCE_FIELD,
+                        "discovery_request_control": _request_control_evidence(
+                            diagnostics
+                        ),
+                    },
+                }
+                for metadata, candidate_selection in eligible_candidates
+            ]
+            selected_metadata = candidate_records[0]["market_metadata"]
             selected = {
-                **selected,
+                **candidate_records[0]["selection"],
                 "market_discovery_pages": pages_fetched,
                 "market_discovery_count": len(normalized_markets),
                 "market_discovery_cursor_remaining": False,
@@ -1879,6 +2290,7 @@ def discover_kalshi_demo_ws_market(
                 "selection_profile_version": SELECTION_PROFILE_VERSION,
                 "selection_profile_hash": diagnostics["selection_profile_hash"],
                 "diagnostics": diagnostics,
+                "eligible_candidates": candidate_records,
             }
 
         if orderbook_probe_limit_reached:
@@ -2104,10 +2516,41 @@ def _market_discovery_blocker(
     }
 
 
+def _request_control_evidence(
+    diagnostics: Mapping[str, object],
+) -> dict[str, object]:
+    return {
+        field: diagnostics.get(field)
+        for field in (
+            "max_request_attempts",
+            "request_attempt_count",
+            "retry_count",
+            "request_budget_limit",
+            "request_budget_consumed",
+        )
+    }
+
+
+def _discovery_global_blocker(error: str | None) -> str:
+    if error == "DISCOVERY_REQUEST_BUDGET_EXHAUSTED":
+        return "DEMO_MARKET_DISCOVERY_REQUEST_BUDGET_EXHAUSTED"
+    return "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR"
+
+
 def _discovery_request(
-    operation: Callable[[], Any], diagnostics: dict[str, Any]
+    operation: Callable[[], Any],
+    diagnostics: dict[str, Any],
+    *,
+    request_budget: DiscoveryRequestBudget | None = None,
+    max_attempts: int = DISCOVERY_MAX_ATTEMPTS,
 ) -> tuple[Any | None, str | None]:
-    for attempt in range(1, DISCOVERY_MAX_ATTEMPTS + 1):
+    for attempt in range(1, max_attempts + 1):
+        if request_budget is not None and not request_budget.reserve():
+            diagnostics["request_budget_consumed"] = request_budget.consumed
+            return None, "DISCOVERY_REQUEST_BUDGET_EXHAUSTED"
+        diagnostics["request_attempt_count"] += 1
+        if request_budget is not None:
+            diagnostics["request_budget_consumed"] = request_budget.consumed
         try:
             result = operation()
             _increment_status(diagnostics, 200)
@@ -2118,7 +2561,7 @@ def _discovery_request(
             _increment_status(diagnostics, exc.status_code)
             code = f"HTTP_{exc.status_code}"
             retryable = exc.status_code == 429 or exc.status_code >= 500
-            if retryable and attempt < DISCOVERY_MAX_ATTEMPTS:
+            if retryable and attempt < max_attempts:
                 diagnostics["retry_count"] += 1
                 time.sleep((0.1 * (2 ** (attempt - 1))) + random.uniform(0, 0.05))
                 continue
@@ -2134,7 +2577,7 @@ def _discovery_request(
             else:
                 diagnostics["connection_error_count"] += 1
                 code = "CONNECTION_ERROR"
-            if attempt < DISCOVERY_MAX_ATTEMPTS:
+            if attempt < max_attempts:
                 diagnostics["retry_count"] += 1
                 time.sleep(0.1 * (2 ** (attempt - 1)))
                 continue
@@ -2150,6 +2593,23 @@ def _increment_status(diagnostics: dict[str, Any], status_code: int) -> None:
         diagnostics["rate_limit_count"] += 1
     if status_code >= 500:
         diagnostics["server_error_count"] += 1
+
+
+def _recent_activity_score(market_metadata: Mapping[str, object]) -> Decimal | None:
+    value = market_metadata.get(RECENT_ACTIVITY_SOURCE_FIELD)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        score = Decimal(value)
+    except InvalidOperation:
+        return None
+    if not score.is_finite() or score <= 0:
+        return None
+    return score
+
+
+def _has_recent_activity_indicator(market_metadata: Mapping[str, object]) -> bool:
+    return _recent_activity_score(market_metadata) is not None
 
 
 def _has_current_quote_indicator(market_metadata: Mapping[str, object]) -> bool:

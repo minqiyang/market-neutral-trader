@@ -19,11 +19,14 @@ from edmn_trader.scripts.v2_readonly_campaign import (
     CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
     SEVEN_DAY_SECONDS,
     SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
+    DiscoveryRequestBudget,
     SelectionProfile,
+    _blocked_ws_selection_record,
     discover_kalshi_demo_ws_market,
     evaluate_market_selection,
     plan_campaign,
     plan_kalshi_ws_campaign,
+    revalidate_kalshi_demo_ws_market,
     run_kalshi_rest_smoke,
     run_kalshi_ws_campaign,
     run_kalshi_ws_smoke,
@@ -51,6 +54,7 @@ def _market_metadata(**overrides: object) -> dict[str, object]:
         "event_title": "Long-horizon finance event",
         "event_metadata_fetched": True,
         "market_type": "binary",
+        "volume_24h_fp": "1.00",
     }
     payload.update(overrides)
     return payload
@@ -541,6 +545,258 @@ def test_market_discovery_paginates_and_selects_active_market() -> None:
     assert all(request.url.host == "external-api.demo.kalshi.co" for request in requests)
 
 
+def test_activity_aware_discovery_requires_positive_documented_24h_volume() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(
+                200,
+                json={
+                    "markets": [
+                        _market_metadata(ticker="QUIET", volume_24h_fp="0.00"),
+                        _market_metadata(ticker="ACTIVE", volume_24h_fp="2.00"),
+                    ],
+                    "cursor": "",
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "orderbook_fp": {
+                    "yes_dollars": [["0.4000", "2.00"]],
+                    "no_dollars": [],
+                }
+            },
+        )
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=300,
+        safety_buffer_seconds=SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        require_recent_activity=True,
+    )
+
+    orderbook_requests = [
+        request for request in requests if request.url.path.endswith("/orderbook")
+    ]
+    assert result["blocker_code"] is None
+    assert result["market_metadata"]["ticker"] == "ACTIVE"
+    assert result["selection"]["recent_activity_gate_result"] == "pass"
+    assert result["selection"]["recent_activity_source"] == "volume_24h_fp"
+    assert len(orderbook_requests) == 1
+    assert orderbook_requests[0].url.path.endswith("ACTIVE/orderbook")
+
+
+def test_activity_aware_discovery_ranks_recent_volume_then_ticker_deterministically() -> None:
+    requested_books: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(
+                200,
+                json={
+                    "markets": [
+                        _market_metadata(ticker="LOW", volume_24h_fp="1.00"),
+                        _market_metadata(ticker="Z-TIE", volume_24h_fp="9.00"),
+                        _market_metadata(ticker="A-TIE", volume_24h_fp="9.00"),
+                    ],
+                    "cursor": "",
+                },
+            )
+        requested_books.append(request.url.path)
+        return httpx.Response(
+            200,
+            json={
+                "orderbook_fp": {
+                    "yes_dollars": [["0.4000", "2.00"]],
+                    "no_dollars": [],
+                }
+            },
+        )
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=300,
+        safety_buffer_seconds=SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        require_recent_activity=True,
+        eligible_market_limit=2,
+    )
+
+    assert result["blocker_code"] is None
+    assert result["market_metadata"]["ticker"] == "A-TIE"
+    assert [
+        candidate["market_metadata"]["ticker"]
+        for candidate in result["eligible_candidates"]
+    ] == ["A-TIE", "Z-TIE"]
+    assert requested_books == [
+        "/trade-api/v2/markets/A-TIE/orderbook",
+        "/trade-api/v2/markets/Z-TIE/orderbook",
+    ]
+
+
+def test_pinned_market_revalidation_never_lists_or_substitutes_candidates() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/markets/TEST-PINNED"):
+            return httpx.Response(
+                200,
+                json={
+                    "market": _market_metadata(
+                        ticker="TEST-PINNED",
+                        event_ticker="TEST-EVENT",
+                        volume_24h_fp="2.00",
+                    )
+                },
+            )
+        if request.url.path.endswith("/events/TEST-EVENT"):
+            return httpx.Response(
+                200,
+                json={
+                    "event": {
+                        "event_ticker": "TEST-EVENT",
+                        "category": "Finance",
+                        "title": "Long-horizon finance event",
+                    }
+                },
+            )
+        if request.url.path.endswith("/markets/TEST-PINNED/orderbook"):
+            return httpx.Response(
+                200,
+                json={
+                    "orderbook_fp": {
+                        "yes_dollars": [["0.4000", "2.00"]],
+                        "no_dollars": [],
+                    }
+                },
+            )
+        raise AssertionError(f"unexpected request: {request.url.path}")
+
+    budget = DiscoveryRequestBudget(limit=3)
+    result = revalidate_kalshi_demo_ws_market(
+        market_ticker="TEST-PINNED",
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        require_recent_activity=True,
+        request_budget=budget,
+        max_request_attempts=1,
+    )
+
+    assert result["blocker_code"] is None
+    assert result["market_metadata"]["ticker"] == "TEST-PINNED"
+    assert result["selection"]["selection_gate_result"] == "pass"
+    assert result["selection"]["recent_activity_gate_result"] == "pass"
+    assert result["selection"]["discovery_request_control"] == {
+        "max_request_attempts": 1,
+        "request_attempt_count": 3,
+        "retry_count": 0,
+        "request_budget_limit": 3,
+        "request_budget_consumed": 3,
+    }
+    assert budget.consumed == 3
+    assert all(not request.url.path.endswith("/markets") for request in requests)
+
+
+def test_pinned_market_revalidation_treats_authorization_failure_as_global() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(401, json={"code": "not_authorized"})
+
+    result = revalidate_kalshi_demo_ws_market(
+        market_ticker="TEST-PINNED",
+        expected_event_ticker="TEST-EVENT",
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        require_recent_activity=True,
+        max_request_attempts=1,
+    )
+
+    assert result["blocker_code"] == "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR"
+    assert result["revalidation_reason"] == "HTTP_401"
+    assert len(requests) == 1
+
+
+def test_pinned_market_revalidation_rejects_event_change_since_discovery() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "market": _market_metadata(
+                    ticker="TEST-PINNED",
+                    event_ticker="TEST-CHANGED-EVENT",
+                )
+            },
+        )
+
+    result = revalidate_kalshi_demo_ws_market(
+        market_ticker="TEST-PINNED",
+        expected_event_ticker="TEST-EVENT",
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        require_recent_activity=True,
+        max_request_attempts=1,
+    )
+
+    assert result["blocker_code"] == "DEMO_PINNED_MARKET_REVALIDATION_REJECTED"
+    assert result["revalidation_reason"] == "PINNED_EVENT_IDENTITY_MISMATCH"
+    assert len(requests) == 1
+
+
+def test_pinned_market_revalidation_rejects_event_identity_mismatch() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markets/TEST-PINNED"):
+            return httpx.Response(
+                200,
+                json={
+                    "market": _market_metadata(
+                        ticker="TEST-PINNED",
+                        event_ticker="TEST-EVENT",
+                    )
+                },
+            )
+        if request.url.path.endswith("/events/TEST-EVENT"):
+            return httpx.Response(
+                200,
+                json={
+                    "event": {
+                        "event_ticker": "TEST-OTHER-EVENT",
+                        "category": "Finance",
+                        "title": "Other event",
+                    }
+                },
+            )
+        raise AssertionError("orderbook must not be requested after identity mismatch")
+
+    result = revalidate_kalshi_demo_ws_market(
+        market_ticker="TEST-PINNED",
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        require_recent_activity=True,
+        max_request_attempts=1,
+    )
+
+    assert result["blocker_code"] == "DEMO_PINNED_MARKET_REVALIDATION_REJECTED"
+    assert result["revalidation_reason"] == "EVENT_METADATA_IDENTITY_MISMATCH"
+
+
 def test_market_discovery_stops_after_requested_eligible_market_count() -> None:
     requests: list[httpx.Request] = []
 
@@ -644,6 +900,68 @@ def test_market_discovery_fails_closed_at_orderbook_probe_limit() -> None:
     assert result["diagnostics"]["orderbook_candidate_scan_complete"] is False
     assert result["diagnostics"]["orderbook_probe_limit_reached"] is True
     assert len(orderbook_requests) == 2
+
+
+def test_market_discovery_enforces_shared_request_budget_without_retry() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={"markets": [_market_metadata()], "cursor": "next-page"},
+        )
+
+    budget = DiscoveryRequestBudget(limit=1)
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=300,
+        safety_buffer_seconds=SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        request_budget=budget,
+        max_request_attempts=1,
+    )
+
+    assert result["blocker_code"] == "DEMO_MARKET_DISCOVERY_REQUEST_BUDGET_EXHAUSTED"
+    assert budget.consumed == 1
+    assert result["diagnostics"]["retry_count"] == 0
+    assert len(requests) == 1
+
+
+def test_blocked_runtime_selection_persists_request_control_evidence() -> None:
+    record = _blocked_ws_selection_record(
+        SelectionProfile.CANARY,
+        {
+            "diagnostics": {
+                "max_request_attempts": 1,
+                "request_attempt_count": 3,
+                "retry_count": 0,
+                "request_budget_limit": 1_000,
+                "request_budget_consumed": 3,
+            }
+        },
+    )
+
+    assert record["discovery_request_control"] == {
+        "max_request_attempts": 1,
+        "request_attempt_count": 3,
+        "retry_count": 0,
+        "request_budget_limit": 1_000,
+        "request_budget_consumed": 3,
+    }
+
+
+def test_discovery_request_controls_require_exact_integers() -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        DiscoveryRequestBudget(limit=1.5)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="between 1 and 3"):
+        discover_kalshi_demo_ws_market(
+            duration_seconds=300,
+            safety_buffer_seconds=SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
+            selected_at_utc=NOW,
+            client=_market_discovery_client(lambda _request: httpx.Response(500)),
+            max_request_attempts=1.5,  # type: ignore[arg-type]
+        )
 
 
 def test_market_discovery_does_not_call_page_cap_complete_with_cursor_remaining() -> None:
@@ -1049,6 +1367,29 @@ def test_market_discovery_retries_429_with_a_bounded_attempt_count(
     assert result["diagnostics"]["http_status_counts"]["429"] == 2
 
 
+def test_market_discovery_can_disable_all_transient_request_retries() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(429, json={"code": "rate_limited"})
+
+    budget = DiscoveryRequestBudget(limit=10)
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=300,
+        safety_buffer_seconds=SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        request_budget=budget,
+        max_request_attempts=1,
+    )
+
+    assert result["blocker_code"] == "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR"
+    assert result["diagnostics"]["retry_count"] == 0
+    assert budget.consumed == 1
+    assert len(requests) == 1
+
+
 def test_market_discovery_marks_exhausted_batch_rate_limit_incomplete(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1451,6 +1792,88 @@ def test_campaign_duration_is_bounded(tmp_path: Path) -> None:
         )
 
 
+def test_pinned_ws_runtime_requires_original_event_identity(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="expected event identity"):
+        run_kalshi_ws_campaign(
+            output_dir=tmp_path,
+            campaign_id="TEST-missing-event-identity",
+            duration_seconds=CANARY_SECONDS,
+            max_markets=1,
+            pinned_market_ticker="TEST-PINNED",
+        )
+
+
+def test_pinned_ws_runtime_rejects_explicit_smoke_selection_horizon(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="pinned selection requires canary"):
+        run_kalshi_ws_smoke(
+            output_dir=tmp_path,
+            campaign_id="TEST-pinned-smoke-selection",
+            duration_seconds=300,
+            max_markets=1,
+            pinned_market_ticker="TEST-PINNED",
+            expected_event_ticker="TEST-EVENT",
+            selection_duration_seconds=900,
+        )
+
+
+def test_pinned_ws_smoke_uses_canary_policy_for_longer_selection_horizon(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KALSHI_DEMO_API_KEY_ID", raising=False)
+    monkeypatch.delenv("KALSHI_DEMO_PRIVATE_KEY_PATH", raising=False)
+
+    result = run_kalshi_ws_smoke(
+        output_dir=tmp_path,
+        campaign_id="TEST-pinned-smoke-canary-selection",
+        duration_seconds=300,
+        max_markets=1,
+        pinned_market_ticker="TEST-PINNED",
+        expected_event_ticker="TEST-EVENT",
+        selection_duration_seconds=3_600,
+    )
+
+    assert result["validation_status"] == "blocked"
+    summary = json.loads((tmp_path / "campaign_summary.json").read_text())
+    assert summary["selected_market_selection"]["selection_profile"] == "canary"
+
+
+def test_pinned_ws_runtime_uses_canary_policy_between_canary_and_seven_day(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KALSHI_DEMO_API_KEY_ID", raising=False)
+    monkeypatch.delenv("KALSHI_DEMO_PRIVATE_KEY_PATH", raising=False)
+
+    result = run_kalshi_ws_campaign(
+        output_dir=tmp_path,
+        campaign_id="TEST-longer-pinned-horizon",
+        duration_seconds=3_600,
+        max_markets=1,
+        pinned_market_ticker="TEST-PINNED",
+        expected_event_ticker="TEST-EVENT",
+    )
+
+    assert result["validation_status"] == "blocked"
+    summary = json.loads((tmp_path / "campaign_summary.json").read_text())
+    assert summary["selected_market_selection"]["selection_profile"] == "canary"
+
+
+def test_ws_runtime_rejects_selection_horizon_shorter_than_runtime(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="selection duration must cover runtime"):
+        run_kalshi_ws_campaign(
+            output_dir=tmp_path,
+            campaign_id="TEST-unsafe-horizon",
+            duration_seconds=CANARY_SECONDS,
+            max_markets=1,
+            selection_duration_seconds=300,
+        )
+
+
 def test_kalshi_ws_smoke_truthfully_blocks_without_credentials(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1600,6 +2023,91 @@ def test_kalshi_ws_runtime_bounds_market_selection_requests(
     assert selection["market_discovery_event_fallback_limit_reached"] is False
     assert selection["market_discovery_market_mve_filter"] == "exclude"
     assert selection["market_discovery_orderbook_probe_limit_reached"] is True
+
+
+def test_pinned_ws_measurement_revalidates_same_candidate_without_reconnect(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    budget = DiscoveryRequestBudget(limit=10)
+    monkeypatch.setattr(
+        "edmn_trader.scripts.v2_readonly_campaign.load_kalshi_ws_auth_config_from_env",
+        lambda: object(),
+    )
+
+    def fail_discovery(**_kwargs: object) -> dict[str, object]:
+        raise AssertionError("pinned runtime must not perform substituting discovery")
+
+    def fake_revalidation(**kwargs: object) -> dict[str, object]:
+        captured["revalidation"] = kwargs
+        return {
+            "market_metadata": _market_metadata(
+                ticker="TEST-PINNED",
+                event_ticker="TEST-EVENT",
+            ),
+            "selection": {
+                "selection_gate_result": "pass",
+                "market_ticker": "TEST-PINNED",
+                "pinned_market_revalidation": True,
+                "discovery_request_control": {
+                    "max_request_attempts": 1,
+                    "request_attempt_count": 3,
+                    "retry_count": 0,
+                    "request_budget_limit": 10,
+                    "request_budget_consumed": 3,
+                },
+            },
+            "blocker_code": None,
+            "diagnostics": {},
+        }
+
+    def fake_runtime(**kwargs: object) -> dict[str, object]:
+        captured["runtime"] = kwargs
+        return {"validation_status": "pass"}
+
+    monkeypatch.setattr(
+        "edmn_trader.scripts.v2_readonly_campaign.discover_kalshi_demo_ws_market",
+        fail_discovery,
+    )
+    monkeypatch.setattr(
+        "edmn_trader.scripts.v2_readonly_campaign.revalidate_kalshi_demo_ws_market",
+        fake_revalidation,
+    )
+    monkeypatch.setattr(
+        "edmn_trader.scripts.v2_readonly_campaign.run_d2_kalshi_ws_runtime",
+        fake_runtime,
+    )
+
+    result = run_kalshi_ws_campaign(
+        output_dir=tmp_path,
+        campaign_id="TEST-pinned-measurement",
+        duration_seconds=CANARY_SECONDS,
+        max_markets=1,
+        now=NOW,
+        pinned_market_ticker="TEST-PINNED",
+        expected_event_ticker="TEST-EVENT",
+        selection_duration_seconds=CANARY_SECONDS,
+        require_recent_activity=True,
+        request_budget=budget,
+        max_request_attempts=1,
+    )
+
+    assert result["validation_status"] == "pass"
+    revalidation = captured["revalidation"]
+    assert revalidation["market_ticker"] == "TEST-PINNED"
+    assert revalidation["expected_event_ticker"] == "TEST-EVENT"
+    assert revalidation["duration_seconds"] == CANARY_SECONDS
+    assert revalidation["require_recent_activity"] is True
+    assert revalidation["request_budget"] is budget
+    assert revalidation["max_request_attempts"] == 1
+    runtime = captured["runtime"]
+    assert runtime["duration_seconds"] == CANARY_SECONDS
+    assert runtime["max_reconnects"] == 0
+    assert runtime["market_metadata"]["ticker"] == "TEST-PINNED"
+    assert runtime["market_selection"]["discovery_request_control"][
+        "max_request_attempts"
+    ] == 1
 
 
 def test_validator_classifies_websocket_smoke_only_when_ws_events_exist(
