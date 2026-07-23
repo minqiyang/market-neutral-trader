@@ -10,6 +10,7 @@ import pytest
 
 from edmn_trader.scripts import phase0f_activity_measurement as phase0f_module
 from edmn_trader.scripts.phase0f_activity_measurement import (
+    PHASE0F_DISCOVERY_MIN_REQUEST_INTERVAL_SECONDS,
     PHASE0F_DISCOVERY_REQUEST_LIMIT,
     PHASE0F_MEASUREMENT_SECONDS,
     Phase0FNetworkClassification,
@@ -221,7 +222,13 @@ def test_phase0f_stops_before_probe_when_activity_discovery_has_no_candidate(
     assert captured["duration_seconds"] == PHASE0F_MEASUREMENT_SECONDS
     assert captured["require_recent_activity"] is True
     assert captured["max_request_attempts"] == 1
-    assert captured["request_budget"].limit == PHASE0F_DISCOVERY_REQUEST_LIMIT
+    budget = captured["request_budget"]
+    assert budget.limit == PHASE0F_DISCOVERY_REQUEST_LIMIT
+    assert budget.pacer is not None
+    assert (
+        budget.pacer.minimum_interval_seconds
+        == PHASE0F_DISCOVERY_MIN_REQUEST_INTERVAL_SECONDS
+    )
 
 
 def test_phase0f_fails_closed_on_malformed_ranked_candidate_identity(
@@ -379,6 +386,8 @@ def test_phase0f_first_qualifying_probe_starts_one_same_candidate_measurement(
     assert probe["expected_event_ticker"] == measurement["expected_event_ticker"]
     assert probe["duration_seconds"] == 300
     assert measurement["duration_seconds"] == PHASE0F_MEASUREMENT_SECONDS
+    assert shared_budget is not None
+    assert getattr(shared_budget, "pacer", None) is not None
     for invocation in (probe, measurement):
         assert invocation["selection_duration_seconds"] == PHASE0F_MEASUREMENT_SECONDS
         assert invocation["require_recent_activity"] is True
