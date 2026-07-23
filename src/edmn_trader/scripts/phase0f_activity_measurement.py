@@ -23,6 +23,7 @@ from edmn_trader.scripts.v2_readonly_campaign import (
     CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
     RUNTIME_MARKET_SELECTION_MAX_ORDERBOOK_PROBES,
     DiscoveryRequestBudget,
+    DiscoveryRequestPacer,
     SelectionProfile,
     discover_kalshi_demo_ws_market,
     run_kalshi_ws_campaign,
@@ -30,6 +31,11 @@ from edmn_trader.scripts.v2_readonly_campaign import (
 )
 
 PHASE0F_DISCOVERY_REQUEST_LIMIT = 1_000
+# Static baseline below the lowest documented default-cost read rate; no account query.
+PHASE0F_DISCOVERY_CONSERVATIVE_REQUESTS_PER_SECOND = 10
+PHASE0F_DISCOVERY_MIN_REQUEST_INTERVAL_SECONDS = (
+    1 / PHASE0F_DISCOVERY_CONSERVATIVE_REQUESTS_PER_SECOND
+)
 PHASE0F_MAX_CANDIDATES = 2
 PHASE0F_PROBE_SECONDS = 300
 PHASE0F_MEASUREMENT_SECONDS = CANARY_SECONDS
@@ -238,7 +244,14 @@ def run_phase0f_activity_measurement(
     root = _prepare_private_root(output_root)
     auth_preflight()
     selected_at = now or datetime.now(UTC)
-    budget = DiscoveryRequestBudget(limit=PHASE0F_DISCOVERY_REQUEST_LIMIT)
+    budget = DiscoveryRequestBudget(
+        limit=PHASE0F_DISCOVERY_REQUEST_LIMIT,
+        pacer=DiscoveryRequestPacer(
+            minimum_interval_seconds=(
+                PHASE0F_DISCOVERY_MIN_REQUEST_INTERVAL_SECONDS
+            )
+        ),
+    )
     selection = discovery(
         duration_seconds=PHASE0F_MEASUREMENT_SECONDS,
         safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -21,6 +23,7 @@ from edmn_trader.scripts.v2_readonly_campaign import (
     SEVEN_DAY_SECONDS,
     SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
     DiscoveryRequestBudget,
+    DiscoveryRequestPacer,
     SelectionProfile,
     _blocked_ws_selection_record,
     _parse_time,
@@ -40,6 +43,19 @@ from edmn_trader.scripts.v2_readonly_campaign import (
 
 FIXTURES = Path(__file__).parent / "fixtures"
 NOW = datetime(2026, 7, 3, 18, 0, tzinfo=UTC)
+
+
+class _FakeMonotonicClock:
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
 
 
 def _market_metadata(**overrides: object) -> dict[str, object]:
@@ -997,6 +1013,121 @@ def test_activity_ranking_preserves_fixed_point_precision_beyond_decimal_context
     ]
 
 
+def test_request_budget_proactively_paces_before_each_serial_reservation() -> None:
+    clock = _FakeMonotonicClock()
+    pacer = DiscoveryRequestPacer(
+        minimum_interval_seconds=0.25,
+        monotonic=clock.monotonic,
+        sleep=clock.sleep,
+    )
+    budget = DiscoveryRequestBudget(limit=3, pacer=pacer)
+
+    assert budget.reserve() is True
+    assert budget.reserve() is True
+    assert budget.reserve() is True
+
+    assert budget.consumed == 3
+    assert clock.sleeps == [0.25, 0.25]
+
+
+@pytest.mark.parametrize(
+    "interval",
+    (0, -0.1, float("nan"), float("inf"), True, "0.1"),
+)
+def test_request_pacer_requires_a_positive_finite_interval(interval: object) -> None:
+    with pytest.raises(ValueError, match="positive and finite"):
+        DiscoveryRequestPacer(
+            minimum_interval_seconds=interval,  # type: ignore[arg-type]
+        )
+
+
+def test_request_budget_serializes_concurrent_transmissions() -> None:
+    clock = _FakeMonotonicClock()
+    pacer = DiscoveryRequestPacer(
+        minimum_interval_seconds=0.25,
+        monotonic=clock.monotonic,
+        sleep=clock.sleep,
+    )
+    budget = DiscoveryRequestBudget(limit=2, pacer=pacer)
+    start = threading.Barrier(3)
+    first_entered = threading.Event()
+    second_entered = threading.Event()
+    release_first = threading.Event()
+    call_lock = threading.Lock()
+    call_count = 0
+
+    def operation() -> str:
+        nonlocal call_count
+        with call_lock:
+            call_count += 1
+            call_number = call_count
+        if call_number == 1:
+            first_entered.set()
+            assert release_first.wait(timeout=1)
+        else:
+            second_entered.set()
+        return "sent"
+
+    def worker() -> tuple[bool, object | None]:
+        start.wait()
+        return budget.execute(operation)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(worker) for _ in range(2)]
+        start.wait()
+        assert first_entered.wait(timeout=1)
+        assert second_entered.wait(timeout=0.05) is False
+        release_first.set()
+        results = [future.result(timeout=1) for future in futures]
+
+    assert results == [(True, "sent"), (True, "sent")]
+    assert second_entered.is_set()
+    assert budget.consumed == 2
+    assert pacer.slots_granted == 2
+
+
+def test_request_budget_rejects_a_non_pacer_object() -> None:
+    with pytest.raises(ValueError, match="DiscoveryRequestPacer"):
+        DiscoveryRequestBudget(limit=1, pacer=object())  # type: ignore[arg-type]
+
+
+def test_exhausted_request_budget_does_not_wait_for_another_slot() -> None:
+    clock = _FakeMonotonicClock()
+    pacer = DiscoveryRequestPacer(
+        minimum_interval_seconds=0.25,
+        monotonic=clock.monotonic,
+        sleep=clock.sleep,
+    )
+    budget = DiscoveryRequestBudget(limit=1, pacer=pacer)
+
+    assert budget.reserve() is True
+    assert budget.reserve() is False
+    assert budget.consumed == 1
+    assert clock.sleeps == []
+    assert pacer.slots_granted == 1
+
+
+def test_request_pacing_interruption_does_not_consume_a_reservation() -> None:
+    clock = _FakeMonotonicClock()
+    pacer = DiscoveryRequestPacer(
+        minimum_interval_seconds=0.25,
+        monotonic=clock.monotonic,
+        sleep=clock.sleep,
+    )
+    budget = DiscoveryRequestBudget(limit=2, pacer=pacer)
+    assert budget.reserve() is True
+
+    def interrupt(_seconds: float) -> None:
+        raise KeyboardInterrupt
+
+    pacer.sleep = interrupt
+    with pytest.raises(KeyboardInterrupt):
+        budget.reserve()
+
+    assert budget.consumed == 1
+    assert pacer.slots_granted == 1
+
+
 def test_pinned_market_revalidation_never_lists_or_substitutes_candidates() -> None:
     requests: list[httpx.Request] = []
 
@@ -1061,6 +1192,87 @@ def test_pinned_market_revalidation_never_lists_or_substitutes_candidates() -> N
     }
     assert budget.consumed == 3
     assert all(not request.url.path.endswith("/markets") for request in requests)
+
+
+def test_successive_pinned_revalidations_share_prior_pacing_state() -> None:
+    clock = _FakeMonotonicClock()
+    request_starts: list[float] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        request_starts.append(clock.monotonic())
+        if request.url.path.endswith("/markets/TEST-PINNED"):
+            return httpx.Response(
+                200,
+                json={
+                    "market": _market_metadata(
+                        ticker="TEST-PINNED",
+                        event_ticker="TEST-EVENT",
+                        volume_24h_fp="2.00",
+                    )
+                },
+            )
+        if request.url.path.endswith("/events/TEST-EVENT"):
+            return httpx.Response(
+                200,
+                json={
+                    "event": {
+                        "event_ticker": "TEST-EVENT",
+                        "category": "Finance",
+                        "title": "Synthetic long-horizon event",
+                    }
+                },
+            )
+        if request.url.path.endswith("/markets/TEST-PINNED/orderbook"):
+            return httpx.Response(
+                200,
+                json={
+                    "orderbook_fp": {
+                        "yes_dollars": [["0.4000", "2.00"]],
+                        "no_dollars": [],
+                    }
+                },
+            )
+        if request.url.path.endswith("/markets/TEST-RATE-LIMITED"):
+            return httpx.Response(429, json={"code": "synthetic_rate_limited"})
+        raise AssertionError(f"unexpected request: {request.url.path}")
+
+    pacer = DiscoveryRequestPacer(
+        minimum_interval_seconds=0.25,
+        monotonic=clock.monotonic,
+        sleep=clock.sleep,
+    )
+    budget = DiscoveryRequestBudget(limit=10, pacer=pacer)
+    client = _market_discovery_client(handler)
+    first = revalidate_kalshi_demo_ws_market(
+        market_ticker="TEST-PINNED",
+        expected_event_ticker="TEST-EVENT",
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=client,
+        require_recent_activity=True,
+        request_budget=budget,
+        max_request_attempts=1,
+    )
+    second = revalidate_kalshi_demo_ws_market(
+        market_ticker="TEST-RATE-LIMITED",
+        expected_event_ticker="TEST-EVENT",
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=client,
+        require_recent_activity=True,
+        request_budget=budget,
+        max_request_attempts=1,
+    )
+    client.close()
+
+    assert first["blocker_code"] is None
+    assert second["blocker_code"] == "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR"
+    assert request_starts == [0.0, 0.25, 0.5, 0.75]
+    assert budget.consumed == len(request_starts)
+    assert second["diagnostics"]["retry_count"] == 0
+    assert second["diagnostics"]["pacing_slots_granted"] == len(request_starts)
 
 
 @pytest.mark.parametrize(
@@ -1332,6 +1544,10 @@ def test_blocked_runtime_selection_persists_request_control_evidence() -> None:
                 "retry_count": 0,
                 "request_budget_limit": 1_000,
                 "request_budget_consumed": 3,
+                "proactive_pacing_enabled": True,
+                "minimum_request_interval_seconds": 0.1,
+                "pacing_slots_granted": 3,
+                "pacing_wait_count": 2,
             }
         },
     )
@@ -1342,6 +1558,10 @@ def test_blocked_runtime_selection_persists_request_control_evidence() -> None:
         "retry_count": 0,
         "request_budget_limit": 1_000,
         "request_budget_consumed": 3,
+        "proactive_pacing_enabled": True,
+        "minimum_request_interval_seconds": 0.1,
+        "pacing_slots_granted": 3,
+        "pacing_wait_count": 2,
     }
 
 
@@ -1365,7 +1585,10 @@ def test_market_discovery_does_not_call_page_cap_complete_with_cursor_remaining(
         requests.append(request)
         return httpx.Response(
             200,
-            json={"markets": [_market_metadata()], "cursor": "more-markets"},
+            json={
+                "markets": [_market_metadata()],
+                "cursor": f"more-markets-{len(requests)}",
+            },
         )
 
     result = discover_kalshi_demo_ws_market(
@@ -1383,6 +1606,32 @@ def test_market_discovery_does_not_call_page_cap_complete_with_cursor_remaining(
     assert result["diagnostics"]["final_cursor_empty"] is False
     assert result["diagnostics"]["max_pages_reached"] is True
     assert all(request.url.path.endswith("/markets") for request in requests)
+
+
+def test_market_discovery_stops_before_reissuing_a_repeated_cursor() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={"markets": [_market_metadata()], "cursor": "stalled-cursor"},
+        )
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        max_pages=5,
+    )
+
+    assert result["blocker_code"] == "DEMO_MARKET_DISCOVERY_REPEATED_CURSOR"
+    assert result["coverage_complete"] is False
+    assert result["diagnostics"]["repeated_market_cursor"] is True
+    assert len(requests) == 2
+    assert requests[0].url.params.get("cursor") is None
+    assert requests[1].url.params.get("cursor") == "stalled-cursor"
 
 
 def test_market_discovery_emits_complete_multilabel_profile_evidence() -> None:
@@ -1596,11 +1845,11 @@ def test_market_discovery_exhausts_documented_open_event_pagination() -> None:
     assert result["diagnostics"]["single_event_fallback_requests"] == 0
     assert (
         result["diagnostics"]["discovery_protocol_version"]
-        == "edmn.kalshi.discovery_protocol.v2"
+        == "edmn.kalshi.discovery_protocol.v3"
     )
     assert (
         result["selection"]["market_discovery_protocol_version"]
-        == "edmn.kalshi.discovery_protocol.v2"
+        == "edmn.kalshi.discovery_protocol.v3"
     )
     assert result["selection"]["market_discovery_event_pages_completed"] == 2
     assert result["selection"]["market_discovery_event_pagination_complete"] is True
@@ -1609,16 +1858,20 @@ def test_market_discovery_exhausts_documented_open_event_pagination() -> None:
 
 
 def test_market_discovery_fails_closed_at_event_page_limit() -> None:
+    event_requests = 0
+
     def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal event_requests
         if request.url.path.endswith("/markets"):
             return httpx.Response(
                 200,
                 json={"markets": [_market_metadata()], "cursor": ""},
             )
         if request.url.path.endswith("/events"):
+            event_requests += 1
             return httpx.Response(
                 200,
-                json={"events": [], "cursor": "more-events"},
+                json={"events": [], "cursor": f"more-events-{event_requests}"},
             )
         raise AssertionError(f"unexpected request: {request.url.path}")
 
@@ -1634,6 +1887,39 @@ def test_market_discovery_fails_closed_at_event_page_limit() -> None:
     assert result["diagnostics"]["event_pages_completed"] == 2
     assert result["diagnostics"]["event_final_cursor_empty"] is False
     assert result["diagnostics"]["event_pagination_complete"] is False
+
+
+def test_event_discovery_stops_before_reissuing_a_repeated_cursor() -> None:
+    event_requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(
+                200,
+                json={"markets": [_market_metadata()], "cursor": ""},
+            )
+        if request.url.path.endswith("/events"):
+            event_requests.append(request)
+            return httpx.Response(
+                200,
+                json={"events": [], "cursor": "stalled-event-cursor"},
+            )
+        raise AssertionError("repeated event cursor must stop before fallback")
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        max_event_pages=5,
+    )
+
+    assert result["blocker_code"] == "DEMO_EVENT_DISCOVERY_REPEATED_CURSOR"
+    assert result["coverage_complete"] is False
+    assert result["diagnostics"]["repeated_event_cursor"] is True
+    assert len(event_requests) == 2
+    assert event_requests[0].url.params.get("cursor") is None
+    assert event_requests[1].url.params.get("cursor") == "stalled-event-cursor"
 
 
 def test_market_discovery_fails_closed_at_exact_event_fallback_limit() -> None:
@@ -1667,6 +1953,77 @@ def test_market_discovery_fails_closed_at_exact_event_fallback_limit() -> None:
     assert result["diagnostics"]["single_event_fallback_requests"] == 1
     assert result["diagnostics"]["event_fallback_request_limit_reached"] is True
     assert result["diagnostics"]["coverage_complete"] is False
+
+
+def test_exact_event_fallback_and_orderbook_share_one_serial_pacer() -> None:
+    clock = _FakeMonotonicClock()
+    request_starts: list[float] = []
+    request_paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        request_starts.append(clock.monotonic())
+        request_paths.append(request.url.path)
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(
+                200,
+                json={
+                    "markets": [
+                        _market_metadata(
+                            ticker="TEST-MARKET",
+                            event_ticker="TEST-EVENT",
+                        )
+                    ],
+                    "cursor": "",
+                },
+            )
+        if request.url.path.endswith("/events"):
+            return httpx.Response(200, json={"events": [], "cursor": ""})
+        if request.url.path.endswith("/events/TEST-EVENT"):
+            return httpx.Response(
+                200,
+                json={
+                    "event": {
+                        "event_ticker": "TEST-EVENT",
+                        "category": "Finance",
+                        "title": "Synthetic long-horizon event",
+                    }
+                },
+            )
+        if request.url.path.endswith("/markets/TEST-MARKET/orderbook"):
+            return httpx.Response(
+                200,
+                json={
+                    "orderbook_fp": {
+                        "yes_dollars": [["0.4000", "2.00"]],
+                        "no_dollars": [],
+                    }
+                },
+            )
+        raise AssertionError(f"unexpected request: {request.url.path}")
+
+    pacer = DiscoveryRequestPacer(
+        minimum_interval_seconds=0.2,
+        monotonic=clock.monotonic,
+        sleep=clock.sleep,
+    )
+    budget = DiscoveryRequestBudget(limit=10, pacer=pacer)
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        eligible_market_limit=1,
+        max_orderbook_probes=1,
+        require_recent_activity=True,
+        request_budget=budget,
+        max_request_attempts=1,
+    )
+
+    assert result["blocker_code"] is None
+    assert request_starts == pytest.approx([0.0, 0.2, 0.4, 0.6])
+    assert len(request_paths) == len(set(request_paths))
+    assert budget.consumed == len(request_paths)
+    assert result["diagnostics"]["pacing_slots_granted"] == len(request_paths)
 
 
 @pytest.mark.parametrize(
@@ -1834,6 +2191,51 @@ def test_default_event_fallback_bound_covers_a_realistic_metadata_gap() -> None:
     assert result["diagnostics"]["single_event_fallback_requests"] == 165
     assert result["diagnostics"]["max_event_fallback_requests"] == 1_000
     assert result["diagnostics"]["event_fallback_request_limit_reached"] is False
+
+
+def test_market_discovery_paces_serial_requests_and_keeps_429_terminal() -> None:
+    clock = _FakeMonotonicClock()
+    request_starts: list[float] = []
+    handler_active = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal handler_active
+        assert handler_active is False
+        handler_active = True
+        request_starts.append(clock.monotonic())
+        try:
+            if request.url.path.endswith("/markets"):
+                return httpx.Response(
+                    200,
+                    json={"markets": [_market_metadata()], "cursor": ""},
+                )
+            return httpx.Response(429, json={"code": "synthetic_rate_limited"})
+        finally:
+            handler_active = False
+
+    pacer = DiscoveryRequestPacer(
+        minimum_interval_seconds=0.25,
+        monotonic=clock.monotonic,
+        sleep=clock.sleep,
+    )
+    budget = DiscoveryRequestBudget(limit=10, pacer=pacer)
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        request_budget=budget,
+        max_request_attempts=1,
+    )
+
+    assert result["blocker_code"] == "DEMO_MARKET_DISCOVERY_INCOMPLETE_HTTP_ERROR"
+    assert request_starts == [0.0, 0.25]
+    assert budget.consumed == len(request_starts)
+    assert result["diagnostics"]["retry_count"] == 0
+    assert result["diagnostics"]["proactive_pacing_enabled"] is True
+    assert result["diagnostics"]["minimum_request_interval_seconds"] == 0.25
+    assert result["diagnostics"]["pacing_slots_granted"] == len(request_starts)
+    assert result["diagnostics"]["pacing_wait_count"] == 1
 
 
 def test_market_discovery_retries_429_with_a_bounded_attempt_count(
@@ -2478,7 +2880,7 @@ def test_kalshi_ws_runtime_bounds_market_selection_requests(
             "coverage_complete": True,
             "eligible_count": 0,
             "diagnostics": {
-                "discovery_protocol_version": "edmn.kalshi.discovery_protocol.v2",
+                "discovery_protocol_version": "edmn.kalshi.discovery_protocol.v3",
                 "event_page_requests": 2,
                 "event_pages_completed": 2,
                 "event_pagination_complete": True,
@@ -2525,7 +2927,7 @@ def test_kalshi_ws_runtime_bounds_market_selection_requests(
     assert selection["market_discovery_max_orderbook_probes"] == 100
     assert (
         selection["market_discovery_protocol_version"]
-        == "edmn.kalshi.discovery_protocol.v2"
+        == "edmn.kalshi.discovery_protocol.v3"
     )
     assert selection["market_discovery_event_page_requests"] == 2
     assert selection["market_discovery_event_pages_completed"] == 2

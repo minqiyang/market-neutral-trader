@@ -252,9 +252,10 @@ context, then read only the files needed for the requested stage. Use `rg` and
   validation, manifest, lifecycle gate, and evidence classification
   helper. Read before any recorder campaign gate work.
 - `src/edmn_trader/scripts/phase0f_activity_measurement.py`: strict composed
-  Phase 0F Demo read-only controller for activity-aware discovery, at most two
-  pinned probes, one measurement, closed-artifact assessment, private evidence,
-  sanitized status, and replay-semantics gating.
+  Phase 0F Demo read-only controller for conservatively paced activity-aware
+  discovery, one shared cumulative request control, at most two pinned probes,
+  one measurement, closed-artifact assessment, private evidence, sanitized
+  status, and replay-semantics gating.
 - `src/edmn_trader/scripts/kalshi_demo_connector.py`: importable Stage 49
   guarded Kalshi Demo connector preview CLI entry point.
 - `src/edmn_trader/scripts/kalshi_demo_reconciliation.py`: importable Stage 50

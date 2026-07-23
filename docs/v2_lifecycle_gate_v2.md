@@ -133,9 +133,22 @@ are not downgraded to observation failures.
 A shared request-budget object can cover discovery and every pinned
 revalidation. Request limits, consumed values, and attempt controls require
 exact integers (Booleans and fractional values reject), and control evidence is
-persisted with private discovery/revalidation records. The bounded Phase 0F
-profile sets one request attempt, so rate-limit, server, timeout, and connection
-failures stop rather than retry. Immediately before a pinned probe or
+persisted with private discovery/revalidation records. The v3 discovery protocol's bounded Phase 0F
+profile attaches one conservative serial minimum-interval pacer to that same
+shared object. Every market-page, event-page, exact-event, orderbook, and pinned
+revalidation request obtains a paced slot before its request reservation and
+transmission. Pacing delays a not-yet-sent request; it never repeats a failed
+request, changes the cumulative ceiling, or hides a provider response. A 429
+therefore remains terminal under the one-attempt profile, while pacing and retry
+counts remain separate private control evidence. A later controller invocation
+is a new owner-authorized attempt, not pacing or an automatic retry. An interrupted pacing wait
+propagates before consuming a reservation. Repeated market or event cursors now
+stop before the same cursor can be issued again, preserving incomplete-coverage
+semantics without avoidable request amplification. The policy is static and
+conservative; it does not query account-limit metadata.
+
+The bounded Phase 0F profile sets one request attempt, so rate-limit, server,
+timeout, and connection failures stop rather than retry. Immediately before a pinned probe or
 measurement, the original exact market and event identity, positive activity
 signal, lifecycle horizon, and orderbook are revalidated. The selection horizon
 must cover the complete requested runtime; pinned calls default to at least the

@@ -5,13 +5,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import random
 import re
 import sys
+import threading
 import time
 from collections import Counter
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -60,7 +62,7 @@ MAX_MARKET_DISCOVERY_PAGES = 100
 EVENT_DISCOVERY_PAGE_LIMIT = 200
 MAX_EVENT_DISCOVERY_PAGES = 100
 MAX_EVENT_FALLBACK_REQUESTS = 1_000
-DISCOVERY_PROTOCOL_VERSION = "edmn.kalshi.discovery_protocol.v2"
+DISCOVERY_PROTOCOL_VERSION = "edmn.kalshi.discovery_protocol.v3"
 DISCOVERY_SELECTION_DIAGNOSTIC_FIELDS = {
     "market_discovery_protocol_version": "discovery_protocol_version",
     "market_discovery_event_page_requests": "event_page_requests",
@@ -146,11 +148,59 @@ class SelectionProfile(StrEnum):
 
 
 @dataclass(slots=True)
+class DiscoveryRequestPacer:
+    """Grant serial request starts no faster than one conservative interval."""
+
+    minimum_interval_seconds: float
+    monotonic: Callable[[], float] = time.monotonic
+    sleep: Callable[[float], None] = time.sleep
+    last_request_started_at: float | None = field(default=None, init=False)
+    wait_count: int = field(default=0, init=False)
+    slots_granted: int = field(default=0, init=False)
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.minimum_interval_seconds, (int, float))
+            or isinstance(self.minimum_interval_seconds, bool)
+            or not math.isfinite(self.minimum_interval_seconds)
+            or self.minimum_interval_seconds <= 0
+        ):
+            raise ValueError("minimum request interval must be positive and finite")
+        if not callable(self.monotonic) or not callable(self.sleep):
+            raise ValueError("request pacer clock and sleeper must be callable")
+
+    def wait_before_request(self) -> None:
+        now = self.monotonic()
+        if not math.isfinite(now):
+            raise ValueError("request pacer clock must be finite")
+        if self.last_request_started_at is not None:
+            earliest = (
+                self.last_request_started_at + self.minimum_interval_seconds
+            )
+            delay = earliest - now
+            while delay > 0:
+                self.sleep(delay)
+                self.wait_count += 1
+                now = self.monotonic()
+                if not math.isfinite(now):
+                    raise ValueError("request pacer clock must be finite")
+                delay = earliest - now
+        self.last_request_started_at = now
+        self.slots_granted += 1
+
+
+@dataclass(slots=True)
 class DiscoveryRequestBudget:
-    """Shared hard cap for actual Demo discovery request attempts."""
+    """Shared hard cap and optional serial pacer for Demo discovery attempts."""
 
     limit: int
     consumed: int = 0
+    pacer: DiscoveryRequestPacer | None = None
+    transmission_lock: threading.Lock = field(
+        default_factory=threading.Lock,
+        init=False,
+        repr=False,
+    )
 
     def __post_init__(self) -> None:
         if (
@@ -166,12 +216,27 @@ class DiscoveryRequestBudget:
             or self.consumed > self.limit
         ):
             raise ValueError("consumed discovery requests must fit within the limit")
+        if self.pacer is not None and not isinstance(
+            self.pacer, DiscoveryRequestPacer
+        ):
+            raise ValueError("request pacer must be a DiscoveryRequestPacer")
+
+    def execute(self, operation: Callable[[], Any]) -> tuple[bool, Any | None]:
+        """Pace, reserve, and synchronously transmit one request under one lock."""
+
+        if not callable(operation):
+            raise ValueError("request operation must be callable")
+        with self.transmission_lock:
+            if self.consumed >= self.limit:
+                return False, None
+            if self.pacer is not None:
+                self.pacer.wait_before_request()
+            self.consumed += 1
+            return True, operation()
 
     def reserve(self) -> bool:
-        if self.consumed >= self.limit:
-            return False
-        self.consumed += 1
-        return True
+        reserved, _result = self.execute(lambda: None)
+        return reserved
 
 
 def _validate_max_request_attempts(value: int) -> None:
@@ -1801,14 +1866,17 @@ def discover_kalshi_demo_ws_market(
     active_client = client or KalshiDemoMarketDataClient()
     owns_client = client is None
     cursor: str | None = None
+    seen_market_cursors: set[str] = set()
     pages_attempted = 0
     pages_fetched = 0
     diagnostics: dict[str, Any] = {
         "coverage_complete": False,
+        "repeated_market_cursor": False,
         "event_page_requests": 0,
         "event_pages_completed": 0,
         "event_final_cursor_empty": False,
         "event_pagination_complete": False,
+        "repeated_event_cursor": False,
         "event_metadata_source": "documented_open_event_pagination_with_exact_fallback",
         "discovery_protocol_version": DISCOVERY_PROTOCOL_VERSION,
         "event_page_limit": EVENT_DISCOVERY_PAGE_LIMIT,
@@ -1885,6 +1953,26 @@ def discover_kalshi_demo_ws_market(
             cursor = next_cursor if isinstance(next_cursor, str) and next_cursor else None
             if cursor is None:
                 break
+            if cursor in seen_market_cursors:
+                diagnostics.update(
+                    {
+                        "pages_attempted": pages_attempted,
+                        "pages_completed": pages_fetched,
+                        "final_cursor_empty": False,
+                        "max_pages_reached": False,
+                        "raw_market_count": len(raw_normalized_markets),
+                        "repeated_market_cursor": True,
+                    }
+                )
+                return _market_discovery_blocker(
+                    "DEMO_MARKET_DISCOVERY_REPEATED_CURSOR",
+                    pages_fetched=pages_fetched,
+                    markets_seen=len(raw_normalized_markets),
+                    rejection_counts={},
+                    cursor_remaining=True,
+                    diagnostics=diagnostics,
+                )
+            seen_market_cursors.add(cursor)
 
         diagnostics.update(
             {
@@ -1932,6 +2020,7 @@ def discover_kalshi_demo_ws_market(
             requested_event_ticker_set = set(requested_event_tickers)
             diagnostics["unique_event_tickers"] = len(requested_event_tickers)
             event_cursor: str | None = None
+            seen_event_cursors: set[str] = set()
             raw_event_count = 0
             duplicate_event_count = 0
             for _ in range(max_event_pages if requested_event_tickers else 0):
@@ -1981,6 +2070,30 @@ def discover_kalshi_demo_ws_market(
                 )
                 if event_cursor is None:
                     break
+                if event_cursor in seen_event_cursors:
+                    diagnostics.update(
+                        {
+                            "raw_event_count": raw_event_count,
+                            "matched_event_count": len(event_cache),
+                            "duplicate_event_count": duplicate_event_count,
+                            "event_final_cursor_empty": False,
+                            "event_pagination_complete": False,
+                            "event_max_pages_reached": False,
+                            "repeated_event_cursor": True,
+                        }
+                    )
+                    return _market_discovery_blocker(
+                        "DEMO_EVENT_DISCOVERY_REPEATED_CURSOR",
+                        pages_fetched=pages_fetched,
+                        markets_seen=len(normalized_markets),
+                        rejection_counts={},
+                        cursor_remaining=False,
+                        diagnostics={
+                            **diagnostics,
+                            "pages_attempted": pages_attempted,
+                        },
+                    )
+                seen_event_cursors.add(event_cursor)
 
             diagnostics.update(
                 {
@@ -2610,7 +2723,7 @@ def _market_discovery_blocker(
 def _request_control_evidence(
     diagnostics: Mapping[str, object],
 ) -> dict[str, object]:
-    return {
+    evidence = {
         field: diagnostics.get(field)
         for field in (
             "max_request_attempts",
@@ -2620,6 +2733,37 @@ def _request_control_evidence(
             "request_budget_consumed",
         )
     }
+    if diagnostics.get("proactive_pacing_enabled") is True:
+        evidence.update(
+            {
+                field: diagnostics.get(field)
+                for field in (
+                    "proactive_pacing_enabled",
+                    "minimum_request_interval_seconds",
+                    "pacing_slots_granted",
+                    "pacing_wait_count",
+                )
+            }
+        )
+    return evidence
+
+
+def _update_request_pacing_diagnostics(
+    diagnostics: dict[str, Any],
+    request_budget: DiscoveryRequestBudget | None,
+) -> None:
+    pacer = request_budget.pacer if request_budget is not None else None
+    diagnostics["proactive_pacing_enabled"] = pacer is not None
+    if pacer is not None:
+        diagnostics.update(
+            {
+                "minimum_request_interval_seconds": (
+                    pacer.minimum_interval_seconds
+                ),
+                "pacing_slots_granted": pacer.slots_granted,
+                "pacing_wait_count": pacer.wait_count,
+            }
+        )
 
 
 def _discovery_global_blocker(error: str | None) -> str:
@@ -2636,14 +2780,26 @@ def _discovery_request(
     max_attempts: int = DISCOVERY_MAX_ATTEMPTS,
 ) -> tuple[Any | None, str | None]:
     for attempt in range(1, max_attempts + 1):
-        if request_budget is not None and not request_budget.reserve():
-            diagnostics["request_budget_consumed"] = request_budget.consumed
-            return None, "DISCOVERY_REQUEST_BUDGET_EXHAUSTED"
-        diagnostics["request_attempt_count"] += 1
-        if request_budget is not None:
-            diagnostics["request_budget_consumed"] = request_budget.consumed
+        def transmit() -> Any:
+            diagnostics["request_attempt_count"] += 1
+            if request_budget is not None:
+                diagnostics["request_budget_consumed"] = request_budget.consumed
+            _update_request_pacing_diagnostics(diagnostics, request_budget)
+            return operation()
+
         try:
-            result = operation()
+            if request_budget is None:
+                result = transmit()
+            else:
+                reserved, result = request_budget.execute(transmit)
+                if not reserved:
+                    diagnostics["request_budget_consumed"] = (
+                        request_budget.consumed
+                    )
+                    _update_request_pacing_diagnostics(
+                        diagnostics, request_budget
+                    )
+                    return None, "DISCOVERY_REQUEST_BUDGET_EXHAUSTED"
             _increment_status(diagnostics, 200)
             return result, None
         except KalshiEmptyOrderBookError:
@@ -2704,14 +2860,14 @@ def _has_recent_activity_indicator(market_metadata: Mapping[str, object]) -> boo
 
 
 def _has_current_quote_indicator(market_metadata: Mapping[str, object]) -> bool:
-    for field in (
+    for field_name in (
         "yes_bid_size_fp",
         "yes_ask_size_fp",
         "no_bid_size_fp",
         "no_ask_size_fp",
     ):
         try:
-            if Decimal(str(market_metadata.get(field) or "0")) > 0:
+            if Decimal(str(market_metadata.get(field_name) or "0")) > 0:
                 return True
         except InvalidOperation:
             continue
