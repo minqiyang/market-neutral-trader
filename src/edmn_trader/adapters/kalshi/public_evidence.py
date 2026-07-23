@@ -11,7 +11,11 @@ from math import ceil
 from pathlib import Path
 from typing import Any
 
-from edmn_trader.adapters.kalshi.client import normalize_kalshi_market_metadata
+from edmn_trader.adapters.kalshi.client import (
+    normalize_kalshi_market_metadata,
+    validate_kalshi_identifier,
+    validate_kalshi_market_identity,
+)
 from edmn_trader.adapters.kalshi.ws_events import (
     AdmissionStatus,
     KalshiWsRawEvent,
@@ -407,10 +411,40 @@ def build_public_trade_stream(
     )
 
 
+def validate_rest_lifecycle_identity(
+    market_metadata: Mapping[str, object],
+    *,
+    selected_market_ticker: str,
+    selected_event_ticker: str | None = None,
+) -> None:
+    """Require one lifecycle observation to retain its exact runtime pin."""
+
+    try:
+        selected_identity = validate_kalshi_identifier(selected_market_ticker)
+        validate_kalshi_market_identity(
+            market_metadata,
+            expected=selected_identity,
+        )
+        if selected_event_ticker is not None:
+            expected_event_identity = validate_kalshi_identifier(
+                selected_event_ticker
+            )
+            observed_event_identity = validate_kalshi_identifier(
+                market_metadata.get("event_ticker")
+            )
+            if observed_event_identity != expected_event_identity:
+                raise ValueError("event identity does not match")
+    except ValueError as exc:
+        raise ValueError(
+            "lifecycle observation must match the selected market and event exactly"
+        ) from exc
+
+
 def record_rest_lifecycle(
     market_metadata: Mapping[str, object],
     *,
     selected_market_ticker: str,
+    selected_event_ticker: str | None = None,
     observed_at_utc: datetime,
     evaluated_at_utc: datetime,
     max_age_seconds: int,
@@ -420,9 +454,11 @@ def record_rest_lifecycle(
     _require_aware(evaluated_at_utc, "evaluated_at_utc")
     if max_age_seconds < 0:
         raise ValueError("max_age_seconds must be non-negative")
-    ticker = market_metadata.get("market_ticker") or market_metadata.get("ticker")
-    if ticker != selected_market_ticker:
-        raise ValueError("lifecycle observation must match the selected market")
+    validate_rest_lifecycle_identity(
+        market_metadata,
+        selected_market_ticker=selected_market_ticker,
+        selected_event_ticker=selected_event_ticker,
+    )
     age = _age_seconds(evaluated_at_utc, observed_at_utc, "observed_at_utc")
     raw_status_value = market_metadata.get("raw_status")
     if not isinstance(raw_status_value, str):

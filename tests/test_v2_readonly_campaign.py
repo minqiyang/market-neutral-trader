@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 
 import httpx
@@ -22,6 +23,8 @@ from edmn_trader.scripts.v2_readonly_campaign import (
     DiscoveryRequestBudget,
     SelectionProfile,
     _blocked_ws_selection_record,
+    _parse_time,
+    _recent_activity_score,
     discover_kalshi_demo_ws_market,
     evaluate_market_selection,
     plan_campaign,
@@ -60,6 +63,171 @@ def _market_metadata(**overrides: object) -> dict[str, object]:
     return payload
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    (
+        ("2030-01-02T03:04:05Z", "2030-01-02T03:04:05+00:00"),
+        ("2030-01-02T03:04:05+05:30", "2030-01-01T21:34:05+00:00"),
+        ("2030-01-02T03:04:05.123456-04:00", "2030-01-02T07:04:05.123456+00:00"),
+    ),
+)
+def test_lifecycle_time_parser_requires_and_normalizes_explicit_timezone(
+    value: str,
+    expected: str,
+) -> None:
+    parsed = _parse_time(value)
+
+    assert parsed is not None
+    assert parsed.isoformat() == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "2030-01-02",
+        "2030-01-02T03:04:05",
+        " 2030-01-02T03:04:05Z",
+        "2030-01-02T03:04:05Z ",
+        "2030-01-02 03:04:05Z",
+        "2030-01-02T03:04Z",
+        "2030-01-02T03:04:05-00:00",
+        "2030-01-02T03:04:05+05:60",
+        "2030-01-02T03:04:05-00:99",
+        "2030-01-02T03:04:05+24:00",
+        "0001-01-01T00:00:00+23:59",
+        "9999-12-31T23:59:59-23:59",
+        "",
+        "not-a-time",
+        True,
+        1,
+        1.5,
+        datetime(2030, 1, 2, 3, 4, 5, tzinfo=UTC),
+        None,
+    ),
+)
+def test_lifecycle_time_parser_rejects_implicit_or_malformed_timezone(
+    value: object,
+) -> None:
+    assert _parse_time(value) is None
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    (
+        ("1", "1"),
+        ("0.25", "0.25"),
+        ("1000.0001", "1000.0001"),
+    ),
+)
+def test_recent_activity_accepts_only_ordinary_positive_fixed_point(
+    value: str,
+    expected: str,
+) -> None:
+    assert _recent_activity_score({"volume_24h_fp": value}) == Decimal(expected)
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "0",
+        "0.0",
+        "1e3",
+        "1E+3",
+        "+1",
+        "-1",
+        " 1",
+        "1 ",
+        "NaN",
+        "Infinity",
+        "",
+        ".5",
+        "1.",
+        True,
+        1,
+        1.0,
+        None,
+    ),
+)
+def test_recent_activity_rejects_nonpositive_or_non_fixed_point_values(
+    value: object,
+) -> None:
+    assert _recent_activity_score({"volume_24h_fp": value}) is None
+
+
+@pytest.mark.parametrize("malformed_primary", (None, ""))
+def test_lifecycle_gate_does_not_fallback_past_null_or_empty_primary_timestamp(
+    malformed_primary: object,
+) -> None:
+    expected_expiration = evaluate_market_selection(
+        _market_metadata(
+            expected_expiration_time=malformed_primary,
+            expected_expiration="2030-01-10T00:00:00Z",
+        ),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+    occurrence = evaluate_market_selection(
+        _market_metadata(
+            occurrence_datetime=malformed_primary,
+            occurrence_time="2030-01-10T00:00:00Z",
+        ),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert (
+        expected_expiration["selection_gate_rejection_reason"]
+        == "MISSING_EXPECTED_EXPIRATION_TIME"
+    )
+    assert occurrence["selection_gate_rejection_reason"] == "OCCURRENCE_DATETIME_INVALID"
+
+
+def test_lifecycle_gate_rejects_extreme_aware_datetime_without_overflow() -> None:
+    result = evaluate_market_selection(
+        _market_metadata(
+            expected_expiration_time=datetime(
+                1,
+                1,
+                1,
+                tzinfo=timezone(timedelta(hours=23, minutes=59)),
+            )
+        ),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert (
+        result["selection_gate_rejection_reason"]
+        == "MISSING_EXPECTED_EXPIRATION_TIME"
+    )
+    assert result["expected_expiration_time"] is None
+
+
+def test_lifecycle_gate_does_not_fallback_past_malformed_primary_timestamp() -> None:
+    expected_expiration = evaluate_market_selection(
+        _market_metadata(
+            expected_expiration_time="2030-01-02",
+            expected_expiration="2030-01-10T00:00:00Z",
+        ),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+    occurrence = evaluate_market_selection(
+        _market_metadata(
+            occurrence_datetime="2030-01-02T03:04:05",
+            occurrence_time="2030-01-10T00:00:00Z",
+        ),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert (
+        expected_expiration["selection_gate_rejection_reason"]
+        == "MISSING_EXPECTED_EXPIRATION_TIME"
+    )
+    assert occurrence["selection_gate_rejection_reason"] == "OCCURRENCE_DATETIME_INVALID"
+
+
 def test_market_selection_accepts_open_market_beyond_campaign_end() -> None:
     result = evaluate_market_selection(
         _market_metadata(),
@@ -70,6 +238,43 @@ def test_market_selection_accepts_open_market_beyond_campaign_end() -> None:
     assert result["selection_gate_result"] == "pass"
     assert result["selection_gate_rejection_reason"] is None
     assert result["market_ticker"] == "DEMO-EVENT-MARKET"
+
+
+@pytest.mark.parametrize(
+    ("overrides", "reason"),
+    (
+        ({"ticker": " TEST-MARKET"}, "INVALID_MARKET_IDENTITY"),
+        ({"ticker": "TEST-MARKET\n"}, "INVALID_MARKET_IDENTITY"),
+        ({"event_ticker": "\tTEST-EVENT"}, "INVALID_EVENT_IDENTITY"),
+        ({"event_ticker": "TEST-EVENT\u2003"}, "INVALID_EVENT_IDENTITY"),
+        ({"ticker": True}, "INVALID_MARKET_IDENTITY"),
+        ({"event_ticker": 1}, "INVALID_EVENT_IDENTITY"),
+        (
+            {"ticker": "TEST-MARKET", "market_ticker": "TEST-OTHER-MARKET"},
+            "INVALID_MARKET_IDENTITY",
+        ),
+        (
+            {"ticker": "TEST-MARKET", "market_ticker": "TEST-MARKET\u200b"},
+            "INVALID_MARKET_IDENTITY",
+        ),
+    ),
+)
+def test_market_selection_rejects_noncanonical_identity_before_ranking(
+    overrides: dict[str, object],
+    reason: str,
+) -> None:
+    result = evaluate_market_selection(
+        _market_metadata(**overrides),
+        selected_at_utc=NOW,
+        duration_seconds=CANARY_SECONDS,
+    )
+
+    assert result["selection_gate_result"] == "reject"
+    assert result["selection_gate_rejection_reason"] == reason
+    if reason == "INVALID_MARKET_IDENTITY":
+        assert result["market_ticker"] is None
+    if reason == "INVALID_EVENT_IDENTITY":
+        assert result["event_ticker"] is None
 
 
 def test_market_selection_rejects_finalized_market() -> None:
@@ -590,6 +795,111 @@ def test_activity_aware_discovery_requires_positive_documented_24h_volume() -> N
     assert orderbook_requests[0].url.path.endswith("ACTIVE/orderbook")
 
 
+def test_activity_aware_discovery_excludes_exponent_activity_before_ranking() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(
+                200,
+                json={
+                    "markets": [
+                        _market_metadata(
+                            ticker="TEST-EXPONENT",
+                            volume_24h_fp="1e9",
+                        ),
+                        _market_metadata(
+                            ticker="TEST-FIXED",
+                            volume_24h_fp="1.00",
+                        ),
+                    ],
+                    "cursor": "",
+                },
+            )
+        if request.url.path.endswith("/markets/TEST-FIXED/orderbook"):
+            return httpx.Response(
+                200,
+                json={
+                    "orderbook_fp": {
+                        "yes_dollars": [["0.4000", "2.00"]],
+                        "no_dollars": [],
+                    }
+                },
+            )
+        raise AssertionError("malformed activity must not reach orderbook ranking")
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=300,
+        safety_buffer_seconds=SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        require_recent_activity=True,
+        eligible_market_limit=1,
+        max_orderbook_probes=1,
+    )
+
+    assert result["blocker_code"] is None
+    assert result["market_metadata"]["ticker"] == "TEST-FIXED"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    (
+        {"ticker": " TEST-MARKET", "event_ticker": "TEST-EVENT"},
+        {"ticker": "TEST-MARKET ", "event_ticker": "TEST-EVENT"},
+        {"ticker": "TEST-MARKET", "event_ticker": "\tTEST-EVENT"},
+        {"ticker": "TEST-MARKET", "event_ticker": "TEST-EVENT\n"},
+        {"ticker": "TEST-MARKET\u2003", "event_ticker": "TEST-EVENT"},
+    ),
+)
+def test_discovery_excludes_noncanonical_identity_before_cache_or_orderbook(
+    overrides: dict[str, object],
+) -> None:
+    event_metadata_requests = 0
+    orderbook_requests = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal event_metadata_requests, orderbook_requests
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(
+                200,
+                json={"markets": [_market_metadata(**overrides)], "cursor": ""},
+            )
+        if request.url.path.endswith("/events"):
+            event_metadata_requests += 1
+            return httpx.Response(
+                200,
+                json={
+                    "events": [
+                        {
+                            "event_ticker": "TEST-EVENT",
+                            "category": "Finance",
+                            "title": "Synthetic event",
+                        }
+                    ],
+                    "cursor": "",
+                },
+            )
+        if request.url.path.endswith("/orderbook"):
+            orderbook_requests += 1
+        raise AssertionError("noncanonical identity must not reach exact URLs")
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        require_recent_activity=True,
+        eligible_market_limit=1,
+        max_orderbook_probes=1,
+        max_request_attempts=1,
+    )
+
+    assert result["blocker_code"] == "DEMO_NO_ELIGIBLE_MARKET"
+    assert result["eligible_count"] == 0
+    assert result["diagnostics"]["unique_event_tickers"] == 0
+    assert event_metadata_requests == 0
+    assert orderbook_requests == 0
+
+
 def test_activity_aware_discovery_ranks_recent_volume_then_ticker_deterministically() -> None:
     requested_books: list[str] = []
 
@@ -635,6 +945,55 @@ def test_activity_aware_discovery_ranks_recent_volume_then_ticker_deterministica
     assert requested_books == [
         "/trade-api/v2/markets/A-TIE/orderbook",
         "/trade-api/v2/markets/Z-TIE/orderbook",
+    ]
+
+
+def test_activity_ranking_preserves_fixed_point_precision_beyond_decimal_context() -> None:
+    requested_books: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(
+                200,
+                json={
+                    "markets": [
+                        _market_metadata(
+                            ticker="TEST-A-LOW",
+                            volume_24h_fp="1.00000000000000000000000000001",
+                        ),
+                        _market_metadata(
+                            ticker="TEST-Z-HIGH",
+                            volume_24h_fp="1.00000000000000000000000000002",
+                        ),
+                    ],
+                    "cursor": "",
+                },
+            )
+        requested_books.append(request.url.path)
+        return httpx.Response(
+            200,
+            json={
+                "orderbook_fp": {
+                    "yes_dollars": [["0.4000", "2.00"]],
+                    "no_dollars": [],
+                }
+            },
+        )
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=300,
+        safety_buffer_seconds=SMOKE_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        require_recent_activity=True,
+        eligible_market_limit=1,
+        max_orderbook_probes=1,
+    )
+
+    assert result["blocker_code"] is None
+    assert result["market_metadata"]["ticker"] == "TEST-Z-HIGH"
+    assert requested_books == [
+        "/trade-api/v2/markets/TEST-Z-HIGH/orderbook"
     ]
 
 
@@ -702,6 +1061,41 @@ def test_pinned_market_revalidation_never_lists_or_substitutes_candidates() -> N
     }
     assert budget.consumed == 3
     assert all(not request.url.path.endswith("/markets") for request in requests)
+
+
+@pytest.mark.parametrize(
+    ("market_ticker", "event_ticker"),
+    (
+        (" TEST-PINNED", "TEST-EVENT"),
+        ("TEST-PINNED ", "TEST-EVENT"),
+        ("TEST-PINNED", "\tTEST-EVENT"),
+        ("TEST-PINNED", "TEST-EVENT\n"),
+        ("TEST-PINNED\u2003", "TEST-EVENT"),
+    ),
+)
+def test_pinned_revalidation_rejects_noncanonical_identity_before_request(
+    market_ticker: str,
+    event_ticker: str,
+) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        raise AssertionError("malformed pin must fail before a request")
+
+    with pytest.raises(ValueError, match="exact non-whitespace string"):
+        revalidate_kalshi_demo_ws_market(
+            market_ticker=market_ticker,
+            expected_event_ticker=event_ticker,
+            duration_seconds=CANARY_SECONDS,
+            safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+            selected_at_utc=NOW,
+            client=_market_discovery_client(handler),
+            require_recent_activity=True,
+            max_request_attempts=1,
+        )
+
+    assert requests == []
 
 
 def test_pinned_market_revalidation_treats_authorization_failure_as_global() -> None:
@@ -1273,6 +1667,124 @@ def test_market_discovery_fails_closed_at_exact_event_fallback_limit() -> None:
     assert result["diagnostics"]["single_event_fallback_requests"] == 1
     assert result["diagnostics"]["event_fallback_request_limit_reached"] is True
     assert result["diagnostics"]["coverage_complete"] is False
+
+
+@pytest.mark.parametrize(
+    "event_payload",
+    (
+        {"category": "Finance", "title": "Missing identity"},
+        {"event_ticker": 1, "category": "Finance", "title": "Malformed identity"},
+        {
+            "event_ticker": "TEST-OTHER-EVENT",
+            "category": "Finance",
+            "title": "Mismatched identity",
+        },
+        {
+            "event_ticker": "test-event",
+            "category": "Finance",
+            "title": "Case-changed identity",
+        },
+        {
+            "event_ticker": " TEST-EVENT",
+            "category": "Finance",
+            "title": "Padded identity",
+        },
+        {
+            "event_ticker": "TEST-EVENT ",
+            "category": "Finance",
+            "title": "Padded identity",
+        },
+        {
+            "event_ticker": "TEST-EVENT",
+            "category": "Finance",
+            "title": "Nested mismatch",
+            "markets": [{"event_ticker": "TEST-OTHER-EVENT"}],
+        },
+        {
+            "event_ticker": "TEST-EVENT",
+            "category": "Finance",
+            "title": "Explicitly missing nested event identity",
+            "markets": [{"ticker": "TEST-MARKET", "event_ticker": None}],
+        },
+        {
+            "event_ticker": "TEST-EVENT",
+            "category": "Finance",
+            "title": "Conflicting nested market aliases",
+            "markets": [
+                {
+                    "ticker": "TEST-MARKET",
+                    "market_ticker": "TEST-OTHER-MARKET",
+                    "event_ticker": "TEST-EVENT",
+                }
+            ],
+        },
+        {
+            "event_ticker": "TEST-EVENT",
+            "category": "Finance",
+            "title": "Malformed nested market alias",
+            "markets": [
+                {
+                    "ticker": "TEST-MARKET",
+                    "market_ticker": "TEST-MARKET\u200b",
+                    "event_ticker": "TEST-EVENT",
+                }
+            ],
+        },
+    ),
+)
+def test_exact_event_fallback_rejects_unverified_identity_without_candidate(
+    event_payload: dict[str, object],
+) -> None:
+    orderbook_requests = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal orderbook_requests
+        if request.url.path.endswith("/markets"):
+            return httpx.Response(
+                200,
+                json={
+                    "markets": [
+                        _market_metadata(
+                            ticker="TEST-MARKET",
+                            event_ticker="TEST-EVENT",
+                        )
+                    ],
+                    "cursor": "",
+                },
+            )
+        if request.url.path.endswith("/events"):
+            return httpx.Response(200, json={"events": [], "cursor": ""})
+        if request.url.path.endswith("/events/TEST-EVENT"):
+            return httpx.Response(200, json={"event": event_payload})
+        if request.url.path.endswith("/markets/TEST-MARKET/orderbook"):
+            orderbook_requests += 1
+            return httpx.Response(
+                200,
+                json={
+                    "orderbook_fp": {
+                        "yes_dollars": [["0.4000", "2.00"]],
+                        "no_dollars": [],
+                    }
+                },
+            )
+        raise AssertionError(f"unexpected request: {request.url.path}")
+
+    result = discover_kalshi_demo_ws_market(
+        duration_seconds=CANARY_SECONDS,
+        safety_buffer_seconds=CANARY_SELECTION_SAFETY_BUFFER_SECONDS,
+        selected_at_utc=NOW,
+        client=_market_discovery_client(handler),
+        eligible_market_limit=1,
+        max_orderbook_probes=1,
+        require_recent_activity=True,
+        max_request_attempts=1,
+    )
+
+    assert result["blocker_code"] == "DEMO_EVENT_DISCOVERY_IDENTITY_MISMATCH"
+    assert result["eligible_count"] == 0
+    assert result["coverage_complete"] is False
+    assert result["diagnostics"]["candidate_local_failure_count"] == 1
+    assert orderbook_requests == 0
 
 
 def test_default_event_fallback_bound_covers_a_realistic_metadata_gap() -> None:

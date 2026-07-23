@@ -103,8 +103,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
 - `src/edmn_trader/core/models.py`: exchange-agnostic dataclasses and
   `ExecutionMode`. Read when changing core trading concepts.
 - `src/edmn_trader/adapters/kalshi/client.py`: guarded read-only Kalshi Demo
-  REST client for public markets and orderbooks. Read for Stage 2 client
-  behavior, error handling, or endpoint path changes.
+  REST client for public markets and orderbooks, including exact identifier
+  validation before URL construction and orderbook-response binding. Read for
+  Stage 2 client behavior, error handling, or endpoint path changes.
 - `src/edmn_trader/adapters/kalshi/orderbook.py`: Kalshi fixed-point
   orderbook normalizer. Read for Kalshi orderbook parsing only.
 - `src/edmn_trader/adapters/kalshi/readonly_recorder.py`: Stage 40 guarded
@@ -119,15 +120,16 @@ context, then read only the files needed for the requested stage. Use `rg` and
   incremental native snapshot/delta rebuild, Decimal price-scale conversion,
   typed quarantine/invalidation, canonical YES frames, and semantic hashes.
 - `src/edmn_trader/adapters/kalshi/public_evidence.py`: D2C fixture-only
-  selected-market public trade stream, REST lifecycle fallback, typed
-  connection evidence, and independent freshness dimensions.
+  selected-market public trade stream, exact-identity REST lifecycle fallback,
+  typed connection evidence, and independent freshness dimensions.
 - `src/edmn_trader/adapters/kalshi/ws_recorder.py`: read-only Kalshi Demo
   WebSocket transport loop. It subscribes to selected-market orderbook and
   public trade channels and sends D2A and connection callbacks to the D2E
   runtime without retaining a campaign-sized in-memory event list.
 - `src/edmn_trader/adapters/kalshi/ws_runtime.py`: D2E runtime assembly for D2A
-  admission, D2B rebuild, D2C public evidence, D2D segmented persistence,
-  timing/classification, terminal validation, and fail-closed crash recovery.
+  admission, D2B rebuild, exact market/event-bound D2C lifecycle evidence, D2D
+  segmented persistence, timing/classification, terminal validation, and
+  fail-closed crash recovery.
 - `src/edmn_trader/data/evidence_classifier.py`: D2D orthogonal evidence
   dimensions, overall classification, exact timing, freshness maxima, and
   threshold provenance.
@@ -245,8 +247,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   daily validation report CLI entry point.
 - `src/edmn_trader/scripts/v2_readonly_campaign.py`: V2 read-only campaign
   planning, paginated and optionally activity-aware Demo market discovery,
-  pinned no-substitution market/event revalidation, shared request budgeting,
-  smoke, validation, manifest, lifecycle gate, and evidence classification
+  strict fixed-point activity/time parsing, verified event caching, pinned
+  no-substitution market/event revalidation, shared request budgeting, smoke,
+  validation, manifest, lifecycle gate, and evidence classification
   helper. Read before any recorder campaign gate work.
 - `src/edmn_trader/scripts/phase0f_activity_measurement.py`: strict composed
   Phase 0F Demo read-only controller for activity-aware discovery, at most two
@@ -385,8 +388,8 @@ context, then read only the files needed for the requested stage. Use `rg` and
   snapshots/deltas, isolation, pricing modes, invalidation/recovery, canonical
   books, exact Decimal values, deterministic hashes, and compatibility gates.
 - `tests/test_kalshi_public_evidence.py`: synthetic D2C coverage for selected
-  public trades, lifecycle fallback, MVE/stale handling, connection types, and
-  independent freshness dimensions.
+  public trades, exact market/event-bound lifecycle fallback, MVE/stale
+  handling, connection types, and independent freshness dimensions.
 - `tests/test_evidence_classifier.py`: D2D orthogonal classification,
   actual-duration, freshness, and threshold-provenance coverage.
 - `tests/test_evidence_durability.py`: D2D chain, checkpoint, close, rotation,
@@ -397,9 +400,9 @@ context, then read only the files needed for the requested stage. Use `rg` and
   for v2 envelope output, connection/segment boundaries, and pre-snapshot
   delta exclusion.
 - `tests/test_kalshi_ws_runtime.py`: mocked D2E runtime coverage for actual
-  entrypoint assembly, D2 artifact validation/monitoring, lifecycle freshness,
-  sequence/rebuild isolation, pricing modes, rotation, tamper detection, and
-  partial-tail crash recovery.
+  entrypoint assembly, D2 artifact validation/monitoring, pinned lifecycle
+  identity/freshness, sequence/rebuild isolation, pricing modes, rotation,
+  tamper detection, and partial-tail crash recovery.
 - `tests/test_polymarket_market_recorder.py`: Stage 41 Polymarket US
   market-channel recorder guardrail coverage for opt-in, US-public-only config,
   mocked HTTP recording, raw event JSONL, normalized snapshot JSONL, and

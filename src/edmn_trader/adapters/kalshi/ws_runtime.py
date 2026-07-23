@@ -18,7 +18,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
-from edmn_trader.adapters.kalshi.client import KalshiDemoMarketDataClient
+from edmn_trader.adapters.kalshi.client import (
+    KalshiDemoMarketDataClient,
+    validate_kalshi_identifier,
+    validate_kalshi_market_identity,
+)
 from edmn_trader.adapters.kalshi.public_evidence import (
     ConnectionEvidenceEvent,
     ConnectionEvidenceType,
@@ -29,6 +33,7 @@ from edmn_trader.adapters.kalshi.public_evidence import (
     build_public_trade_stream,
     evaluate_evidence_freshness,
     record_rest_lifecycle,
+    validate_rest_lifecycle_identity,
 )
 from edmn_trader.adapters.kalshi.ws_auth import KalshiWsAuthConfig
 from edmn_trader.adapters.kalshi.ws_book_rebuild import (
@@ -268,6 +273,11 @@ def run_d2_kalshi_ws_runtime(
         last_lifecycle_poll = observed_at
         try:
             current = provider(session.selected_market_ticker)
+            validate_rest_lifecycle_identity(
+                current,
+                selected_market_ticker=session.selected_market_ticker,
+                selected_event_ticker=session.selected_event_ticker,
+            )
         except Exception:
             lifecycle_blocker = "LIFECYCLE_OBSERVATION_FAILED"
             return
@@ -496,11 +506,17 @@ class RuntimeEvidenceSession:
         validate_no_secret_payload(selected_market_selection)
         validate_no_private_account_payload(selected_market_metadata)
         validate_no_private_account_payload(selected_market_selection)
-        ticker = selected_market_metadata.get("ticker") or selected_market_metadata.get(
-            "market_ticker"
-        )
-        if not isinstance(ticker, str) or not ticker:
-            raise ValueError("selected market ticker is required")
+        try:
+            ticker = validate_kalshi_market_identity(selected_market_metadata)
+            event_ticker = (
+                validate_kalshi_identifier(
+                    selected_market_metadata.get("event_ticker")
+                )
+                if "event_ticker" in selected_market_metadata
+                else None
+            )
+        except ValueError as exc:
+            raise ValueError("selected market/event identity must be exact") from exc
         if threshold_policy.effective_at_utc > started_at_utc:
             raise ValueError("threshold policy must be effective before runtime start")
         if not isinstance(use_yes_price, bool):
@@ -513,6 +529,7 @@ class RuntimeEvidenceSession:
         self.selected_market_metadata = dict(selected_market_metadata)
         self.selected_market_selection = dict(selected_market_selection)
         self.selected_market_ticker = ticker
+        self.selected_event_ticker = event_ticker
         self.lifecycle_mode_and_source = lifecycle_mode_and_source
         self.pricing_mode_and_source = pricing_mode_and_source
         self.provenance = provenance
@@ -673,6 +690,7 @@ class RuntimeEvidenceSession:
         evidence = record_rest_lifecycle(
             market_metadata,
             selected_market_ticker=self.selected_market_ticker,
+            selected_event_ticker=self.selected_event_ticker,
             observed_at_utc=observed_at_utc,
             evaluated_at_utc=evaluated_at_utc,
             max_age_seconds=self.threshold_policy.maximum_lifecycle_age_seconds,
