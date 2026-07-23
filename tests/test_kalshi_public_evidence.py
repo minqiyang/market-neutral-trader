@@ -358,6 +358,67 @@ def test_rest_lifecycle_status_transitions(
     )
 
 
+@pytest.mark.parametrize(
+    "identity_fields",
+    (
+        {"market_ticker": MARKET},
+        {"ticker": MARKET, "market_ticker": MARKET},
+    ),
+)
+def test_rest_lifecycle_accepts_exact_consistent_market_aliases(
+    identity_fields: dict[str, object],
+) -> None:
+    evidence = record_rest_lifecycle(
+        {**identity_fields, "status": "active"},
+        selected_market_ticker=MARKET,
+        observed_at_utc=NOW,
+        evaluated_at_utc=NOW,
+        max_age_seconds=60,
+    )
+
+    assert evidence.market_ticker == MARKET
+    assert evidence.validity is LifecycleValidity.VALID
+
+
+def test_rest_lifecycle_accepts_exact_selected_event_identity() -> None:
+    evidence = record_rest_lifecycle(
+        {
+            "ticker": MARKET,
+            "event_ticker": "TEST-EVENT",
+            "status": "active",
+        },
+        selected_market_ticker=MARKET,
+        selected_event_ticker="TEST-EVENT",
+        observed_at_utc=NOW,
+        evaluated_at_utc=NOW,
+        max_age_seconds=60,
+    )
+
+    assert evidence.validity is LifecycleValidity.VALID
+
+
+@pytest.mark.parametrize(
+    "event_ticker",
+    (None, "", "TEST-OTHER-EVENT", " TEST-EVENT", 1),
+)
+def test_rest_lifecycle_rejects_unverified_selected_event_identity(
+    event_ticker: object,
+) -> None:
+    with pytest.raises(ValueError, match="selected market and event"):
+        record_rest_lifecycle(
+            {
+                "ticker": MARKET,
+                "event_ticker": event_ticker,
+                "status": "active",
+            },
+            selected_market_ticker=MARKET,
+            selected_event_ticker="TEST-EVENT",
+            observed_at_utc=NOW,
+            evaluated_at_utc=NOW,
+            max_age_seconds=60,
+        )
+
+
 def test_rest_lifecycle_preserves_existing_raw_status_provenance() -> None:
     evidence = record_rest_lifecycle(
         {
@@ -424,6 +485,47 @@ def test_nonselected_lifecycle_observation_is_rejected() -> None:
         record_rest_lifecycle(
             {"ticker": OTHER_MARKET, "status": "active"},
             selected_market_ticker=MARKET,
+            observed_at_utc=NOW,
+            evaluated_at_utc=NOW,
+            max_age_seconds=60,
+        )
+
+
+@pytest.mark.parametrize(
+    ("market_metadata", "selected_market_ticker"),
+    (
+        (
+            {
+                "ticker": OTHER_MARKET,
+                "market_ticker": MARKET,
+                "status": "active",
+            },
+            MARKET,
+        ),
+        (
+            {"ticker": None, "market_ticker": MARKET, "status": "active"},
+            MARKET,
+        ),
+        (
+            {
+                "ticker": f"{MARKET} ",
+                "market_ticker": MARKET,
+                "status": "active",
+            },
+            MARKET,
+        ),
+        ({"ticker": f" {MARKET}", "status": "active"}, f" {MARKET}"),
+        ({"ticker": f"{MARKET}\x00", "status": "active"}, f"{MARKET}\x00"),
+    ),
+)
+def test_rest_lifecycle_rejects_noncanonical_or_conflicting_market_identity(
+    market_metadata: dict[str, object],
+    selected_market_ticker: str,
+) -> None:
+    with pytest.raises(ValueError, match="selected market"):
+        record_rest_lifecycle(
+            market_metadata,
+            selected_market_ticker=selected_market_ticker,
             observed_at_utc=NOW,
             evaluated_at_utc=NOW,
             max_age_seconds=60,

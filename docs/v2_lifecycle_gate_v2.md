@@ -98,6 +98,38 @@ and ticker as a final stable tie-break. Discovery can return a bounded ordered
 candidate set so the bounded controller can pin each pre-authorized probe
 without silently substituting a market.
 
+Lifecycle timestamps use a strict external parser before any horizon math. It
+accepts only an exact timezone-aware string with `T`, seconds, and either `Z`
+or a numeric `HH:MM` offset whose hour/minute components are in range;
+fractional seconds are allowed. Date-only, naive, whitespace-padded, non-string,
+malformed, out-of-range, and unknown `-00:00` offset values remain invalid and
+cannot inherit UTC. A supplied null, empty, or malformed primary lifecycle field
+cannot fall through to a secondary alias. Range-edge UTC conversion failures
+also remain invalid rather than escaping the gate. Original strings remain
+available in the local evidence fields while only validated values are
+normalized to UTC.
+
+The activity field uses an ASCII unsigned fixed-point grammar before Decimal
+conversion. Integer and fractional strings are accepted; signs, exponents,
+whitespace, non-string numerics, non-finite spellings, malformed decimals, and
+zero activity cannot satisfy the recent-activity gate. No rounding or numeric
+coercion occurs.
+
+Market/event identities are exact strings at discovery, event caching,
+revalidation, URL construction, orderbook normalization, runtime lifecycle
+recording (including the pinned event), probe launch, and measurement launch.
+Any empty, non-string,
+ASCII/Unicode-whitespace-padded, control/format-tainted, case-mismatched, or
+otherwise non-exact identity rejects before use; supplied market aliases must
+agree exactly. Exact-event fallback verifies the returned event identity, any
+supplied nested event identity, and nested market aliases before cache mutation;
+an exact-fallback identity contradiction blocks the discovery scan globally and
+cannot substitute a different event. Rejected market identities cannot trigger
+event hydration, and response-supplied orderbook identities must match the
+requested market before normalization. Runtime lifecycle identity failures set
+the lifecycle blocker, while evidence append/fsync failures remain terminal and
+are not downgraded to observation failures.
+
 A shared request-budget object can cover discovery and every pinned
 revalidation. Request limits, consumed values, and attempt controls require
 exact integers (Booleans and fractional values reject), and control evidence is

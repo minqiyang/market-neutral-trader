@@ -63,6 +63,48 @@ def test_list_markets_rejects_unknown_multivariate_filter() -> None:
         client.list_markets(mve_filter="unknown")
 
 
+@pytest.mark.parametrize(
+    "identity",
+    (
+        "",
+        " TEST-TICKER",
+        "TEST-TICKER ",
+        "\tTEST-TICKER",
+        "TEST-TICKER\n",
+        "\u00a0TEST-TICKER",
+        "TEST-TICKER\u2003",
+        "TEST-TICKER\u200b",
+        "\ufeffTEST-TICKER",
+        "TEST-TICKER\x00",
+        True,
+        1,
+        None,
+    ),
+)
+@pytest.mark.parametrize(
+    "method_name",
+    ("get_market", "get_event", "get_market_orderbook", "get_normalized_orderbook"),
+)
+def test_exact_resource_requests_reject_noncanonical_identity_before_url_construction(
+    identity: object,
+    method_name: str,
+) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        raise AssertionError("invalid identity must fail before a request")
+
+    client = KalshiDemoMarketDataClient(
+        http_client=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+
+    with pytest.raises(ValueError, match="exact non-whitespace string"):
+        getattr(client, method_name)(identity)
+
+    assert requests == []
+
+
 def test_get_market_uses_read_only_market_endpoint() -> None:
     requests: list[httpx.Request] = []
 
@@ -165,6 +207,65 @@ def test_get_market_orderbook_uses_read_only_orderbook_endpoint() -> None:
     assert requests[0].url.path == "/trade-api/v2/markets/DEMO-EVENT-MARKET/orderbook"
     assert requests[0].url.params["depth"] == "10"
     assert "authorization" not in requests[0].headers
+
+
+@pytest.mark.parametrize("method_name", ("get_market_orderbook", "get_normalized_orderbook"))
+@pytest.mark.parametrize(
+    ("location", "identity_fields"),
+    (
+        ("top", {"ticker": "TEST-OTHER-MARKET"}),
+        (
+            "top",
+            {
+                "ticker": "TEST-EVENT-MARKET",
+                "market_ticker": "TEST-OTHER-MARKET",
+            },
+        ),
+        ("top", {"instrument_id": "TEST-OTHER-MARKET"}),
+        ("nested", {"ticker": "TEST-OTHER-MARKET"}),
+        ("nested", {"market_ticker": "TEST-EVENT-MARKET\u200b"}),
+        ("nested", {"instrument_id": None}),
+    ),
+)
+def test_orderbook_response_rejects_unverified_market_identity(
+    method_name: str,
+    location: str,
+    identity_fields: dict[str, object],
+) -> None:
+    payload = _load_fixture("kalshi_orderbook_response.json")
+    target = payload if location == "top" else payload["orderbook_fp"]
+    target.update(identity_fields)
+    client = KalshiDemoMarketDataClient(
+        http_client=httpx.Client(transport=_json_transport(payload))
+    )
+
+    with pytest.raises(KalshiResponseError, match="identity"):
+        getattr(client, method_name)("TEST-EVENT-MARKET")
+
+
+def test_get_normalized_orderbook_accepts_only_matching_response_identities() -> None:
+    payload = _load_fixture("kalshi_orderbook_response.json")
+    payload.update(
+        {
+            "ticker": "TEST-EVENT-MARKET",
+            "market_ticker": "TEST-EVENT-MARKET",
+            "instrument_id": "TEST-EVENT-MARKET",
+        }
+    )
+    payload["orderbook_fp"].update(
+        {
+            "ticker": "TEST-EVENT-MARKET",
+            "market_ticker": "TEST-EVENT-MARKET",
+            "instrument_id": "TEST-EVENT-MARKET",
+        }
+    )
+    client = KalshiDemoMarketDataClient(
+        http_client=httpx.Client(transport=_json_transport(payload))
+    )
+
+    book = client.get_normalized_orderbook("TEST-EVENT-MARKET")
+
+    assert book.instrument_id == "TEST-EVENT-MARKET"
 
 
 def test_get_normalized_orderbook_returns_canonical_yes_book() -> None:

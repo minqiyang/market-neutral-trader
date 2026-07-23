@@ -270,6 +270,116 @@ def test_actual_runtime_assembly_uses_d2_writer_and_mocked_transports(
     assert monitor["run_info"]["health"] != "OK_PAPER"
 
 
+def test_runtime_lifecycle_poll_rejects_changed_pinned_event_identity(
+    tmp_path: Path,
+) -> None:
+    fake_time = _FakeTime()
+    websocket = _FakeWebSocket([])
+
+    summary = run_d2_kalshi_ws_runtime(
+        output_dir=tmp_path / "run-event-mismatch",
+        campaign_id="TEST-RUNTIME-EVENT-MISMATCH",
+        mode="read_only_websocket_smoke",
+        duration_seconds=65,
+        market_metadata={
+            "ticker": MARKET,
+            "event_ticker": "TEST-EVENT",
+            "status": "active",
+        },
+        market_selection={
+            "selection_profile": "smoke",
+            "selection_gate_result": "pass",
+        },
+        auth=KalshiWsAuthConfig(
+            api_key_id="fixture-id",
+            private_key_path=_private_key(tmp_path),
+        ),
+        provenance=RuntimeCodeProvenance(
+            COMMIT,
+            "main",
+            "https://example.test/repo",
+            False,
+        ),
+        websocket_factory=lambda *_args, **_kwargs: websocket,
+        lifecycle_provider=lambda ticker: {
+            "ticker": ticker,
+            "event_ticker": "TEST-OTHER-EVENT",
+            "status": "active",
+        },
+        now=fake_time.now,
+        monotonic=fake_time.monotonic,
+        monotonic_ns=fake_time.monotonic_ns,
+    )
+
+    assert summary["lifecycle_observation_count"] == 1
+
+
+def test_runtime_lifecycle_poll_propagates_evidence_persistence_failure(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    original_append = RuntimeEvidenceSession._append
+    lifecycle_append_count = 0
+
+    def append_with_failure(
+        self: RuntimeEvidenceSession,
+        record_type: str,
+        payload: dict[str, object],
+        *,
+        observed_at_utc: datetime,
+    ) -> None:
+        nonlocal lifecycle_append_count
+        if record_type == "lifecycle_evidence":
+            lifecycle_append_count += 1
+            if lifecycle_append_count == 2:
+                raise OSError("synthetic lifecycle durability failure")
+        original_append(
+            self,
+            record_type,
+            payload,
+            observed_at_utc=observed_at_utc,
+        )
+
+    monkeypatch.setattr(RuntimeEvidenceSession, "_append", append_with_failure)
+    fake_time = _FakeTime()
+
+    with pytest.raises(ws_recorder.EvidenceCallbackError):
+        run_d2_kalshi_ws_runtime(
+            output_dir=tmp_path / "run-lifecycle-durability-failure",
+            campaign_id="TEST-RUNTIME-LIFECYCLE-DURABILITY",
+            mode="read_only_websocket_smoke",
+            duration_seconds=65,
+            market_metadata={
+                "ticker": MARKET,
+                "event_ticker": "TEST-EVENT",
+                "status": "active",
+            },
+            market_selection={
+                "selection_profile": "smoke",
+                "selection_gate_result": "pass",
+            },
+            auth=KalshiWsAuthConfig(
+                api_key_id="fixture-id",
+                private_key_path=_private_key(tmp_path),
+            ),
+            provenance=RuntimeCodeProvenance(
+                COMMIT,
+                "main",
+                "https://example.test/repo",
+                False,
+            ),
+            websocket_factory=lambda *_args, **_kwargs: _FakeWebSocket([]),
+            lifecycle_provider=lambda ticker: {
+                "ticker": ticker,
+                "event_ticker": "TEST-EVENT",
+                "status": "active",
+            },
+            now=fake_time.now,
+            monotonic=fake_time.monotonic,
+            monotonic_ns=fake_time.monotonic_ns,
+        )
+
+
 def test_actual_runtime_requires_acknowledgement_after_resubscription(
     tmp_path: Path,
     monkeypatch,

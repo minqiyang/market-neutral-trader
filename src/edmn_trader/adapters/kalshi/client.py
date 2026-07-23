@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any, Self
+from unicodedata import category
 from urllib.parse import quote
 
 import httpx
@@ -168,7 +169,7 @@ class KalshiDemoMarketDataClient:
         clean_ticker = _validate_ticker(ticker)
         payload = self.get_market_orderbook(clean_ticker, depth=depth)
         payload_with_ticker = dict(payload)
-        payload_with_ticker.setdefault("market_ticker", clean_ticker)
+        payload_with_ticker["market_ticker"] = clean_ticker
         return normalize_kalshi_orderbook_fp(payload_with_ticker)
 
     def _get_json(self, path: str, *, params: Mapping[str, object | None]) -> dict[str, Any]:
@@ -230,12 +231,53 @@ def _validate_demo_base_url(base_url: str) -> None:
         raise KalshiConfigurationError(msg)
 
 
-def _validate_ticker(ticker: str) -> str:
-    clean_ticker = ticker.strip()
-    if not clean_ticker:
-        msg = "ticker is required"
-        raise ValueError(msg)
-    return clean_ticker
+def validate_kalshi_identifier(value: object) -> str:
+    """Return an exact Kalshi identity or reject before URL construction."""
+
+    if (
+        not isinstance(value, str)
+        or not value
+        or any(
+            character.isspace()
+            or category(character).startswith(("C", "Z"))
+            for character in value
+        )
+    ):
+        raise ValueError("ticker must be an exact non-whitespace string")
+    return value
+
+
+def validate_kalshi_market_identity(
+    market: Mapping[str, object],
+    *,
+    expected: object | None = None,
+) -> str:
+    """Return one exact, internally consistent market identity."""
+
+    supplied = [
+        (key, market.get(key))
+        for key in ("ticker", "market_ticker")
+        if key in market
+    ]
+    if not supplied:
+        raise ValueError("market identity requires ticker or market_ticker")
+    try:
+        identities = [validate_kalshi_identifier(value) for _key, value in supplied]
+        expected_identity = (
+            validate_kalshi_identifier(expected) if expected is not None else None
+        )
+    except ValueError as exc:
+        raise ValueError("market identity contains a non-exact alias") from exc
+    if any(identity != identities[0] for identity in identities[1:]):
+        raise ValueError("ticker and market_ticker must match exactly")
+    identity = identities[0]
+    if expected_identity is not None and identity != expected_identity:
+        raise ValueError("market identity does not match the expected ticker")
+    return identity
+
+
+def _validate_ticker(ticker: object) -> str:
+    return validate_kalshi_identifier(ticker)
 
 
 def _validate_markets_payload(payload: dict[str, Any]) -> None:
@@ -278,9 +320,37 @@ def _validate_orderbook_payload(payload: dict[str, Any], *, ticker: str) -> None
         msg = "Kalshi orderbook_fp must contain yes_dollars and no_dollars lists"
         raise KalshiResponseError(msg)
 
+    _validate_orderbook_identity_fields(payload, ticker=ticker, location="response")
+    _validate_orderbook_identity_fields(
+        orderbook,
+        ticker=ticker,
+        location="orderbook_fp",
+    )
+
     if not yes_dollars and not no_dollars:
         msg = f"Kalshi orderbook for {ticker} contains no YES or NO levels"
         raise KalshiEmptyOrderBookError(msg)
+
+
+def _validate_orderbook_identity_fields(
+    payload: Mapping[str, object],
+    *,
+    ticker: str,
+    location: str,
+) -> None:
+    for key in ("instrument_id", "market_ticker", "ticker"):
+        if key not in payload:
+            continue
+        try:
+            identity = validate_kalshi_identifier(payload.get(key))
+        except ValueError as exc:
+            raise KalshiResponseError(
+                f"Kalshi orderbook {location} identity field {key} is invalid"
+            ) from exc
+        if identity != ticker:
+            raise KalshiResponseError(
+                f"Kalshi orderbook {location} identity does not match the requested market"
+            )
 
 
 def _short_body(body: str, *, max_chars: int = 300) -> str:

@@ -12,6 +12,10 @@ from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from pathlib import Path
 
+from edmn_trader.adapters.kalshi.client import (
+    validate_kalshi_identifier,
+    validate_kalshi_market_identity,
+)
 from edmn_trader.adapters.kalshi.ws_auth import load_kalshi_ws_auth_config_from_env
 from edmn_trader.adapters.kalshi.ws_runtime import validate_d2_runtime_artifacts
 from edmn_trader.scripts.v2_readonly_campaign import (
@@ -480,13 +484,13 @@ def _candidate_identity(candidate: object) -> tuple[str, str] | None:
     metadata = candidate.get("market_metadata")
     if not isinstance(metadata, Mapping):
         return None
-    market_ticker = metadata.get("ticker") or metadata.get("market_ticker")
-    event_ticker = metadata.get("event_ticker")
-    if not isinstance(market_ticker, str) or not market_ticker:
+    try:
+        return (
+            validate_kalshi_market_identity(metadata),
+            validate_kalshi_identifier(metadata.get("event_ticker")),
+        )
+    except ValueError:
         return None
-    if not isinstance(event_ticker, str) or not event_ticker:
-        return None
-    return market_ticker, event_ticker
 
 
 def main(argv: list[str] | None = None) -> int:

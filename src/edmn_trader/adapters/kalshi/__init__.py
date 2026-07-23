@@ -9,6 +9,8 @@ from edmn_trader.adapters.kalshi.client import (
     KalshiHTTPError,
     KalshiResponseError,
     normalize_kalshi_market_metadata,
+    validate_kalshi_identifier,
+    validate_kalshi_market_identity,
 )
 from edmn_trader.adapters.kalshi.demo_connector import (
     KalshiDemoConnectorConfig,
@@ -83,6 +85,8 @@ __all__ = [
     "normalize_kalshi_orderbook_fp",
     "normalize_kalshi_market_metadata",
     "preview_or_submit_kalshi_demo",
+    "validate_kalshi_identifier",
+    "validate_kalshi_market_identity",
     "reconcile_kalshi_demo_events",
     "record_kalshi_readonly_orderbook",
     "record_kalshi_demo_ws_orderbook",

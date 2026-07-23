@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import random
+import re
 import sys
 import time
 from collections import Counter
@@ -30,6 +31,8 @@ from edmn_trader.adapters.kalshi import (
     load_kalshi_ws_auth_config_from_env,
     normalize_kalshi_market_metadata,
     record_kalshi_readonly_orderbook,
+    validate_kalshi_identifier,
+    validate_kalshi_market_identity,
 )
 from edmn_trader.adapters.kalshi.ws_runtime import (
     D2_RUNTIME_SCHEMA_VERSION,
@@ -74,6 +77,12 @@ DISCOVERY_MAX_ATTEMPTS = 3
 DISCOVERY_NEAR_MISS_LIMIT = 100
 RECENT_ACTIVITY_POLICY_VERSION = "edmn.kalshi.recent_activity.v1"
 RECENT_ACTIVITY_SOURCE_FIELD = "volume_24h_fp"
+FIXED_POINT_ACTIVITY_PATTERN = re.compile(r"[0-9]+(?:\.[0-9]+)?")
+EXPLICIT_TIMEZONE_PATTERN = re.compile(
+    r"[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T"
+    r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?"
+    r"(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])"
+)
 RUNTIME_MARKET_SELECTION_MAX_ORDERBOOK_PROBES = 100
 OCCURRENCE_CLOCK_SKEW_TOLERANCE_SECONDS = 60
 SELECTION_PROFILE_VERSION = "edmn.kalshi.selection_profile.v4"
@@ -382,11 +391,12 @@ def _lifecycle_policy_evidence(
     early_close_deadline_authoritative = (
         market_metadata.get("early_close_deadline_authoritative") is True
     )
+    occurrence_supplied = any(key in market_metadata for key in OCCURRENCE_FIELDS)
     occurrence_raw = _first_metadata_value(market_metadata, *OCCURRENCE_FIELDS)
     occurrence_time = _parse_time(occurrence_raw)
     occurrence_included = False
 
-    if occurrence_raw is None:
+    if not occurrence_supplied:
         occurrence_semantics = "MISSING"
     elif occurrence_time is None:
         occurrence_semantics = "INVALID"
@@ -467,6 +477,10 @@ def _market_selection_rejection_reasons(
     allow_sports_long_horizon: bool,
 ) -> tuple[str, ...]:
     reasons: list[str] = []
+    if _market_identity_or_none(market_metadata) is None:
+        reasons.append("INVALID_MARKET_IDENTITY")
+    if _strict_identifier_or_none(market_metadata.get("event_ticker")) is None:
+        reasons.append("INVALID_EVENT_IDENTITY")
     status = str(market_metadata.get("status") or "").strip().lower()
     status_reason = MARKET_STATUS_REJECTION_REASONS.get(status)
     if not status:
@@ -841,13 +855,10 @@ def _validate_pinned_market_identity(
 ) -> None:
     if market_ticker is None and event_ticker is None:
         return
-    if (
-        not isinstance(market_ticker, str)
-        or not market_ticker.strip()
-        or not isinstance(event_ticker, str)
-        or not event_ticker.strip()
-    ):
+    if market_ticker is None or event_ticker is None:
         raise ValueError("pinned runtime requires its expected event identity")
+    validate_kalshi_identifier(market_ticker)
+    validate_kalshi_identifier(event_ticker)
 
 
 def _runtime_selection_profile(
@@ -1583,9 +1594,9 @@ def revalidate_kalshi_demo_ws_market(
 ) -> dict[str, object]:
     """Revalidate one pinned Demo candidate without searching for a substitute."""
 
-    ticker = market_ticker.strip()
-    if not ticker:
-        raise ValueError("market_ticker is required")
+    ticker = validate_kalshi_identifier(market_ticker)
+    if expected_event_ticker is not None:
+        validate_kalshi_identifier(expected_event_ticker)
     _validate_max_request_attempts(max_request_attempts)
     profile = (
         SelectionProfile(selection_profile)
@@ -1624,22 +1635,25 @@ def revalidate_kalshi_demo_ws_market(
         if error or not isinstance(market, Mapping):
             return _pinned_revalidation_blocker(error, diagnostics)
         candidate = normalize_kalshi_market_metadata(market)
-        returned_ticker = candidate.get("ticker") or candidate.get("market_ticker")
+        returned_ticker = _market_identity_or_none(candidate)
         if returned_ticker != ticker:
             return _pinned_revalidation_blocker(
                 "PINNED_MARKET_IDENTITY_MISMATCH", diagnostics
             )
-        if (
+        candidate_event_ticker = _strict_identifier_or_none(
+            candidate.get("event_ticker")
+        )
+        if candidate_event_ticker is None or (
             expected_event_ticker is not None
-            and candidate.get("event_ticker") != expected_event_ticker
+            and candidate_event_ticker != expected_event_ticker
         ):
             return _pinned_revalidation_blocker(
                 "PINNED_EVENT_IDENTITY_MISMATCH", diagnostics
             )
 
         if profile is not SelectionProfile.SMOKE:
-            event_ticker = candidate.get("event_ticker")
-            if not isinstance(event_ticker, str) or not event_ticker:
+            event_ticker = candidate_event_ticker
+            if event_ticker is None:
                 return _pinned_revalidation_blocker(
                     "EVENT_METADATA_INCOMPLETE", diagnostics
                 )
@@ -1651,7 +1665,7 @@ def revalidate_kalshi_demo_ws_market(
             )
             if error or not isinstance(event, Mapping):
                 return _pinned_revalidation_blocker(error, diagnostics)
-            if event.get("event_ticker") != event_ticker:
+            if not _event_identity_matches(event, event_ticker):
                 return _pinned_revalidation_blocker(
                     "EVENT_METADATA_IDENTITY_MISMATCH", diagnostics
                 )
@@ -1904,9 +1918,15 @@ def discover_kalshi_demo_ws_market(
         if require_event_metadata:
             requested_event_tickers = sorted(
                 {
-                    str(market.get("event_ticker"))
+                    event_ticker
                     for market in normalized_markets
-                    if market.get("event_ticker")
+                    if _market_identity_or_none(market) is not None
+                    and (
+                        event_ticker := _strict_identifier_or_none(
+                            market.get("event_ticker")
+                        )
+                    )
+                    is not None
                 }
             )
             requested_event_ticker_set = set(requested_event_tickers)
@@ -1914,7 +1934,7 @@ def discover_kalshi_demo_ws_market(
             event_cursor: str | None = None
             raw_event_count = 0
             duplicate_event_count = 0
-            for _ in range(max_event_pages):
+            for _ in range(max_event_pages if requested_event_tickers else 0):
                 diagnostics["event_page_requests"] += 1
                 payload, error = _discovery_request(
                     lambda event_cursor=event_cursor: active_client.list_events(
@@ -1937,13 +1957,21 @@ def discover_kalshi_demo_ws_market(
                     )
                 diagnostics["event_pages_completed"] += 1
                 for event in payload.get("events", []):
-                    if isinstance(event, Mapping) and event.get("event_ticker"):
-                        raw_event_count += 1
-                        event_ticker = str(event["event_ticker"])
-                        if event_ticker in event_cache:
-                            duplicate_event_count += 1
-                        if event_ticker in requested_event_ticker_set:
-                            event_cache[event_ticker] = event
+                    if not isinstance(event, Mapping):
+                        continue
+                    raw_event_count += 1
+                    event_ticker = _strict_identifier_or_none(
+                        event.get("event_ticker")
+                    )
+                    if event_ticker is None or not _event_identity_matches(
+                        event, event_ticker
+                    ):
+                        diagnostics["candidate_local_failure_count"] += 1
+                        continue
+                    if event_ticker in event_cache:
+                        duplicate_event_count += 1
+                    if event_ticker in requested_event_ticker_set:
+                        event_cache[event_ticker] = event
 
                 next_event_cursor = payload.get("cursor")
                 event_cursor = (
@@ -2016,6 +2044,19 @@ def discover_kalshi_demo_ws_market(
                         cursor_remaining=bool(cursor),
                         diagnostics={**diagnostics, "pages_attempted": pages_attempted},
                     )
+                if not _event_identity_matches(event, ticker):
+                    diagnostics["candidate_local_failure_count"] += 1
+                    return _market_discovery_blocker(
+                        "DEMO_EVENT_DISCOVERY_IDENTITY_MISMATCH",
+                        pages_fetched=pages_fetched,
+                        markets_seen=len(normalized_markets),
+                        rejection_counts={},
+                        cursor_remaining=False,
+                        diagnostics={
+                            **diagnostics,
+                            "pages_attempted": pages_attempted,
+                        },
+                    )
                 event_cache[ticker] = event
 
         audit_rows: list[tuple[dict[str, object], list[str]]] = []
@@ -2026,9 +2067,16 @@ def discover_kalshi_demo_ws_market(
         for market_metadata in normalized_markets:
             candidate_metadata = market_metadata
             reasons: list[str] = []
+            market_ticker = _market_identity_or_none(market_metadata)
+            event_ticker = _strict_identifier_or_none(
+                market_metadata.get("event_ticker")
+            )
+            if market_ticker is None:
+                reasons.append("INVALID_MARKET_IDENTITY")
+            if event_ticker is None:
+                reasons.append("INVALID_EVENT_IDENTITY")
             if require_event_metadata:
-                event_ticker = str(market_metadata.get("event_ticker") or "")
-                event = event_cache.get(event_ticker)
+                event = event_cache.get(event_ticker) if event_ticker else None
                 if event is None:
                     reasons.append("EVENT_METADATA_FETCH_FAILED")
                 else:
@@ -2070,7 +2118,7 @@ def discover_kalshi_demo_ws_market(
 
         lifecycle_candidates.sort(
             key=lambda item: (
-                -(_recent_activity_score(item[0]) or Decimal("0"))
+                (_recent_activity_score(item[0]) or Decimal("0")).copy_negate()
                 if require_recent_activity
                 else Decimal("0"),
                 _as_bool(item[0].get("can_close_early")),
@@ -2112,9 +2160,9 @@ def discover_kalshi_demo_ws_market(
                 orderbook_candidate_scan_complete = False
                 orderbook_probe_limit_reached = True
                 break
-            ticker = candidate_metadata.get("ticker") or candidate_metadata.get("market_ticker")
-            if not isinstance(ticker, str) or not ticker:
-                reasons.append("MISSING_MARKET_METADATA")
+            ticker = _market_identity_or_none(candidate_metadata)
+            if ticker is None:
+                reasons.append("INVALID_MARKET_IDENTITY")
                 continue
             diagnostics["orderbook_requests"] += 1
             orderbook, error = _discovery_request(
@@ -2316,6 +2364,48 @@ def discover_kalshi_demo_ws_market(
             active_client.close()
 
 
+def _strict_identifier_or_none(value: object) -> str | None:
+    try:
+        return validate_kalshi_identifier(value)
+    except ValueError:
+        return None
+
+
+def _market_identity_or_none(market: Mapping[str, object]) -> str | None:
+    try:
+        return validate_kalshi_market_identity(market)
+    except ValueError:
+        return None
+
+
+def _event_identity_matches(
+    event: Mapping[str, object],
+    expected_event_ticker: str,
+) -> bool:
+    if _strict_identifier_or_none(event.get("event_ticker")) != expected_event_ticker:
+        return False
+    nested_markets = event.get("markets")
+    if nested_markets is None:
+        return True
+    if not isinstance(nested_markets, list):
+        return False
+    for market in nested_markets:
+        if not isinstance(market, Mapping):
+            return False
+        if (
+            "event_ticker" in market
+            and _strict_identifier_or_none(market.get("event_ticker"))
+            != expected_event_ticker
+        ):
+            return False
+        if (
+            ("ticker" in market or "market_ticker" in market)
+            and _market_identity_or_none(market) is None
+        ):
+            return False
+    return True
+
+
 def _deduplicate_discovery_markets(
     markets: list[dict[str, object]],
 ) -> tuple[list[dict[str, object]], int]:
@@ -2323,11 +2413,11 @@ def _deduplicate_discovery_markets(
     deduplicated: list[dict[str, object]] = []
     duplicate_count = 0
     for market in markets:
-        ticker = str(market.get("ticker") or market.get("market_ticker") or "").strip()
-        if ticker and ticker in seen:
+        ticker = _market_identity_or_none(market)
+        if ticker is not None and ticker in seen:
             duplicate_count += 1
             continue
-        if ticker:
+        if ticker is not None:
             seen.add(ticker)
         deduplicated.append(market)
     return deduplicated, duplicate_count
@@ -2391,10 +2481,8 @@ def _discovery_audit_summary(
         margin = int((deadline - required_end).total_seconds()) if deadline else None
         close_time = policy["close_time"]
         expected_expiration = policy["expected_expiration_time"]
-        market_id = str(
-            metadata.get("ticker") or metadata.get("market_ticker") or ""
-        ).strip()
-        event_id = str(metadata.get("event_ticker") or "").strip()
+        market_id = _market_identity_or_none(metadata)
+        event_id = _strict_identifier_or_none(metadata.get("event_ticker"))
         near_misses.append(
             {
                 "market_id_hash": hashlib.sha256(market_id.encode("utf-8")).hexdigest()[:16]
@@ -2456,10 +2544,13 @@ def _with_event_metadata(
     client: KalshiDemoMarketDataClient,
     market_metadata: Mapping[str, object],
 ) -> dict[str, object]:
-    event_ticker = market_metadata.get("event_ticker")
-    if not isinstance(event_ticker, str) or not event_ticker:
-        raise KalshiResponseError("selected market has no event_ticker")
-    return _merge_event_metadata(market_metadata, client.get_event(event_ticker))
+    event_ticker = _strict_identifier_or_none(market_metadata.get("event_ticker"))
+    if event_ticker is None:
+        raise KalshiResponseError("selected market has no exact event_ticker")
+    event = client.get_event(event_ticker)
+    if not _event_identity_matches(event, event_ticker):
+        raise KalshiResponseError("selected event identity mismatch")
+    return _merge_event_metadata(market_metadata, event)
 
 
 def _merge_event_metadata(
@@ -2597,7 +2688,7 @@ def _increment_status(diagnostics: dict[str, Any], status_code: int) -> None:
 
 def _recent_activity_score(market_metadata: Mapping[str, object]) -> Decimal | None:
     value = market_metadata.get(RECENT_ACTIVITY_SOURCE_FIELD)
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str) or FIXED_POINT_ACTIVITY_PATTERN.fullmatch(value) is None:
         return None
     try:
         score = Decimal(value)
@@ -2779,16 +2870,14 @@ def _market_lifecycle_record(
     )
     close_time = policy["close_time"]
     lifecycle_deadline = policy["conservative_lifecycle_deadline"]
-    market_ticker = (
-        market_metadata.get("market_ticker")
-        or market_metadata.get("ticker")
-        or market_metadata.get("market")
-    )
+    market_ticker = _market_identity_or_none(market_metadata)
     title = market_metadata.get("title") or market_metadata.get("name")
     status = str(market_metadata.get("status") or "").strip().lower() or None
     return {
         "market_ticker": market_ticker,
-        "event_ticker": market_metadata.get("event_ticker"),
+        "event_ticker": _strict_identifier_or_none(
+            market_metadata.get("event_ticker")
+        ),
         "title": title,
         "name": market_metadata.get("name") or title,
         "status_at_launch": status,
@@ -2873,17 +2962,15 @@ def _market_lifecycle_record(
 
 def _first_metadata_time(market_metadata: Mapping[str, object], *keys: str) -> datetime | None:
     for key in keys:
-        parsed = _parse_time(market_metadata.get(key))
-        if parsed is not None:
-            return parsed
+        if key in market_metadata:
+            return _parse_time(market_metadata.get(key))
     return None
 
 
 def _first_metadata_value(market_metadata: Mapping[str, object], *keys: str) -> object:
     for key in keys:
-        value = market_metadata.get(key)
-        if value is not None and value != "":
-            return value
+        if key in market_metadata:
+            return market_metadata.get(key)
     return None
 
 
@@ -2938,21 +3025,28 @@ def _is_match_event(market_metadata: Mapping[str, object]) -> bool:
 
 
 def _parse_time(value: object) -> datetime | None:
-    if isinstance(value, datetime):
-        parsed = value
-    elif isinstance(value, str) and value:
-        try:
-            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-    else:
+    if not isinstance(value, str) or EXPLICIT_TIMEZONE_PATTERN.fullmatch(value) is None:
         return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    if value.endswith("-00:00"):
+        return None
+    encoded = f"{value[:-1]}+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(encoded)
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return None
+        return parsed.astimezone(UTC)
+    except (OverflowError, ValueError):
+        return None
 
 
 def _time_text(value: object) -> str | None:
+    if isinstance(value, datetime):
+        try:
+            if value.tzinfo is None or value.utcoffset() is None:
+                return None
+            return value.astimezone(UTC).isoformat()
+        except (OverflowError, ValueError):
+            return None
     parsed = _parse_time(value)
     if parsed is not None:
         return parsed.isoformat()

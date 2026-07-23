@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from edmn_trader.scripts import phase0f_activity_measurement as phase0f_module
 from edmn_trader.scripts.phase0f_activity_measurement import (
     PHASE0F_DISCOVERY_REQUEST_LIMIT,
@@ -251,6 +253,48 @@ def test_phase0f_fails_closed_on_malformed_ranked_candidate_identity(
 
     assert result.classification is Phase0FNetworkClassification.ACTIVITY_DISCOVERY_BLOCKED
     assert result.activity_aware_candidate_qualified is False
+    assert result.bounded_probe_passed is False
+    assert result.measurement_started is False
+
+
+@pytest.mark.parametrize(
+    "market_metadata",
+    (
+        {"ticker": " SYNTHETIC-MARKET", "event_ticker": "SYNTHETIC-EVENT"},
+        {"ticker": "SYNTHETIC-MARKET ", "event_ticker": "SYNTHETIC-EVENT"},
+        {"ticker": "SYNTHETIC-MARKET", "event_ticker": "\tSYNTHETIC-EVENT"},
+        {"ticker": "SYNTHETIC-MARKET", "event_ticker": "SYNTHETIC-EVENT\n"},
+        {"ticker": "SYNTHETIC-MARKET\u2003", "event_ticker": "SYNTHETIC-EVENT"},
+        {"ticker": "SYNTHETIC-MARKET\u200b", "event_ticker": "SYNTHETIC-EVENT"},
+        {"ticker": "SYNTHETIC-MARKET", "event_ticker": "\ufeffSYNTHETIC-EVENT"},
+        {
+            "ticker": "SYNTHETIC-MARKET",
+            "market_ticker": "SYNTHETIC-OTHER-MARKET",
+            "event_ticker": "SYNTHETIC-EVENT",
+        },
+    ),
+)
+def test_phase0f_fails_before_probe_on_noncanonical_candidate_identity(
+    tmp_path: Path,
+    market_metadata: dict[str, object],
+) -> None:
+    def forbidden_runner(**_kwargs: object) -> dict[str, object]:
+        raise AssertionError("noncanonical candidate must not reach a runtime")
+
+    result = run_phase0f_activity_measurement(
+        output_root=tmp_path / "phase0f",
+        demo_readonly_opt_in=True,
+        auth_preflight=lambda: None,
+        discovery=lambda **_kwargs: {
+            "blocker_code": None,
+            "eligible_candidates": [{"market_metadata": market_metadata}],
+        },
+        probe_runner=forbidden_runner,
+        measurement_runner=forbidden_runner,
+        runtime_assessor=lambda *_args, **_kwargs: {},
+    )
+
+    assert result.classification is Phase0FNetworkClassification.ACTIVITY_DISCOVERY_BLOCKED
     assert result.bounded_probe_passed is False
     assert result.measurement_started is False
 
